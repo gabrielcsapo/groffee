@@ -1,0 +1,24 @@
+{
+  "name": "groffee",
+  "version": "0.0.0",
+  "description": "☕️ The best deal to with git, just with a little bit of coffee",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gabrielcsapo/groffee.git"
+  },
+  "keywords": [
+    "git",
+    "server",
+    "ui"
+  ],
+  "author": "Gabriel J. Csapo <gabecsapo@gmail.com>",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/gabrielcsapo/groffee/issues"
+  },
+  "homepage": "https://github.com/gabrielcsapo/groffee#readme"
+}
