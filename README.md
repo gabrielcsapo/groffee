@@ -1,2 +1,3 @@
 # groffee
-☕️ The best deal to with git, just with a little bit of coffee
+
+> ☕️ The best way to deal to with git is with a little bit of coffee

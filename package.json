@@ -1,7 +1,7 @@
 {
   "name": "groffee",
   "version": "0.0.0",
-  "description": "☕️ The best deal to with git, just with a little bit of coffee",
+  "description": "☕️ The best way to deal to with git is with a little bit of coffee",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
