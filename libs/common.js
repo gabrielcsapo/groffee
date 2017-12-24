@@ -53,65 +53,6 @@ function toJson(obj) {
     }
 }
 
-async function stat(fname) {
-    return new Promise((resolve) => {
-        fs.stat(fname, async function(error, fstat) {
-            if (error)
-                return resolve(false);
-
-            return resolve(fstat);
-        }.bind(this));
-    });
-}
-
-async function writeFile(fpath, data, options) {
-    return new Promise((resolve) => {
-        fs.writeFile(fpath, data, options, async function(error) {
-            if (error)
-                return resolve(false);
-
-            return resolve(true);
-        }.bind(this));
-    });
-}
-
-async function readFile(fpath, options) {
-    return new Promise((resolve) => {
-        fs.readFile(fpath, options, async function(error, data) {
-            if (error)
-                return resolve(false);
-
-            return resolve(data);
-        }.bind(this));
-    });
-}
-
-async function unlink(fpath) {
-    return new Promise((resolve) => {
-        fs.unlink(fpath, async function(error, data) {
-            if (error)
-                return resolve(false);
-
-            return resolve(data);
-        }.bind(this));
-    });
-}
-
-async function readJSON(fpath, encoding='utf8') {
-    var content = await readFile(fpath, encoding);
-    if (content === false)
-        return false;
-    
-    return parseJson(content);
-}
-
-async function writeJSON(fpath, data, options='utf8') {
-    var dataObj = toJson(data);
-    if (!dataObj)
-        return false;
-
-    return writeFile(fpath, dataObj, options);
-}
 
 function filterDir(fpath, extension='.json', recursive=true, encoding='utf8') {
     var list=[];
@@ -145,7 +86,81 @@ function genRandomToken(length=32) {
     return token;
 }
 
+function ASYNC(fn) {
+    return function(...args) {
+        return new Promise(resolve => {
+            try {                
+                fn(...args, function(error, data) {
+                    if (error)
+                        return resolve(false);
+
+                    return resolve(data);
+                });
+            } catch(e) {
+                console.trace(e);
+                return resolve(false);
+            }
+        });
+    };
+}
+
+/* TODO: will be improved later */
+async function asyncFilter(arr, callback) {
+    var i, 
+        max = arr.length,
+        results = new Array(arr.length),
+        list = [];
+
+    for (i=0; i < max; i++) {
+        results[i] = callback(arr[i]);
+    }
+
+    for (i=0; i < max; i++) {
+        if (await results[i])
+            list.push(results[i]);
+    }
+
+    return list;
+}
+
+const stat = ASYNC(fs.stat);
+const readdir = ASYNC(fs.readdir);
+const writeFile = ASYNC(fs.writeFile);
+const readFile = ASYNC(fs.readFile);
+const unlink = ASYNC(fs.unlink);
+
+async function dirList(fpath, encoding='utf8') {
+    var list = await asyncFilter(await readdir(fpath, encoding), async function(file) {
+        var fname = path.join(fpath, file),
+            fstat = await stat(fname);
+
+        if (!fstat || !fstat.isDirectory())
+            return false;
+
+        return fname;
+    }.bind(this));
+
+    return list;
+};
+
+async function readJSON(fpath, encoding='utf8') {
+    var content = await readFile(fpath, encoding);
+    if (content === false)
+        return false;
+    
+    return parseJson(content);
+}
+
+async function writeJSON(fpath, data, options='utf8') {
+    var dataObj = toJson(data);
+    if (!dataObj)
+        return false;
+
+    return writeFile(fpath, dataObj, options);
+}
+
 exports = module.exports = {
+    MSONEHOUR: MSONEHOUR,
     expect: expect,
     trim: trim,
     utcnow: utcnow,
@@ -154,12 +169,15 @@ exports = module.exports = {
     parseJson: parseJson,
     toJson: toJson,
     filterDir: filterDir,
+    genRandomToken: genRandomToken,
+    ASYNC: ASYNC,
+    asyncFilter: asyncFilter,
     stat: stat,
+    readdir: readdir,    
     writeFile: writeFile,
-    readFile: readFile,
+    readFile: readFile,    
     unlink: unlink,
+    dirList: dirList,    
     readJSON: readJSON,
     writeJSON: writeJSON,
-    genRandomToken: genRandomToken,
-    MSONEHOUR: MSONEHOUR    
 };
