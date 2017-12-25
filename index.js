@@ -41,14 +41,7 @@ var server = App.create(SETTINGS.host, { // app config
     certs: {
         key: fs.readFileSync(SETTINGS.key),
         cert: fs.readFileSync(SETTINGS.cert),
-    },
-    // Don't need to configure cookies because sessions requires it, automatically loading and enabling it
-    sessions: {
-        enabled: true,
-        name: 'SESS',
-        secure: false,
-        path: path.resolve(path.join(process.cwd(), 'sessions')),
-    },
+    }
 });
 
 server.get('/', function() {

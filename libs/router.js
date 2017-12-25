@@ -2,8 +2,6 @@ const TYPE_DEF = 'frag';
 const TYPE_VAR = 'var';
 const TYPE_WILD = 'wild';
 
-//const util = require('util');
-
 class Router {
     constructor() {
         this._routes={};
@@ -44,9 +42,6 @@ class Router {
             i, max,
             params=[],
             current=this._routes;
-
-        //console.log("URI: ", uri);
-        //console.log("Pieces: \n", toks);
 
         for (i=0, max=toks.length; i < max; i++) {
             item = toks[i];
@@ -137,9 +132,6 @@ class Router {
             params = this.tagParamEndPoints ? {} : [],
             current = this._routes;
 
-        //print("Routing: {0} {1}", method, uri);
-        //console.log("Pieces: ", toks);
-
         for (var i=0, max=toks.length; i < max; i++) {
             item = toks[i];
 
@@ -154,16 +146,11 @@ class Router {
                     params[current.name] = item;
                     path += '/:' + current.name;
                 } else {
-                    //console.log("Early out");
-                    //console.log("Router Error: Early out at '" + item + "' in " + uri);
                     return false;
                 }
             } else {
                 params.push(item);
-                //path += '/#' + item;
             }
-
-            //console.log("    P: ", path, " -- ", params, "\n");
         }
 
         if (!current['__c'] || typeof(current['__c'][method]) != 'number')
@@ -171,13 +158,10 @@ class Router {
 
         var index = current.__c[method];
         var cb = this._callbacks[index];
-        //console.log("Route: ", path, " CB ", index, " :: Length: ", cb.length, 
-        //            " -- Params: ", params, " : ", params.length);
+
         if (params.length > cb.length)
             return false;
-        //console.log("Path: ", path, "\tParams: ", util.inspect(params, {depth: 2 }), " -- Method: ", method);
-        //console.log("Index: ", index, " -- Handler: ", this._callbacks[index]);
-        //return current[method].apply(null, o);
+
         return {
             handler: cb,
             params: [method, path, params]

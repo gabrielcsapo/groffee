@@ -1,6 +1,9 @@
 /*
 Generating certs using openssl:
-gencerts.bat domainname.com
+
+openssl genrsa -out certs/privatekey.pem 4096
+openssl req -new -key certs/privatekey.pem -out certs/certrequest.csr -subj "/C=US/ST=California/L=LA/O=ACME Inc/CN=yourdomainname"
+openssl x509 -req -in certs/certrequest.csr -signkey certs/privatekey.pem -out certs/certificate.pem
 */
 
 const http = require('http');
