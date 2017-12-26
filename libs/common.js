@@ -104,23 +104,23 @@ function ASYNC(fn) {
     };
 }
 
-/* TODO: will be improved later */
 async function asyncFilter(arr, callback) {
-    var i, 
-        max = arr.length,
-        results = new Array(arr.length),
+    return new Promise(resolve => {
+        var i, max = arr.length,
+            count = 0,
         list = [];
 
     for (i=0; i < max; i++) {
-        results[i] = callback(arr[i]);
+            setTimeout(async function(val) {
+                var r = await callback(val);
+                if (r)
+                    list.push(r);
+                
+                if (++count >= max)
+                    resolve(list);
+            }.bind(null, arr[i]), 1);
     }
-
-    for (i=0; i < max; i++) {
-        if (await results[i])
-            list.push(results[i]);
-    }
-
-    return list;
+    });
 }
 
 const stat = ASYNC(fs.stat);
@@ -130,7 +130,7 @@ const readFile = ASYNC(fs.readFile);
 const unlink = ASYNC(fs.unlink);
 
 async function dirList(fpath, encoding='utf8') {
-    var list = await asyncFilter(await readdir(fpath, encoding), async function(file) {
+    return asyncFilter(await readdir(fpath, encoding), async function(file) {
         var fname = path.join(fpath, file),
             fstat = await stat(fname);
 
@@ -138,9 +138,7 @@ async function dirList(fpath, encoding='utf8') {
             return false;
 
         return fname;
-    }.bind(this));
-
-    return list;
+    });
 };
 
 async function readJSON(fpath, encoding='utf8') {
