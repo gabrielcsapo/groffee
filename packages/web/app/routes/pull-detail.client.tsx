@@ -134,7 +134,7 @@ export function PullDetailLayout({
 
   return (
     <PullDetailContext.Provider value={{ owner, repo, prNumber, pr, setPr, diff, commentsList, setCommentsList, user }}>
-      <div className="max-w-4xl mx-auto mt-4">
+      <div className="max-w-5xl mx-auto mt-4">
         {/* Header */}
         <div className="mb-6">
           {editing ? (
