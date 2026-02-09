@@ -1,0 +1,30 @@
+{
+  "name": "@groffee/server",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node --import tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@groffee/db": "workspace:*",
+    "@groffee/git": "workspace:*",
+    "@hono/node-server": "^1.13.0",
+    "@node-rs/argon2": "^2.0.2",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.18"
+  }
+}

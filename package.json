@@ -1,0 +1,34 @@
+{
+  "name": "groffee",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The best way to deal with git is with a little bit of coffee",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n web,server -c blue,green \"pnpm --filter @groffee/web dev\" \"pnpm --filter @groffee/server dev\"",
+    "build": "pnpm --filter @groffee/server build && pnpm --filter @groffee/web build",
+    "db:generate": "pnpm --filter @groffee/db generate",
+    "db:migrate": "pnpm --filter @groffee/db migrate",
+    "test": "pnpm --filter @groffee/server test",
+    "typecheck": "pnpm -r typecheck",
+    "seed": "pnpm --filter @groffee/server exec tsx src/seed.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gabrielcsapo/groffee.git"
+  },
+  "keywords": ["git", "server", "ui"],
+  "author": "Gabriel J. Csapo <gabecsapo@gmail.com>",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.8.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild", "@node-rs/argon2"]
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}

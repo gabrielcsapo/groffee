@@ -1,0 +1,145 @@
+@import 'tailwindcss';
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f6f8fa;
+  --color-border: #d1d9e0;
+  --color-border-muted: #e5e7eb;
+  --color-text-primary: #1f2328;
+  --color-text-secondary: #656d76;
+  --color-text-link: #0969da;
+  --color-success: #1a7f37;
+  --color-danger: #d1242f;
+  --color-warning: #9a6700;
+  --color-diff-add-bg: #dafbe1;
+  --color-diff-del-bg: #ffebe9;
+  --color-diff-add-text: #116329;
+  --color-diff-del-text: #82071e;
+
+  --animate-progress: progress 1s infinite linear;
+  --animate-pulse-subtle: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-fade-in: fade-in 0.15s ease-out;
+
+  @keyframes progress {
+    0% {
+      transform: translateX(0) scaleX(0);
+    }
+    40% {
+      transform: translateX(0) scaleX(0.4);
+    }
+    100% {
+      transform: translateX(100%) scaleX(0.5);
+    }
+  }
+
+  @keyframes pulse-subtle {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@utility vt-name {
+  view-transition-name: var(--vt-name);
+}
+
+@utility no-vt {
+  view-transition-name: none;
+}
+
+@view-transition {
+  navigation: auto;
+}
+
+@layer base {
+  body {
+    @apply bg-surface-secondary text-text-primary text-sm antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+  }
+
+  a {
+    @apply text-text-link no-underline hover:underline;
+  }
+
+  /* Smooth transitions on interactive elements */
+  button, a, input, select, textarea {
+    @apply transition-colors duration-150;
+  }
+
+  /* Better focus ring for accessibility */
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    @apply outline-none ring-2 ring-primary/40 border-primary;
+  }
+}
+
+@layer components {
+  /* Skeleton loading placeholder */
+  .skeleton {
+    @apply bg-surface-secondary rounded animate-pulse-subtle;
+  }
+
+  /* Card surface */
+  .card {
+    @apply bg-surface border border-border rounded-lg;
+  }
+
+  /* Status badges */
+  .badge {
+    @apply inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium;
+  }
+
+  .badge-public {
+    @apply border border-border text-text-secondary;
+  }
+
+  .badge-private {
+    @apply border border-warning/30 text-warning bg-warning/5;
+  }
+
+  .badge-open {
+    @apply bg-success/10 text-success;
+  }
+
+  .badge-closed {
+    @apply bg-danger/10 text-danger;
+  }
+
+  .badge-merged {
+    @apply bg-purple-100 text-purple-700;
+  }
+
+  /* Button base styles */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium px-4 py-2 transition-all duration-150 hover:no-underline disabled:opacity-50 disabled:cursor-not-allowed bg-success text-white hover:brightness-110 active:brightness-95;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium px-4 py-2 transition-all duration-150 hover:no-underline disabled:opacity-50 disabled:cursor-not-allowed bg-surface border border-border text-text-primary hover:bg-surface-secondary active:bg-border-muted;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium px-4 py-2 transition-all duration-150 hover:no-underline disabled:opacity-50 disabled:cursor-not-allowed bg-danger text-white hover:brightness-110 active:brightness-95;
+  }
+
+  .btn-sm {
+    @apply text-sm px-3 py-1.5;
+  }
+}
