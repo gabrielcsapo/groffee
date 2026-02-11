@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage } from "node:http";
+import { Readable } from "node:stream";
 
 type ServiceType = "upload-pack" | "receive-pack";
 
@@ -14,68 +15,75 @@ function pktLine(data: string): string {
 
 /**
  * Handle GET /info/refs?service=git-upload-pack|git-receive-pack
- * Advertises available refs to the git client.
+ * Returns a web Response with the ref advertisement stream.
  */
 export function handleInfoRefs(
   repoPath: string,
   service: ServiceType,
-  res: ServerResponse,
-): void {
-  res.setHeader(
-    "Content-Type",
-    `application/x-git-${service}-advertisement`,
-  );
-  res.setHeader("Cache-Control", "no-cache");
-
-  // Write the service advertisement header
+): Response {
   const header = `# service=git-${service}\n`;
-  res.write(pktLine(header));
-  res.write("0000"); // flush-pkt
+  const headerBytes = new TextEncoder().encode(pktLine(header) + "0000");
 
   const proc = spawn("git", [service, "--stateless-rpc", "--advertise-refs", "."], {
     cwd: repoPath,
   });
 
-  proc.stdout.pipe(res);
-
   proc.stderr.on("data", (data: Buffer) => {
     console.error(`git ${service} stderr:`, data.toString());
   });
 
   proc.on("error", (err) => {
     console.error(`git ${service} spawn error:`, err);
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.end("Internal Server Error");
-    }
   });
 
-  proc.on("close", (code) => {
-    if (code !== 0) {
-      console.error(`git ${service} exited with code ${code}`);
-    }
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(headerBytes);
+
+      proc.stdout.on("data", (chunk: Buffer) => {
+        controller.enqueue(new Uint8Array(chunk));
+      });
+
+      proc.stdout.on("end", () => {
+        controller.close();
+      });
+
+      proc.stdout.on("error", (err) => {
+        controller.error(err);
+      });
+    },
+    cancel() {
+      proc.kill();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": `application/x-git-${service}-advertisement`,
+      "Cache-Control": "no-cache",
+    },
   });
 }
 
 /**
  * Handle POST /git-upload-pack or /git-receive-pack
- * Performs the actual pack negotiation and data transfer.
+ * Pipes the request body to git and returns a web Response with the result stream.
  */
 export function handleServiceRpc(
   repoPath: string,
   service: ServiceType,
-  req: IncomingMessage,
-  res: ServerResponse,
-): void {
-  res.setHeader("Content-Type", `application/x-git-${service}-result`);
-  res.setHeader("Cache-Control", "no-cache");
-
+  req: IncomingMessage | ReadableStream,
+): Response {
   const proc = spawn("git", [service, "--stateless-rpc", "."], {
     cwd: repoPath,
   });
 
-  req.pipe(proc.stdin);
-  proc.stdout.pipe(res);
+  // Pipe request body into git stdin
+  if (req instanceof ReadableStream) {
+    Readable.fromWeb(req as import("stream/web").ReadableStream).pipe(proc.stdin);
+  } else {
+    req.pipe(proc.stdin);
+  }
 
   proc.stderr.on("data", (data: Buffer) => {
     console.error(`git ${service} stderr:`, data.toString());
@@ -83,15 +91,31 @@ export function handleServiceRpc(
 
   proc.on("error", (err) => {
     console.error(`git ${service} spawn error:`, err);
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.end("Internal Server Error");
-    }
   });
 
-  proc.on("close", (code) => {
-    if (code !== 0) {
-      console.error(`git ${service} exited with code ${code}`);
-    }
+  const stream = new ReadableStream({
+    start(controller) {
+      proc.stdout.on("data", (chunk: Buffer) => {
+        controller.enqueue(new Uint8Array(chunk));
+      });
+
+      proc.stdout.on("end", () => {
+        controller.close();
+      });
+
+      proc.stdout.on("error", (err) => {
+        controller.error(err);
+      });
+    },
+    cancel() {
+      proc.kill();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": `application/x-git-${service}-result`,
+      "Cache-Control": "no-cache",
+    },
   });
 }

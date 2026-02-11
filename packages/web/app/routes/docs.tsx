@@ -6,17 +6,57 @@ export default function Docs() {
         <nav className="sticky top-24 text-sm space-y-4">
           <div>
             <h3 className="font-semibold text-text-primary mb-1">Overview</h3>
-            <a href="#overview" className="block text-text-secondary hover:text-text-link py-0.5">Introduction</a>
-            <a href="#authentication" className="block text-text-secondary hover:text-text-link py-0.5">Authentication</a>
+            <a
+              href="#overview"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              Introduction
+            </a>
+            <a
+              href="#authentication"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              Authentication
+            </a>
           </div>
           <div>
             <h3 className="font-semibold text-text-primary mb-1">Endpoints</h3>
-            <a href="#health" className="block text-text-secondary hover:text-text-link py-0.5">Health</a>
-            <a href="#auth" className="block text-text-secondary hover:text-text-link py-0.5">Auth</a>
-            <a href="#repositories" className="block text-text-secondary hover:text-text-link py-0.5">Repositories</a>
-            <a href="#issues" className="block text-text-secondary hover:text-text-link py-0.5">Issues</a>
-            <a href="#pull-requests" className="block text-text-secondary hover:text-text-link py-0.5">Pull Requests</a>
-            <a href="#git-protocol" className="block text-text-secondary hover:text-text-link py-0.5">Git Protocol</a>
+            <a
+              href="#health"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              Health
+            </a>
+            <a
+              href="#auth"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              Auth
+            </a>
+            <a
+              href="#repositories"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              Repositories
+            </a>
+            <a
+              href="#issues"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              Issues
+            </a>
+            <a
+              href="#pull-requests"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              Pull Requests
+            </a>
+            <a
+              href="#git-protocol"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              Git Protocol
+            </a>
           </div>
         </nav>
       </aside>
@@ -25,30 +65,57 @@ export default function Docs() {
       <div className="flex-1 min-w-0">
         {/* Intro */}
         <section id="overview" className="mb-10">
-          <h1 className="text-2xl font-bold text-text-primary mb-2">API Documentation</h1>
+          <h1 className="text-2xl font-bold text-text-primary mb-2">
+            API Documentation
+          </h1>
           <p className="text-text-secondary text-sm mb-4">
-            Groffee exposes a JSON REST API for managing repositories, issues, pull requests, and more.
-            All endpoints are prefixed with <Code>/api</Code> and return JSON unless otherwise noted.
+            Groffee exposes a JSON REST API for managing repositories, issues,
+            pull requests, and more. All endpoints are prefixed with{" "}
+            <Code>/api</Code> and return JSON unless otherwise noted.
           </p>
           <div className="card p-4 text-sm space-y-2">
-            <p><span className="font-medium">Base URL:</span> <Code>http://localhost:3000</Code></p>
-            <p><span className="font-medium">Content-Type:</span> <Code>application/json</Code></p>
-            <p><span className="font-medium">Error format:</span> <Code>{'{ "error": "message" }'}</Code> with appropriate HTTP status code</p>
+            <p>
+              <span className="font-medium">Base URL:</span>{" "}
+              <Code>/api</Code>
+            </p>
+            <p>
+              <span className="font-medium">Content-Type:</span>{" "}
+              <Code>application/json</Code>
+            </p>
+            <p>
+              <span className="font-medium">Error format:</span>{" "}
+              <Code>{'{ "error": "message" }'}</Code> with appropriate HTTP
+              status code
+            </p>
           </div>
         </section>
 
         <section id="authentication" className="mb-10">
-          <h2 className="text-xl font-bold text-text-primary mb-2">Authentication</h2>
+          <h2 className="text-xl font-bold text-text-primary mb-2">
+            Authentication
+          </h2>
           <p className="text-text-secondary text-sm mb-3">
-            Authentication is cookie-based. Call <Code>POST /api/auth/login</Code> or <Code>POST /api/auth/register</Code> to
-            obtain a session cookie. Include credentials in subsequent requests.
+            Authentication is cookie-based. Call{" "}
+            <Code>POST /api/auth/login</Code> or{" "}
+            <Code>POST /api/auth/register</Code> to obtain a session cookie.
+            Include credentials in subsequent requests.
           </p>
           <div className="card p-4 text-sm">
-            <p className="font-medium mb-1">Auth levels used in this documentation:</p>
+            <p className="font-medium mb-1">
+              Auth levels used in this documentation:
+            </p>
             <ul className="list-disc list-inside text-text-secondary space-y-1">
-              <li><AuthBadge level="required" /> — Request fails with <Code>401</Code> without a valid session</li>
-              <li><AuthBadge level="optional" /> — Works without auth but may return fewer results</li>
-              <li><AuthBadge level="none" /> — No authentication needed</li>
+              <li>
+                <AuthBadge level="required" /> — Request fails with{" "}
+                <Code>401</Code> without a valid session
+              </li>
+              <li>
+                <AuthBadge level="optional" /> — Works without auth but may
+                return fewer results
+              </li>
+              <li>
+                <AuthBadge level="none" /> — No authentication needed
+              </li>
             </ul>
           </div>
         </section>
@@ -133,9 +200,21 @@ export default function Docs() {
           auth="optional"
           description="List repositories. Returns public repos, plus your own private repos if authenticated."
           queryParams={[
-            { name: "q", type: "string", description: "Search query for repository names" },
-            { name: "limit", type: "number", description: "Results per page (default: 30, max: 100)" },
-            { name: "offset", type: "number", description: "Pagination offset (default: 0)" },
+            {
+              name: "q",
+              type: "string",
+              description: "Search query for repository names",
+            },
+            {
+              name: "limit",
+              type: "number",
+              description: "Results per page (default: 30, max: 100)",
+            },
+            {
+              name: "offset",
+              type: "number",
+              description: "Pagination offset (default: 0)",
+            },
           ]}
           response={{
             repositories: [
@@ -268,11 +347,20 @@ export default function Docs() {
           pathParams={[
             { name: "owner", description: "Username" },
             { name: "name", description: "Repository name" },
-            { name: "ref", description: 'Branch/tag, optionally followed by path (e.g. "main/src/lib")' },
+            {
+              name: "ref",
+              description:
+                'Branch/tag, optionally followed by path (e.g. "main/src/lib")',
+            },
           ]}
           response={{
             entries: [
-              { type: "blob | tree", name: "string", oid: "string", mode: "string" },
+              {
+                type: "blob | tree",
+                name: "string",
+                oid: "string",
+                mode: "string",
+              },
             ],
             ref: "string",
             path: "string",
@@ -287,7 +375,11 @@ export default function Docs() {
           pathParams={[
             { name: "owner", description: "Username" },
             { name: "name", description: "Repository name" },
-            { name: "ref", description: 'Branch/tag followed by file path (e.g. "main/README.md")' },
+            {
+              name: "ref",
+              description:
+                'Branch/tag followed by file path (e.g. "main/README.md")',
+            },
           ]}
           response={{
             content: "string (UTF-8 text)",
@@ -308,11 +400,21 @@ export default function Docs() {
             { name: "ref", description: "Branch or tag name" },
           ]}
           queryParams={[
-            { name: "limit", type: "number", description: "Max commits to return (default: 30)" },
+            {
+              name: "limit",
+              type: "number",
+              description: "Max commits to return (default: 30)",
+            },
           ]}
           response={{
             commits: [
-              { oid: "string", author: "string", email: "string", date: "datetime", message: "string" },
+              {
+                oid: "string",
+                author: "string",
+                email: "string",
+                date: "datetime",
+                message: "string",
+              },
             ],
             ref: "string",
           }}
@@ -355,7 +457,11 @@ export default function Docs() {
             { name: "repo", description: "Repository name" },
           ]}
           queryParams={[
-            { name: "status", type: "string", description: '"open" (default) or "closed"' },
+            {
+              name: "status",
+              type: "string",
+              description: '"open" (default) or "closed"',
+            },
           ]}
           response={{
             issues: [
@@ -396,7 +502,12 @@ export default function Docs() {
               closedAt: "datetime | null",
             },
             comments: [
-              { id: "string", body: "string", author: "string", createdAt: "datetime" },
+              {
+                id: "string",
+                body: "string",
+                author: "string",
+                createdAt: "datetime",
+              },
             ],
           }}
         />
@@ -415,7 +526,12 @@ export default function Docs() {
             body: "string (optional)",
           }}
           response={{
-            issue: { id: "string", number: 1, title: "string", author: "string" },
+            issue: {
+              id: "string",
+              number: 1,
+              title: "string",
+              author: "string",
+            },
           }}
           notes="Issue number auto-increments (shared counter with pull requests)."
         />
@@ -455,7 +571,12 @@ export default function Docs() {
             body: "string (required, non-empty)",
           }}
           response={{
-            comment: { id: "string", body: "string", author: "string", createdAt: "datetime" },
+            comment: {
+              id: "string",
+              body: "string",
+              author: "string",
+              createdAt: "datetime",
+            },
           }}
         />
 
@@ -472,7 +593,11 @@ export default function Docs() {
             { name: "repo", description: "Repository name" },
           ]}
           queryParams={[
-            { name: "status", type: "string", description: '"open" (default), "closed", or "merged"' },
+            {
+              name: "status",
+              type: "string",
+              description: '"open" (default), "closed", or "merged"',
+            },
           ]}
           response={{
             pullRequests: [
@@ -518,7 +643,12 @@ export default function Docs() {
             },
             diff: "object | null",
             comments: [
-              { id: "string", body: "string", author: "string", createdAt: "datetime" },
+              {
+                id: "string",
+                body: "string",
+                author: "string",
+                createdAt: "datetime",
+              },
             ],
           }}
           notes="Diff is computed from the merge-base of source and target branches."
@@ -540,7 +670,12 @@ export default function Docs() {
             targetBranch: "string (optional, defaults to repo default branch)",
           }}
           response={{
-            pullRequest: { id: "string", number: 1, title: "string", author: "string" },
+            pullRequest: {
+              id: "string",
+              number: 1,
+              title: "string",
+              author: "string",
+            },
           }}
           notes="Both branches must exist and must be different. Number auto-increments (shared with issues)."
         />
@@ -593,7 +728,12 @@ export default function Docs() {
             body: "string (required, non-empty)",
           }}
           response={{
-            comment: { id: "string", body: "string", author: "string", createdAt: "datetime" },
+            comment: {
+              id: "string",
+              body: "string",
+              author: "string",
+              createdAt: "datetime",
+            },
           }}
         />
 
@@ -601,8 +741,11 @@ export default function Docs() {
         <SectionHeader id="git-protocol" title="Git Protocol (Smart HTTP)" />
 
         <div className="card p-4 text-sm text-text-secondary mb-6">
-          These endpoints implement Git's Smart HTTP protocol for <Code>git clone</Code>, <Code>git fetch</Code>, and <Code>git push</Code>.
-          They use binary git protocol streams, not JSON. You typically interact with these via the <Code>git</Code> CLI rather than calling them directly.
+          These endpoints implement Git's Smart HTTP protocol for{" "}
+          <Code>git clone</Code>, <Code>git fetch</Code>, and{" "}
+          <Code>git push</Code>. They use binary git protocol streams, not JSON.
+          You typically interact with these via the <Code>git</Code> CLI rather
+          than calling them directly.
         </div>
 
         <Endpoint
@@ -611,7 +754,11 @@ export default function Docs() {
           auth="none"
           description="Git ref advertisement (discovery)."
           queryParams={[
-            { name: "service", type: "string", description: '"git-upload-pack" or "git-receive-pack"' },
+            {
+              name: "service",
+              type: "string",
+              description: '"git-upload-pack" or "git-receive-pack"',
+            },
           ]}
           notes="Returns binary git protocol data. Used automatically by git clone/fetch/push."
         />
@@ -633,17 +780,20 @@ export default function Docs() {
         />
       </div>
     </div>
-  )
+  );
 }
 
 /* ─── Helper components ─── */
 
 function SectionHeader({ id, title }: { id: string; title: string }) {
   return (
-    <h2 id={id} className="text-xl font-bold text-text-primary mt-10 mb-4 pt-4 border-t border-border first:mt-0 first:border-t-0 scroll-mt-20">
+    <h2
+      id={id}
+      className="text-xl font-bold text-text-primary mt-10 mb-4 pt-4 border-t border-border first:mt-0 first:border-t-0 scroll-mt-20"
+    >
       {title}
     </h2>
-  )
+  );
 }
 
 function Code({ children }: { children: React.ReactNode }) {
@@ -651,45 +801,49 @@ function Code({ children }: { children: React.ReactNode }) {
     <code className="px-1.5 py-0.5 bg-surface-secondary border border-border-muted rounded text-xs font-mono">
       {children}
     </code>
-  )
+  );
 }
 
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
-    GET: 'bg-blue-100 text-blue-800 border-blue-200',
-    POST: 'bg-green-100 text-green-800 border-green-200',
-    PATCH: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    DELETE: 'bg-red-100 text-red-800 border-red-200',
-  }
+    GET: "bg-blue-100 text-blue-800 border-blue-200",
+    POST: "bg-green-100 text-green-800 border-green-200",
+    PATCH: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    DELETE: "bg-red-100 text-red-800 border-red-200",
+  };
   return (
-    <span className={`inline-block text-xs font-bold font-mono px-2 py-0.5 rounded border ${colors[method] || ''}`}>
+    <span
+      className={`inline-block text-xs font-bold font-mono px-2 py-0.5 rounded border ${colors[method] || ""}`}
+    >
       {method}
     </span>
-  )
+  );
 }
 
-function AuthBadge({ level }: { level: 'required' | 'optional' | 'none' }) {
+function AuthBadge({ level }: { level: "required" | "optional" | "none" }) {
   const styles: Record<string, string> = {
-    required: 'bg-red-50 text-red-700 border-red-200',
-    optional: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    none: 'bg-gray-50 text-gray-600 border-gray-200',
-  }
+    required: "bg-red-50 text-red-700 border-red-200",
+    optional: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    none: "bg-gray-50 text-gray-600 border-gray-200",
+  };
   const labels: Record<string, string> = {
-    required: 'Auth Required',
-    optional: 'Auth Optional',
-    none: 'No Auth',
-  }
+    required: "Auth Required",
+    optional: "Auth Optional",
+    none: "No Auth",
+  };
   return (
-    <span className={`inline-block text-xs px-2 py-0.5 rounded border ${styles[level]}`}>
+    <span
+      className={`inline-block text-xs px-2 py-0.5 rounded border ${styles[level]}`}
+    >
       {labels[level]}
     </span>
-  )
+  );
 }
 
 interface ParamDef {
-  name: string
-  type?: string
-  description: string
+  name: string;
+  type?: string;
+  description: string;
 }
 
 function Endpoint({
@@ -703,22 +857,24 @@ function Endpoint({
   response,
   notes,
 }: {
-  method: string
-  path: string
-  auth: 'required' | 'optional' | 'none'
-  description: string
-  pathParams?: ParamDef[]
-  queryParams?: ParamDef[]
-  body?: Record<string, unknown>
-  response?: Record<string, unknown>
-  notes?: string
+  method: string;
+  path: string;
+  auth: "required" | "optional" | "none";
+  description: string;
+  pathParams?: ParamDef[];
+  queryParams?: ParamDef[];
+  body?: Record<string, unknown>;
+  response?: Record<string, unknown>;
+  notes?: string;
 }) {
   return (
     <div className="card mb-4 overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-surface-secondary border-b border-border flex-wrap">
         <MethodBadge method={method} />
-        <code className="text-sm font-mono font-medium text-text-primary">{path}</code>
+        <code className="text-sm font-mono font-medium text-text-primary">
+          {path}
+        </code>
         <div className="flex-1" />
         <AuthBadge level={auth} />
       </div>
@@ -728,38 +884,48 @@ function Endpoint({
 
         {pathParams && pathParams.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold text-text-primary mb-1">Path Parameters</h4>
+            <h4 className="text-xs font-semibold text-text-primary mb-1">
+              Path Parameters
+            </h4>
             <ParamTable params={pathParams} />
           </div>
         )}
 
         {queryParams && queryParams.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold text-text-primary mb-1">Query Parameters</h4>
+            <h4 className="text-xs font-semibold text-text-primary mb-1">
+              Query Parameters
+            </h4>
             <ParamTable params={queryParams} />
           </div>
         )}
 
         {body && (
           <div>
-            <h4 className="text-xs font-semibold text-text-primary mb-1">Request Body</h4>
+            <h4 className="text-xs font-semibold text-text-primary mb-1">
+              Request Body
+            </h4>
             <JsonBlock value={body} />
           </div>
         )}
 
         {response && (
           <div>
-            <h4 className="text-xs font-semibold text-text-primary mb-1">Response</h4>
+            <h4 className="text-xs font-semibold text-text-primary mb-1">
+              Response
+            </h4>
             <JsonBlock value={response} />
           </div>
         )}
 
         {notes && (
-          <p className="text-xs text-text-secondary border-t border-border-muted pt-2">{notes}</p>
+          <p className="text-xs text-text-secondary border-t border-border-muted pt-2">
+            {notes}
+          </p>
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function ParamTable({ params }: { params: ParamDef[] }) {
@@ -768,7 +934,9 @@ function ParamTable({ params }: { params: ParamDef[] }) {
       <thead>
         <tr className="text-left text-text-secondary">
           <th className="pb-1 pr-4 font-medium">Name</th>
-          {params.some((p) => p.type) && <th className="pb-1 pr-4 font-medium">Type</th>}
+          {params.some((p) => p.type) && (
+            <th className="pb-1 pr-4 font-medium">Type</th>
+          )}
           <th className="pb-1 font-medium">Description</th>
         </tr>
       </thead>
@@ -777,14 +945,16 @@ function ParamTable({ params }: { params: ParamDef[] }) {
           <tr key={p.name} className="text-text-primary">
             <td className="py-0.5 pr-4 font-mono">{p.name}</td>
             {params.some((pp) => pp.type) && (
-              <td className="py-0.5 pr-4 text-text-secondary">{p.type || '—'}</td>
+              <td className="py-0.5 pr-4 text-text-secondary">
+                {p.type || "—"}
+              </td>
             )}
             <td className="py-0.5 text-text-secondary">{p.description}</td>
           </tr>
         ))}
       </tbody>
     </table>
-  )
+  );
 }
 
 function JsonBlock({ value }: { value: unknown }) {
@@ -792,5 +962,5 @@ function JsonBlock({ value }: { value: unknown }) {
     <pre className="bg-surface-secondary border border-border-muted rounded p-3 text-xs font-mono overflow-x-auto whitespace-pre">
       {JSON.stringify(value, null, 2)}
     </pre>
-  )
+  );
 }

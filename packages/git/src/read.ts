@@ -1,5 +1,9 @@
 import git from "isomorphic-git";
 import fs from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 export interface GitRef {
   name: string;
@@ -25,6 +29,32 @@ export interface CommitInfo {
 // For bare repos, isomorphic-git needs gitdir instead of dir
 function bareOpts(repoPath: string) {
   return { fs, gitdir: repoPath };
+}
+
+/**
+ * Read the branch that HEAD points to in a bare repo.
+ * Returns the branch name (e.g. "main", "master") or null if HEAD is missing/invalid.
+ */
+export async function resolveHead(repoPath: string): Promise<string | null> {
+  try {
+    const branches = await git.listBranches({ ...bareOpts(repoPath) });
+    if (branches.length === 0) return null;
+
+    // Read the HEAD file directly — it contains "ref: refs/heads/<branch>"
+    const head = fs.readFileSync(`${repoPath}/HEAD`, "utf8").trim();
+    const match = head.match(/^ref: refs\/heads\/(.+)$/);
+    // Only return HEAD's branch if it actually exists
+    if (match && branches.includes(match[1])) return match[1];
+
+    // HEAD points to a non-existent branch or is detached — find a match or use first branch
+    for (const branch of branches) {
+      const oid = await git.resolveRef({ ...bareOpts(repoPath), ref: branch });
+      if (oid === head) return branch;
+    }
+    return branches[0];
+  } catch {
+    return null;
+  }
 }
 
 export async function listRefs(repoPath: string): Promise<GitRef[]> {
@@ -134,4 +164,45 @@ export async function getCommit(
     },
     parents: commit.parent,
   };
+}
+
+export interface LastCommitInfo {
+  oid: string;
+  message: string;
+  timestamp: number;
+}
+
+/**
+ * For each path, find the last commit that touched it.
+ * Uses git CLI for performance on bare repos.
+ */
+export async function getLastCommitsForPaths(
+  repoPath: string,
+  ref: string,
+  paths: string[],
+): Promise<Map<string, LastCommitInfo>> {
+  const result = new Map<string, LastCommitInfo>();
+
+  const promises = paths.map(async (filePath) => {
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["log", "-1", "--format=%H%x00%s%x00%at", ref, "--", filePath],
+        { cwd: repoPath, maxBuffer: 1024 * 1024 },
+      );
+      const trimmed = stdout.trim();
+      if (!trimmed) return;
+      const [oid, message, ts] = trimmed.split("\0");
+      result.set(filePath, {
+        oid,
+        message,
+        timestamp: parseInt(ts, 10),
+      });
+    } catch {
+      // Skip entries where git log fails
+    }
+  });
+
+  await Promise.all(promises);
+  return result;
 }

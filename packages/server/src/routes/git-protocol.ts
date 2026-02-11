@@ -2,11 +2,10 @@ import { Hono } from "hono";
 import { db, repositories, users } from "@groffee/db";
 import { eq, and } from "drizzle-orm";
 import { handleInfoRefs, handleServiceRpc } from "@groffee/git";
-import type { HttpBindings } from "@hono/node-server";
 
 type ServiceType = "git-upload-pack" | "git-receive-pack";
 
-export const gitProtocolRoutes = new Hono<{ Bindings: HttpBindings }>();
+export const gitProtocolRoutes = new Hono();
 
 async function resolveRepo(owner: string, repoName: string) {
   // Strip .git suffix if present
@@ -44,14 +43,8 @@ gitProtocolRoutes.get("/:owner/:repo/info/refs", async (c) => {
   const repo = await resolveRepo(c.req.param("owner"), c.req.param("repo"));
   if (!repo) return c.text("Repository not found", 404);
 
-  // For public repos, allow upload-pack (clone/fetch) without auth
-  // For receive-pack (push), require auth (TODO: implement Basic auth check)
-
   const serviceType = service.replace("git-", "") as "upload-pack" | "receive-pack";
-  handleInfoRefs(repo.diskPath, serviceType, c.env.outgoing);
-
-  // Return undefined to let the stream handle the response
-  return undefined as never;
+  return handleInfoRefs(repo.diskPath, serviceType);
 });
 
 // POST /:owner/:repo.git/git-upload-pack
@@ -59,8 +52,7 @@ gitProtocolRoutes.post("/:owner/:repo/git-upload-pack", async (c) => {
   const repo = await resolveRepo(c.req.param("owner"), c.req.param("repo"));
   if (!repo) return c.text("Repository not found", 404);
 
-  handleServiceRpc(repo.diskPath, "upload-pack", c.env.incoming, c.env.outgoing);
-  return undefined as never;
+  return handleServiceRpc(repo.diskPath, "upload-pack", c.req.raw.body!);
 });
 
 // POST /:owner/:repo.git/git-receive-pack
@@ -69,6 +61,5 @@ gitProtocolRoutes.post("/:owner/:repo/git-receive-pack", async (c) => {
   if (!repo) return c.text("Repository not found", 404);
 
   // TODO: require auth for push
-  handleServiceRpc(repo.diskPath, "receive-pack", c.env.incoming, c.env.outgoing);
-  return undefined as never;
+  return handleServiceRpc(repo.diskPath, "receive-pack", c.req.raw.body!);
 });

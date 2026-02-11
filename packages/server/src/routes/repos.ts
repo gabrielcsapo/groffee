@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db, repositories, users } from "@groffee/db";
 import { eq, and, like, desc } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
-import { initBareRepo, getTree, getBlob, getCommitLog, getCommit, listRefs } from "@groffee/git";
+import { initBareRepo, getTree, getBlob, getCommitLog, getCommit, listRefs, resolveHead, getLastCommitsForPaths } from "@groffee/git";
 import { getDiff } from "@groffee/git";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -174,7 +174,11 @@ repoRoutes.get("/:owner/:name", optionalAuth, async (c) => {
     return c.json({ error: "Repository not found" }, 404);
   }
 
-  return c.json({ repository: { ...repo, owner: ownerName } });
+  // Resolve actual HEAD branch from the git repo on disk
+  const headBranch = await resolveHead(repo.diskPath);
+  const defaultBranch = headBranch || repo.defaultBranch;
+
+  return c.json({ repository: { ...repo, defaultBranch, owner: ownerName } });
 });
 
 // Update repository settings (owner only)
@@ -274,7 +278,8 @@ repoRoutes.get("/:owner/:name/refs", optionalAuth, async (c) => {
 
   try {
     const refs = await listRefs(repo.diskPath);
-    return c.json({ refs, defaultBranch: repo.defaultBranch });
+    const headBranch = await resolveHead(repo.diskPath);
+    return c.json({ refs, defaultBranch: headBranch || repo.defaultBranch });
   } catch {
     return c.json({ refs: [], defaultBranch: repo.defaultBranch });
   }
@@ -314,7 +319,18 @@ repoRoutes.get("/:owner/:name/tree/:ref{.+}", optionalAuth, async (c) => {
 
   try {
     const entries = await getTree(repo.diskPath, ref, treePath);
-    return c.json({ entries, ref, path: treePath });
+    const paths = entries.map((e) => e.path);
+    const lastCommits = await getLastCommitsForPaths(repo.diskPath, ref, paths);
+
+    const entriesWithCommits = entries.map((entry) => {
+      const commit = lastCommits.get(entry.path);
+      return {
+        ...entry,
+        lastCommit: commit || null,
+      };
+    });
+
+    return c.json({ entries: entriesWithCommits, ref, path: treePath });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to read tree";
     return c.json({ error: message }, 404);

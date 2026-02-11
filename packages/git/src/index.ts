@@ -1,12 +1,15 @@
 export {
   listRefs,
+  resolveHead,
   getTree,
   getBlob,
   getCommitLog,
   getCommit,
+  getLastCommitsForPaths,
   type GitRef,
   type TreeEntry,
   type CommitInfo,
+  type LastCommitInfo,
 } from "./read.js";
 
 export { getDiff, type DiffFile, type DiffHunk } from "./diff.js";

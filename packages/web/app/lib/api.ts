@@ -1,6 +1,6 @@
-const API_BASE = typeof window === 'undefined'
-  ? 'http://localhost:3000'
-  : ''
+const API_BASE = typeof window === "undefined" ? "http://localhost:3001" : "";
+export const SERVER_BASE =
+  typeof window === "undefined" ? "http://localhost:3001" : "";
 
 export async function apiFetch(path: string, init?: RequestInit) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -8,6 +8,6 @@ export async function apiFetch(path: string, init?: RequestInit) {
     headers: {
       ...init?.headers,
     },
-  })
-  return res.json()
+  });
+  return res.json();
 }

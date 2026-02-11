@@ -72,3 +72,5 @@ data/
 # Vite
 .vite/
 
+# OS
+.DS_Store
