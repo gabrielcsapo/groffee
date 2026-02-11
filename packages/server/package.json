@@ -16,15 +16,15 @@
   "dependencies": {
     "@groffee/db": "workspace:*",
     "@groffee/git": "workspace:*",
-    "@hono/node-server": "^1.13.0",
+    "@hono/node-server": "^1.19.9",
     "@node-rs/argon2": "^2.0.2",
     "drizzle-orm": "^0.45.1",
-    "hono": "^4.7.0"
+    "hono": "^4.11.9"
   },
   "devDependencies": {
-    "@types/node": "^22.15.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.8.3",
+    "@types/node": "^25.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
 }

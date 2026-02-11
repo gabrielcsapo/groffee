@@ -19,12 +19,12 @@
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.18",
-    "@types/react": "^19.2.10",
+    "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "latest",
     "@vitejs/plugin-rsc": "latest",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.8.3",
+    "typescript": "^5.9.3",
     "vite": "^7.3.1"
   }
 }
