@@ -7,8 +7,7 @@ import * as schema from "./schema.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "..", "..", "..");
-const DB_PATH =
-  process.env.DATABASE_URL || resolve(PROJECT_ROOT, "data", "groffee.sqlite");
+const DB_PATH = process.env.DATABASE_URL || resolve(PROJECT_ROOT, "data", "groffee.sqlite");
 
 const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");

@@ -12,16 +12,11 @@ export interface BlameLine {
   content: string;
 }
 
-export async function getBlame(
-  repoPath: string,
-  ref: string,
-  path: string,
-): Promise<BlameLine[]> {
-  const { stdout } = await execFileAsync(
-    "git",
-    ["blame", "--porcelain", ref, "--", path],
-    { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 },
-  );
+export async function getBlame(repoPath: string, ref: string, path: string): Promise<BlameLine[]> {
+  const { stdout } = await execFileAsync("git", ["blame", "--porcelain", ref, "--", path], {
+    cwd: repoPath,
+    maxBuffer: 10 * 1024 * 1024,
+  });
 
   return parsePorcelainBlame(stdout);
 }
@@ -32,9 +27,7 @@ function parsePorcelainBlame(raw: string): BlameLine[] {
   let i = 0;
 
   while (i < rawLines.length) {
-    const headerMatch = rawLines[i]?.match(
-      /^([0-9a-f]{40}) (\d+) (\d+)/,
-    );
+    const headerMatch = rawLines[i]?.match(/^([0-9a-f]{40}) (\d+) (\d+)/);
     if (!headerMatch) {
       i++;
       continue;
@@ -51,10 +44,8 @@ function parsePorcelainBlame(raw: string): BlameLine[] {
     while (i < rawLines.length && !rawLines[i].startsWith("\t")) {
       const line = rawLines[i];
       if (line.startsWith("author ")) author = line.slice(7);
-      else if (line.startsWith("author-mail "))
-        authorEmail = line.slice(12).replace(/[<>]/g, "");
-      else if (line.startsWith("author-time "))
-        timestamp = parseInt(line.slice(12), 10);
+      else if (line.startsWith("author-mail ")) authorEmail = line.slice(12).replace(/[<>]/g, "");
+      else if (line.startsWith("author-time ")) timestamp = parseInt(line.slice(12), 10);
       i++;
     }
 

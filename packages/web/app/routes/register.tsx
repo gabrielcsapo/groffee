@@ -1,43 +1,42 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
-import { GroffeeLogo } from '../components/groffee-logo'
+import { useState } from "react";
+import { Link } from "react-router";
+import { GroffeeLogo } from "../components/groffee-logo";
 
 export default function Register() {
-  const [error, setError] = useState('')
-  const navigate = useNavigate()
+  const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError('')
+    e.preventDefault();
+    setError("");
 
-    const form = new FormData(e.currentTarget)
-    const password = form.get('password') as string
-    const confirm = form.get('confirm') as string
+    const form = new FormData(e.currentTarget);
+    const password = form.get("password") as string;
+    const confirm = form.get("confirm") as string;
 
     if (password !== confirm) {
-      setError('Passwords do not match')
-      return
+      setError("Passwords do not match");
+      return;
     }
 
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        username: form.get('username'),
-        email: form.get('email'),
+        username: form.get("username"),
+        email: form.get("email"),
         password,
       }),
-    })
+    });
 
-    const data = await res.json()
+    const data = await res.json();
     if (!res.ok) {
-      setError(data.error || 'Registration failed')
-      return
+      setError(data.error || "Registration failed");
+      return;
     }
 
-    window.location.href = '/'
+    window.location.href = "/";
   }
 
   return (
@@ -54,7 +53,9 @@ export default function Register() {
         )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label htmlFor="username" className="block text-sm font-medium mb-1">Username</label>
+            <label htmlFor="username" className="block text-sm font-medium mb-1">
+              Username
+            </label>
             <input
               id="username"
               name="username"
@@ -64,7 +65,9 @@ export default function Register() {
             />
           </div>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-1">Email address</label>
+            <label htmlFor="email" className="block text-sm font-medium mb-1">
+              Email address
+            </label>
             <input
               id="email"
               name="email"
@@ -74,7 +77,9 @@ export default function Register() {
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium mb-1">Password</label>
+            <label htmlFor="password" className="block text-sm font-medium mb-1">
+              Password
+            </label>
             <input
               id="password"
               name="password"
@@ -86,7 +91,9 @@ export default function Register() {
             <p className="text-xs text-text-secondary mt-1">Must be at least 8 characters</p>
           </div>
           <div>
-            <label htmlFor="confirm" className="block text-sm font-medium mb-1">Confirm password</label>
+            <label htmlFor="confirm" className="block text-sm font-medium mb-1">
+              Confirm password
+            </label>
             <input
               id="confirm"
               name="confirm"
@@ -102,9 +109,8 @@ export default function Register() {
         </form>
       </div>
       <div className="bg-surface border border-border rounded-lg p-4 mt-4 text-center text-sm">
-        Already have an account?{' '}
-        <Link to="/login">Sign in</Link>.
+        Already have an account? <Link to="/login">Sign in</Link>.
       </div>
     </div>
-  )
+  );
 }

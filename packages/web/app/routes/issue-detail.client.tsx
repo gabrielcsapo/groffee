@@ -1,39 +1,39 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { timeAgo } from '../lib/time'
-import { getEditHistory } from '../lib/actions'
+import { useState, useEffect } from "react";
+import { timeAgo } from "../lib/time";
+import { getEditHistory } from "../lib/actions";
 
 interface Comment {
-  id: string
-  body: string
-  author: string
-  authorId?: string
-  createdAt: string
-  updatedAt?: string
-  editCount?: number
-  lastEditedAt?: string | null
+  id: string;
+  body: string;
+  author: string;
+  authorId?: string;
+  createdAt: string;
+  updatedAt?: string;
+  editCount?: number;
+  lastEditedAt?: string | null;
 }
 
 interface Issue {
-  id: string
-  number: number
-  title: string
-  body: string | null
-  status: string
-  author: string
-  authorId?: string
-  createdAt: string
-  editCount?: number
-  lastEditedAt?: string | null
+  id: string;
+  number: number;
+  title: string;
+  body: string | null;
+  status: string;
+  author: string;
+  authorId?: string;
+  createdAt: string;
+  editCount?: number;
+  lastEditedAt?: string | null;
 }
 
 interface EditEntry {
-  id: string
-  previousTitle: string | null
-  previousBody: string | null
-  editedBy: string
-  createdAt: string | null
+  id: string;
+  previousTitle: string | null;
+  previousBody: string | null;
+  editedBy: string;
+  createdAt: string | null;
 }
 
 function EditedIndicator({
@@ -41,20 +41,20 @@ function EditedIndicator({
   lastEditedAt,
   onViewHistory,
 }: {
-  editCount?: number
-  lastEditedAt?: string | null
-  onViewHistory: () => void
+  editCount?: number;
+  lastEditedAt?: string | null;
+  onViewHistory: () => void;
 }) {
-  if (!editCount || editCount === 0) return null
+  if (!editCount || editCount === 0) return null;
   return (
     <button
       onClick={onViewHistory}
       className="text-xs text-text-secondary hover:underline ml-1"
-      title={`Edited ${editCount} time${editCount > 1 ? 's' : ''}${lastEditedAt ? ` - last ${timeAgo(lastEditedAt)}` : ''}`}
+      title={`Edited ${editCount} time${editCount > 1 ? "s" : ""}${lastEditedAt ? ` - last ${timeAgo(lastEditedAt)}` : ""}`}
     >
       (edited)
     </button>
-  )
+  );
 }
 
 function EditHistoryPanel({ entries, onClose }: { entries: EditEntry[]; onClose: () => void }) {
@@ -62,13 +62,15 @@ function EditHistoryPanel({ entries, onClose }: { entries: EditEntry[]; onClose:
     <div className="border border-border rounded-lg mt-2 mb-4 bg-surface p-3">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-medium text-text-primary">Edit History</h3>
-        <button onClick={onClose} className="text-xs text-text-secondary hover:text-text-primary">&times;</button>
+        <button onClick={onClose} className="text-xs text-text-secondary hover:text-text-primary">
+          &times;
+        </button>
       </div>
       {entries.length === 0 && <p className="text-xs text-text-secondary">No edit history.</p>}
       {entries.map((entry) => (
         <div key={entry.id} className="border-b border-border last:border-0 py-2">
           <div className="text-xs text-text-secondary">
-            {entry.editedBy} edited {entry.createdAt ? timeAgo(entry.createdAt) : ''}
+            {entry.editedBy} edited {entry.createdAt ? timeAgo(entry.createdAt) : ""}
           </div>
           {entry.previousTitle && (
             <div className="text-xs text-text-secondary mt-1">
@@ -83,7 +85,7 @@ function EditHistoryPanel({ entries, onClose }: { entries: EditEntry[]; onClose:
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 export function IssueDetailView({
@@ -93,59 +95,67 @@ export function IssueDetailView({
   initialIssue,
   initialComments,
 }: {
-  owner: string
-  repo: string
-  issueNumber: string
-  initialIssue: Issue | null
-  initialComments: Comment[]
+  owner: string;
+  repo: string;
+  issueNumber: string;
+  initialIssue: Issue | null;
+  initialComments: Comment[];
 }) {
-  const [issue, setIssue] = useState<Issue | null>(initialIssue)
-  const [commentsList, setCommentsList] = useState<Comment[]>(initialComments)
-  const [newComment, setNewComment] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [user, setUser] = useState<{ username: string } | null>(null)
+  const [issue, setIssue] = useState<Issue | null>(initialIssue);
+  const [commentsList, setCommentsList] = useState<Comment[]>(initialComments);
+  const [newComment, setNewComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [user, setUser] = useState<{ username: string } | null>(null);
 
   // Issue edit state
-  const [editing, setEditing] = useState(false)
-  const [editTitle, setEditTitle] = useState('')
-  const [editBody, setEditBody] = useState('')
-  const [editSaving, setEditSaving] = useState(false)
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   // Comment edit state
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
-  const [editCommentBody, setEditCommentBody] = useState('')
-  const [commentEditSaving, setCommentEditSaving] = useState(false)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentBody, setEditCommentBody] = useState("");
+  const [commentEditSaving, setCommentEditSaving] = useState(false);
 
   // History state
-  const [historyTarget, setHistoryTarget] = useState<{ type: 'issue' | 'comment'; id: string } | null>(null)
-  const [historyEntries, setHistoryEntries] = useState<EditEntry[]>([])
-  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyTarget, setHistoryTarget] = useState<{
+    type: "issue" | "comment";
+    id: string;
+  } | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<EditEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(d => { if (d?.user) setUser(d.user) }).catch(() => {})
-  }, [])
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.user) setUser(d.user);
+      })
+      .catch(() => {});
+  }, []);
 
-  const canEditIssue = user && issue && (user.username === issue.author || user.username === owner)
+  const canEditIssue = user && issue && (user.username === issue.author || user.username === owner);
 
   function canEditComment(comment: Comment) {
-    return user && (user.username === comment.author || user.username === owner)
+    return user && (user.username === comment.author || user.username === owner);
   }
 
   function startEditIssue() {
-    if (!issue) return
-    setEditTitle(issue.title)
-    setEditBody(issue.body || '')
-    setEditing(true)
+    if (!issue) return;
+    setEditTitle(issue.title);
+    setEditBody(issue.body || "");
+    setEditing(true);
   }
 
   async function saveIssueEdit() {
-    if (!issue || !editTitle.trim()) return
-    setEditSaving(true)
+    if (!issue || !editTitle.trim()) return;
+    setEditSaving(true);
     const res = await fetch(`/api/repos/${owner}/${repo}/issues/${issueNumber}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: editTitle, body: editBody }),
-    })
+    });
     if (res.ok) {
       setIssue({
         ...issue,
@@ -153,84 +163,94 @@ export function IssueDetailView({
         body: editBody.trim() || null,
         editCount: (issue.editCount || 0) + 1,
         lastEditedAt: new Date().toISOString(),
-      })
-      setEditing(false)
+      });
+      setEditing(false);
     }
-    setEditSaving(false)
+    setEditSaving(false);
   }
 
   function startEditComment(comment: Comment) {
-    setEditingCommentId(comment.id)
-    setEditCommentBody(comment.body)
+    setEditingCommentId(comment.id);
+    setEditCommentBody(comment.body);
   }
 
   async function saveCommentEdit(comment: Comment) {
-    if (!editCommentBody.trim()) return
-    setCommentEditSaving(true)
+    if (!editCommentBody.trim()) return;
+    setCommentEditSaving(true);
 
     // Determine the correct API path based on whether this is an issue or PR comment
-    const res = await fetch(`/api/repos/${owner}/${repo}/issues/${issueNumber}/comments/${comment.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body: editCommentBody }),
-    })
+    const res = await fetch(
+      `/api/repos/${owner}/${repo}/issues/${issueNumber}/comments/${comment.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: editCommentBody }),
+      },
+    );
 
     if (res.ok) {
-      setCommentsList(commentsList.map(c =>
-        c.id === comment.id
-          ? { ...c, body: editCommentBody.trim(), editCount: (c.editCount || 0) + 1, lastEditedAt: new Date().toISOString() }
-          : c
-      ))
-      setEditingCommentId(null)
+      setCommentsList(
+        commentsList.map((c) =>
+          c.id === comment.id
+            ? {
+                ...c,
+                body: editCommentBody.trim(),
+                editCount: (c.editCount || 0) + 1,
+                lastEditedAt: new Date().toISOString(),
+              }
+            : c,
+        ),
+      );
+      setEditingCommentId(null);
     }
-    setCommentEditSaving(false)
+    setCommentEditSaving(false);
   }
 
-  async function showHistory(type: 'issue' | 'comment', id: string) {
+  async function showHistory(type: "issue" | "comment", id: string) {
     if (historyTarget?.type === type && historyTarget?.id === id) {
-      setHistoryTarget(null)
-      return
+      setHistoryTarget(null);
+      return;
     }
-    setHistoryLoading(true)
-    setHistoryTarget({ type, id })
+    setHistoryLoading(true);
+    setHistoryTarget({ type, id });
     try {
-      const targetType = type === 'issue' ? 'issue' : 'comment'
-      const entries = await getEditHistory(targetType, id)
-      setHistoryEntries(entries)
+      const targetType = type === "issue" ? "issue" : "comment";
+      const entries = await getEditHistory(targetType, id);
+      setHistoryEntries(entries);
     } catch {
-      setHistoryEntries([])
+      setHistoryEntries([]);
     }
-    setHistoryLoading(false)
+    setHistoryLoading(false);
   }
 
   async function handleComment(e: React.FormEvent) {
-    e.preventDefault()
-    if (!newComment.trim()) return
-    setSubmitting(true)
+    e.preventDefault();
+    if (!newComment.trim()) return;
+    setSubmitting(true);
 
     const res = await fetch(`/api/repos/${owner}/${repo}/issues/${issueNumber}/comments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ body: newComment }),
-    })
+    });
 
-    const data = await res.json()
+    const data = await res.json();
     if (res.ok) {
-      setCommentsList([...commentsList, data.comment])
-      setNewComment('')
+      setCommentsList([...commentsList, data.comment]);
+      setNewComment("");
     }
-    setSubmitting(false)
+    setSubmitting(false);
   }
 
   async function toggleStatus() {
-    if (!issue) return
-    const newStatus = issue.status === 'open' ? 'closed' : 'open'
+    if (!issue) return;
+    const newStatus = issue.status === "open" ? "closed" : "open";
     const res = await fetch(`/api/repos/${owner}/${repo}/issues/${issueNumber}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
-    })
-    if (res.ok) setIssue({ ...issue, status: newStatus })
+    });
+    if (res.ok) setIssue({ ...issue, status: newStatus });
   }
 
   if (!issue) {
@@ -240,7 +260,7 @@ export function IssueDetailView({
           <h1 className="text-xl font-semibold text-text-primary">Issue not found</h1>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -252,7 +272,7 @@ export function IssueDetailView({
             <input
               type="text"
               value={editTitle}
-              onChange={e => setEditTitle(e.target.value)}
+              onChange={(e) => setEditTitle(e.target.value)}
               className="w-full px-3 py-2 border border-border rounded-md bg-surface text-lg font-semibold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary mb-2"
             />
           </div>
@@ -271,13 +291,15 @@ export function IssueDetailView({
           </h1>
         )}
         <div className="flex items-center gap-3">
-          <span className={`badge ${issue.status === 'open' ? 'badge-open' : 'badge-closed'}`}>
+          <span className={`badge ${issue.status === "open" ? "badge-open" : "badge-closed"}`}>
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
               <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
-              {issue.status === 'open' && <circle cx="8" cy="8" r="3" />}
-              {issue.status === 'closed' && <path d="M4 8l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" />}
+              {issue.status === "open" && <circle cx="8" cy="8" r="3" />}
+              {issue.status === "closed" && (
+                <path d="M4 8l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" />
+              )}
             </svg>
-            {issue.status === 'open' ? 'Open' : 'Closed'}
+            {issue.status === "open" ? "Open" : "Closed"}
           </span>
           <span className="text-sm text-text-secondary">
             <strong>{issue.author}</strong> opened this issue {timeAgo(issue.createdAt)}
@@ -293,7 +315,7 @@ export function IssueDetailView({
             <EditedIndicator
               editCount={issue.editCount}
               lastEditedAt={issue.lastEditedAt}
-              onViewHistory={() => showHistory('issue', issue.id)}
+              onViewHistory={() => showHistory("issue", issue.id)}
             />
           </span>
           {canEditIssue && !editing && (
@@ -309,7 +331,7 @@ export function IssueDetailView({
           <div className="p-4">
             <textarea
               value={editBody}
-              onChange={e => setEditBody(e.target.value)}
+              onChange={(e) => setEditBody(e.target.value)}
               rows={8}
               className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
               placeholder="Issue description..."
@@ -326,23 +348,27 @@ export function IssueDetailView({
                 disabled={editSaving || !editTitle.trim()}
                 className="btn-primary btn-sm"
               >
-                {editSaving ? 'Saving...' : 'Save'}
+                {editSaving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
         ) : (
           <div className="px-4 py-3 text-sm text-text-primary whitespace-pre-wrap">
-            {issue.body || <span className="text-text-secondary italic">No description provided.</span>}
+            {issue.body || (
+              <span className="text-text-secondary italic">No description provided.</span>
+            )}
           </div>
         )}
       </div>
 
       {/* Issue edit history */}
-      {historyTarget?.type === 'issue' && historyTarget.id === issue.id && (
-        historyLoading
-          ? <div className="text-xs text-text-secondary mb-4">Loading history...</div>
-          : <EditHistoryPanel entries={historyEntries} onClose={() => setHistoryTarget(null)} />
-      )}
+      {historyTarget?.type === "issue" &&
+        historyTarget.id === issue.id &&
+        (historyLoading ? (
+          <div className="text-xs text-text-secondary mb-4">Loading history...</div>
+        ) : (
+          <EditHistoryPanel entries={historyEntries} onClose={() => setHistoryTarget(null)} />
+        ))}
 
       {/* Comments */}
       {commentsList.map((comment) => (
@@ -351,11 +377,13 @@ export function IssueDetailView({
             <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm flex items-center justify-between">
               <span className="flex items-center">
                 <strong className="text-text-primary">{comment.author}</strong>
-                <span className="text-text-secondary ml-1">commented {timeAgo(comment.createdAt)}</span>
+                <span className="text-text-secondary ml-1">
+                  commented {timeAgo(comment.createdAt)}
+                </span>
                 <EditedIndicator
                   editCount={comment.editCount}
                   lastEditedAt={comment.lastEditedAt}
-                  onViewHistory={() => showHistory('comment', comment.id)}
+                  onViewHistory={() => showHistory("comment", comment.id)}
                 />
               </span>
               {canEditComment(comment) && editingCommentId !== comment.id && (
@@ -371,7 +399,7 @@ export function IssueDetailView({
               <div className="p-4">
                 <textarea
                   value={editCommentBody}
-                  onChange={e => setEditCommentBody(e.target.value)}
+                  onChange={(e) => setEditCommentBody(e.target.value)}
                   rows={4}
                   className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
                 />
@@ -387,7 +415,7 @@ export function IssueDetailView({
                     disabled={commentEditSaving || !editCommentBody.trim()}
                     className="btn-primary btn-sm"
                   >
-                    {commentEditSaving ? 'Saving...' : 'Save'}
+                    {commentEditSaving ? "Saving..." : "Save"}
                   </button>
                 </div>
               </div>
@@ -399,11 +427,13 @@ export function IssueDetailView({
           </div>
 
           {/* Comment edit history */}
-          {historyTarget?.type === 'comment' && historyTarget.id === comment.id && (
-            historyLoading
-              ? <div className="text-xs text-text-secondary mb-4">Loading history...</div>
-              : <EditHistoryPanel entries={historyEntries} onClose={() => setHistoryTarget(null)} />
-          )}
+          {historyTarget?.type === "comment" &&
+            historyTarget.id === comment.id &&
+            (historyLoading ? (
+              <div className="text-xs text-text-secondary mb-4">Loading history...</div>
+            ) : (
+              <EditHistoryPanel entries={historyEntries} onClose={() => setHistoryTarget(null)} />
+            ))}
         </div>
       ))}
 
@@ -413,7 +443,7 @@ export function IssueDetailView({
           <form onSubmit={handleComment}>
             <textarea
               value={newComment}
-              onChange={e => setNewComment(e.target.value)}
+              onChange={(e) => setNewComment(e.target.value)}
               rows={4}
               placeholder="Leave a comment..."
               className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
@@ -423,12 +453,12 @@ export function IssueDetailView({
                 type="button"
                 onClick={toggleStatus}
                 className={`btn-sm rounded-md border font-medium ${
-                  issue.status === 'open'
-                    ? 'border-danger/30 text-danger hover:bg-danger/5'
-                    : 'border-success/30 text-success hover:bg-success/5'
+                  issue.status === "open"
+                    ? "border-danger/30 text-danger hover:bg-danger/5"
+                    : "border-success/30 text-success hover:bg-success/5"
                 }`}
               >
-                {issue.status === 'open' ? 'Close issue' : 'Reopen issue'}
+                {issue.status === "open" ? "Close issue" : "Reopen issue"}
               </button>
               <button
                 type="submit"
@@ -442,5 +472,5 @@ export function IssueDetailView({
         </div>
       )}
     </div>
-  )
+  );
 }

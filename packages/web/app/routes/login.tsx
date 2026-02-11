@@ -1,34 +1,33 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
-import { GroffeeLogo } from '../components/groffee-logo'
+import { useState } from "react";
+import { Link } from "react-router";
+import { GroffeeLogo } from "../components/groffee-logo";
 
 export default function Login() {
-  const [error, setError] = useState('')
-  const navigate = useNavigate()
+  const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError('')
+    e.preventDefault();
+    setError("");
 
-    const form = new FormData(e.currentTarget)
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const form = new FormData(e.currentTarget);
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        username: form.get('username'),
-        password: form.get('password'),
+        username: form.get("username"),
+        password: form.get("password"),
       }),
-    })
+    });
 
-    const data = await res.json()
+    const data = await res.json();
     if (!res.ok) {
-      setError(data.error || 'Login failed')
-      return
+      setError(data.error || "Login failed");
+      return;
     }
 
-    window.location.href = '/'
+    window.location.href = "/";
   }
 
   return (
@@ -45,7 +44,9 @@ export default function Login() {
         )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label htmlFor="username" className="block text-sm font-medium mb-1">Username</label>
+            <label htmlFor="username" className="block text-sm font-medium mb-1">
+              Username
+            </label>
             <input
               id="username"
               name="username"
@@ -55,7 +56,9 @@ export default function Login() {
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium mb-1">Password</label>
+            <label htmlFor="password" className="block text-sm font-medium mb-1">
+              Password
+            </label>
             <input
               id="password"
               name="password"
@@ -70,9 +73,8 @@ export default function Login() {
         </form>
       </div>
       <div className="bg-surface border border-border rounded-lg p-4 mt-4 text-center text-sm">
-        New to Groffee?{' '}
-        <Link to="/register">Create an account</Link>.
+        New to Groffee? <Link to="/register">Create an account</Link>.
       </div>
     </div>
-  )
+  );
 }

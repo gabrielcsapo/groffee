@@ -1,65 +1,69 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { useParams } from 'react-router'
+import { useState, useEffect } from "react";
+import { useParams } from "react-router";
 
 export default function RepoSettings() {
-  const { owner, repo: repoName } = useParams()
-  const [repo, setRepo] = useState<{ description: string; isPublic: boolean; defaultBranch: string } | null>(null)
-  const [description, setDescription] = useState('')
-  const [isPublic, setIsPublic] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState('')
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const { owner, repo: repoName } = useParams();
+  const [repo, setRepo] = useState<{
+    description: string;
+    isPublic: boolean;
+    defaultBranch: string;
+  } | null>(null);
+  const [description, setDescription] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetch(`/api/repos/${owner}/${repoName}`)
-      .then(r => r.json())
-      .then(data => {
+      .then((r) => r.json())
+      .then((data) => {
         if (data.repository) {
-          setRepo(data.repository)
-          setDescription(data.repository.description || '')
-          setIsPublic(data.repository.isPublic)
+          setRepo(data.repository);
+          setDescription(data.repository.description || "");
+          setIsPublic(data.repository.isPublic);
         }
-      })
-  }, [owner, repoName])
+      });
+  }, [owner, repoName]);
 
   async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    setMessage('')
-    setError('')
+    e.preventDefault();
+    setSaving(true);
+    setMessage("");
+    setError("");
 
     const res = await fetch(`/api/repos/${owner}/${repoName}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ description, isPublic }),
-    })
+    });
 
-    const data = await res.json()
+    const data = await res.json();
     if (res.ok) {
-      setMessage('Settings saved.')
-      setRepo(data.repository)
+      setMessage("Settings saved.");
+      setRepo(data.repository);
     } else {
-      setError(data.error || 'Failed to save settings')
+      setError(data.error || "Failed to save settings");
     }
-    setSaving(false)
+    setSaving(false);
   }
 
   async function handleDelete() {
-    if (confirmDelete !== repoName) return
-    setDeleting(true)
-    setError('')
+    if (confirmDelete !== repoName) return;
+    setDeleting(true);
+    setError("");
 
-    const res = await fetch(`/api/repos/${owner}/${repoName}`, { method: 'DELETE' })
+    const res = await fetch(`/api/repos/${owner}/${repoName}`, { method: "DELETE" });
     if (res.ok) {
-      window.location.href = `/${owner}`
+      window.location.href = `/${owner}`;
     } else {
-      const data = await res.json()
-      setError(data.error || 'Failed to delete repository')
-      setDeleting(false)
+      const data = await res.json();
+      setError(data.error || "Failed to delete repository");
+      setDeleting(false);
     }
   }
 
@@ -75,12 +79,11 @@ export default function RepoSettings() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
     <div className="max-w-2xl mx-auto mt-4">
-
       {message && (
         <div className="mb-4 p-3 rounded-md bg-diff-add-bg border border-success/30 text-success text-sm">
           {message}
@@ -101,7 +104,7 @@ export default function RepoSettings() {
             <input
               type="text"
               value={description}
-              onChange={e => setDescription(e.target.value)}
+              onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
               placeholder="Short description of your repository"
             />
@@ -138,12 +141,8 @@ export default function RepoSettings() {
           </fieldset>
 
           <div>
-            <button
-              type="submit"
-              disabled={saving}
-              className="btn-primary"
-            >
-              {saving ? 'Saving...' : 'Save changes'}
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? "Saving..." : "Save changes"}
             </button>
           </div>
         </form>
@@ -154,7 +153,10 @@ export default function RepoSettings() {
         <h2 className="text-lg font-semibold text-danger mb-2">Danger zone</h2>
         <p className="text-sm text-text-secondary mb-4">
           Once you delete a repository, there is no going back. This will permanently delete the
-          <strong> {owner}/{repoName} </strong>
+          <strong>
+            {" "}
+            {owner}/{repoName}{" "}
+          </strong>
           repository, wiki, issues, comments, and all associated data.
         </p>
         <div className="flex flex-col gap-3">
@@ -165,7 +167,7 @@ export default function RepoSettings() {
             <input
               type="text"
               value={confirmDelete}
-              onChange={e => setConfirmDelete(e.target.value)}
+              onChange={(e) => setConfirmDelete(e.target.value)}
               className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-danger focus:border-danger"
               placeholder={repoName}
             />
@@ -176,11 +178,11 @@ export default function RepoSettings() {
               disabled={confirmDelete !== repoName || deleting}
               className="btn-danger"
             >
-              {deleting ? 'Deleting...' : 'Delete this repository'}
+              {deleting ? "Deleting..." : "Delete this repository"}
             </button>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

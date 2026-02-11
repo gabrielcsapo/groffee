@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { db, repositories, users, issues, comments, editHistory } from "@groffee/db";
-import { eq, and, desc, max, count, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, max, count, inArray } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
+import type { AppEnv } from "../types.js";
 
-export const issueRoutes = new Hono();
+export const issueRoutes = new Hono<AppEnv>();
 
 // Helper: find repo + check visibility
 async function findRepoForIssues(ownerName: string, repoName: string, currentUserId?: string) {
@@ -25,7 +26,11 @@ async function findRepoForIssues(ownerName: string, repoName: string, currentUse
 // List issues for a repo
 issueRoutes.get("/:owner/:repo/issues", optionalAuth, async (c) => {
   const currentUser = c.get("user") as { id: string } | undefined;
-  const result = await findRepoForIssues(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
+  const result = await findRepoForIssues(
+    c.req.param("owner"),
+    c.req.param("repo"),
+    currentUser?.id,
+  );
   if (!result) return c.json({ error: "Repository not found" }, 404);
 
   const status = c.req.query("status") || "open";
@@ -38,12 +43,15 @@ issueRoutes.get("/:owner/:repo/issues", optionalAuth, async (c) => {
 
   // Attach author usernames
   const authorIds = [...new Set(issueList.map((i) => i.authorId))];
-  const authors = authorIds.length > 0
-    ? await Promise.all(authorIds.map(async (id) => {
-        const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-        return u;
-      }))
-    : [];
+  const authors =
+    authorIds.length > 0
+      ? await Promise.all(
+          authorIds.map(async (id) => {
+            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+            return u;
+          }),
+        )
+      : [];
   const authorMap = new Map(authors.filter(Boolean).map((u) => [u.id, u.username]));
 
   const issuesWithAuthors = issueList.map((i) => ({
@@ -57,7 +65,11 @@ issueRoutes.get("/:owner/:repo/issues", optionalAuth, async (c) => {
 // Get single issue with comments
 issueRoutes.get("/:owner/:repo/issues/:number", optionalAuth, async (c) => {
   const currentUser = c.get("user") as { id: string } | undefined;
-  const result = await findRepoForIssues(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
+  const result = await findRepoForIssues(
+    c.req.param("owner"),
+    c.req.param("repo"),
+    currentUser?.id,
+  );
   if (!result) return c.json({ error: "Repository not found" }, 404);
 
   const num = parseInt(c.req.param("number"), 10);
@@ -80,12 +92,15 @@ issueRoutes.get("/:owner/:repo/issues/:number", optionalAuth, async (c) => {
     .orderBy(comments.createdAt);
 
   const commentAuthorIds = [...new Set(commentList.map((c) => c.authorId))];
-  const commentAuthors = commentAuthorIds.length > 0
-    ? await Promise.all(commentAuthorIds.map(async (id) => {
-        const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-        return u;
-      }))
-    : [];
+  const commentAuthors =
+    commentAuthorIds.length > 0
+      ? await Promise.all(
+          commentAuthorIds.map(async (id) => {
+            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+            return u;
+          }),
+        )
+      : [];
   const commentAuthorMap = new Map(commentAuthors.filter(Boolean).map((u) => [u.id, u.username]));
 
   // Get edit count for the issue
@@ -96,19 +111,23 @@ issueRoutes.get("/:owner/:repo/issues/:number", optionalAuth, async (c) => {
 
   // Get edit counts for comments
   const commentIds = commentList.map((c) => c.id);
-  const commentEditCounts = commentIds.length > 0
-    ? await db
-        .select({
-          commentId: editHistory.commentId,
-          editCount: count(),
-          lastEditedAt: max(editHistory.createdAt),
-        })
-        .from(editHistory)
-        .where(inArray(editHistory.commentId, commentIds))
-        .groupBy(editHistory.commentId)
-    : [];
+  const commentEditCounts =
+    commentIds.length > 0
+      ? await db
+          .select({
+            commentId: editHistory.commentId,
+            editCount: count(),
+            lastEditedAt: max(editHistory.createdAt),
+          })
+          .from(editHistory)
+          .where(inArray(editHistory.commentId, commentIds))
+          .groupBy(editHistory.commentId)
+      : [];
   const commentEditMap = new Map(
-    commentEditCounts.map((e) => [e.commentId, { editCount: e.editCount, lastEditedAt: e.lastEditedAt }])
+    commentEditCounts.map((e) => [
+      e.commentId,
+      { editCount: e.editCount, lastEditedAt: e.lastEditedAt },
+    ]),
   );
 
   const commentsWithAuthors = commentList.map((c) => ({
@@ -133,7 +152,11 @@ issueRoutes.get("/:owner/:repo/issues/:number", optionalAuth, async (c) => {
 issueRoutes.post("/:owner/:repo/issues", requireAuth, async (c) => {
   const user = c.get("user") as { id: string; username: string };
   const currentUser = c.get("user") as { id: string } | undefined;
-  const result = await findRepoForIssues(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
+  const result = await findRepoForIssues(
+    c.req.param("owner"),
+    c.req.param("repo"),
+    currentUser?.id,
+  );
   if (!result) return c.json({ error: "Repository not found" }, 404);
 
   const { title, body } = await c.req.json();
@@ -197,8 +220,9 @@ issueRoutes.patch("/:owner/:repo/issues/:number", requireAuth, async (c) => {
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
 
-  const newTitle = typeof body.title === "string" && body.title.trim() ? body.title.trim() : undefined;
-  const newBody = typeof body.body === "string" ? (body.body.trim() || null) : undefined;
+  const newTitle =
+    typeof body.title === "string" && body.title.trim() ? body.title.trim() : undefined;
+  const newBody = typeof body.body === "string" ? body.body.trim() || null : undefined;
 
   // Record edit history if title or body actually changed
   if (
@@ -237,11 +261,7 @@ issueRoutes.patch("/:owner/:repo/issues/:number/comments/:commentId", requireAut
   if (!result) return c.json({ error: "Repository not found" }, 404);
 
   const commentId = c.req.param("commentId");
-  const [comment] = await db
-    .select()
-    .from(comments)
-    .where(eq(comments.id, commentId))
-    .limit(1);
+  const [comment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
 
   if (!comment) return c.json({ error: "Comment not found" }, 404);
 
@@ -290,7 +310,11 @@ issueRoutes.patch("/:owner/:repo/issues/:number/comments/:commentId", requireAut
 issueRoutes.post("/:owner/:repo/issues/:number/comments", requireAuth, async (c) => {
   const user = c.get("user") as { id: string; username: string };
   const currentUser = c.get("user") as { id: string } | undefined;
-  const result = await findRepoForIssues(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
+  const result = await findRepoForIssues(
+    c.req.param("owner"),
+    c.req.param("repo"),
+    currentUser?.id,
+  );
   if (!result) return c.json({ error: "Repository not found" }, 404);
 
   const num = parseInt(c.req.param("number"), 10);

@@ -18,11 +18,7 @@ function formatRelativeDate(timestamp: number): string {
   return `${years} year${years !== 1 ? "s" : ""} ago`;
 }
 
-export default async function Repo({
-  params,
-}: {
-  params: { owner: string; repo: string };
-}) {
+export default async function Repo({ params }: { params: { owner: string; repo: string } }) {
   const { owner, repo: repoName } = params;
 
   const repoData = await apiFetch(`/api/repos/${owner}/${repoName}`);
@@ -31,9 +27,7 @@ export default async function Repo({
     return (
       <div className="max-w-4xl mx-auto mt-8">
         <div className="bg-surface border border-border rounded-lg p-6">
-          <h1 className="text-xl font-semibold text-text-primary">
-            Repository not found
-          </h1>
+          <h1 className="text-xl font-semibold text-text-primary">Repository not found</h1>
         </div>
       </div>
     );
@@ -43,17 +37,13 @@ export default async function Repo({
   const defaultBranch = repository.defaultBranch;
 
   const [treeData, refsData] = await Promise.all([
-    apiFetch(
-      `/api/repos/${owner}/${repoName}/tree/${encodeURIComponent(defaultBranch)}`,
-    ),
+    apiFetch(`/api/repos/${owner}/${repoName}/tree/${encodeURIComponent(defaultBranch)}`),
     apiFetch(`/api/repos/${owner}/${repoName}/refs`),
   ]);
 
   const ref = treeData.ref || defaultBranch;
   const entries = treeData.entries || [];
-  const branches = (refsData.refs || []).filter(
-    (r: { type: string }) => r.type === "branch",
-  );
+  const branches = (refsData.refs || []).filter((r: { type: string }) => r.type === "branch");
   const clonePath = `/${owner}/${repoName}.git`;
 
   return (
@@ -84,16 +74,12 @@ export default async function Repo({
           >
             {repoName}
           </Link>
-          <span
-            className={`ml-2 badge ${repository.isPublic ? "badge-public" : "badge-private"}`}
-          >
+          <span className={`ml-2 badge ${repository.isPublic ? "badge-public" : "badge-private"}`}>
             {repository.isPublic ? "Public" : "Private"}
           </span>
         </div>
         {repository.description && (
-          <p className="text-sm text-text-secondary mt-1">
-            {repository.description}
-          </p>
+          <p className="text-sm text-text-secondary mt-1">{repository.description}</p>
         )}
       </div>
 
@@ -110,12 +96,7 @@ export default async function Repo({
               to={`/${owner}/${repoName}/commits/${ref}`}
               className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-link hover:no-underline"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -207,12 +188,8 @@ export default async function Repo({
                     <td className="py-2 px-4 text-text-secondary whitespace-nowrap text-right">
                       {entry.lastCommit && (
                         <time
-                          dateTime={new Date(
-                            entry.lastCommit.timestamp * 1000,
-                          ).toISOString()}
-                          title={new Date(
-                            entry.lastCommit.timestamp * 1000,
-                          ).toLocaleString()}
+                          dateTime={new Date(entry.lastCommit.timestamp * 1000).toISOString()}
+                          title={new Date(entry.lastCommit.timestamp * 1000).toLocaleString()}
                         >
                           {formatRelativeDate(entry.lastCommit.timestamp)}
                         </time>
@@ -242,11 +219,10 @@ export default async function Repo({
           <h3 className="text-base font-semibold text-text-primary mb-1">
             This repository is empty
           </h3>
-          <p className="text-sm text-text-secondary mb-4">
-            Push some code to get started:
-          </p>
+          <p className="text-sm text-text-secondary mb-4">Push some code to get started:</p>
           <pre className="text-left bg-surface-secondary p-4 rounded-md border border-border text-sm overflow-x-auto font-mono text-text-primary">
-            git remote add origin <CloneUrl path={clonePath} />{"\n"}git push -u origin main
+            git remote add origin <CloneUrl path={clonePath} />
+            {"\n"}git push -u origin main
           </pre>
         </div>
       )}

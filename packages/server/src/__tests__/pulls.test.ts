@@ -25,11 +25,15 @@ describe("GET /api/repos/:owner/:repo/pulls", () => {
   it("filters by status", async () => {
     const { cookie } = await createRepoWithBranches();
 
-    await post("/api/repos/testuser/my-repo/pulls", {
-      title: "Open PR",
-      sourceBranch: "feature",
-      targetBranch: "main",
-    }, cookie);
+    await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "Open PR",
+        sourceBranch: "feature",
+        targetBranch: "main",
+      },
+      cookie,
+    );
 
     const openRes = await get("/api/repos/testuser/my-repo/pulls?status=open");
     const openData = await openRes.json();
@@ -44,12 +48,16 @@ describe("GET /api/repos/:owner/:repo/pulls", () => {
 describe("POST /api/repos/:owner/:repo/pulls", () => {
   it("creates a pull request", async () => {
     const { cookie } = await createRepoWithBranches();
-    const res = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "Add feature",
-      body: "This adds a new feature",
-      sourceBranch: "feature",
-      targetBranch: "main",
-    }, cookie);
+    const res = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "Add feature",
+        body: "This adds a new feature",
+        sourceBranch: "feature",
+        targetBranch: "main",
+      },
+      cookie,
+    );
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.pullRequest.title).toBe("Add feature");
@@ -59,10 +67,14 @@ describe("POST /api/repos/:owner/:repo/pulls", () => {
 
   it("defaults targetBranch to repo default", async () => {
     const { cookie } = await createRepoWithBranches();
-    const res = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "Add feature",
-      sourceBranch: "feature",
-    }, cookie);
+    const res = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "Add feature",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     expect(res.status).toBe(200);
   });
 
@@ -71,10 +83,14 @@ describe("POST /api/repos/:owner/:repo/pulls", () => {
     // Create an issue first
     await post("/api/repos/testuser/my-repo/issues", { title: "Bug" }, cookie);
     // PR should get number 2
-    const res = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "Fix",
-      sourceBranch: "feature",
-    }, cookie);
+    const res = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "Fix",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const data = await res.json();
     expect(data.pullRequest.number).toBe(2);
   });
@@ -90,26 +106,38 @@ describe("POST /api/repos/:owner/:repo/pulls", () => {
 
   it("returns 400 for missing title", async () => {
     const { cookie } = await createRepoWithBranches();
-    const res = await post("/api/repos/testuser/my-repo/pulls", {
-      sourceBranch: "feature",
-    }, cookie);
+    const res = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for missing source branch", async () => {
     const { cookie } = await createRepoWithBranches();
-    const res = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-    }, cookie);
+    const res = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+      },
+      cookie,
+    );
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for non-existent source branch", async () => {
     const { cookie } = await createRepoWithBranches();
-    const res = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "nonexistent",
-    }, cookie);
+    const res = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "nonexistent",
+      },
+      cookie,
+    );
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toMatch(/not found/);
@@ -117,11 +145,15 @@ describe("POST /api/repos/:owner/:repo/pulls", () => {
 
   it("returns 400 when source equals target", async () => {
     const { cookie } = await createRepoWithBranches();
-    const res = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "main",
-      targetBranch: "main",
-    }, cookie);
+    const res = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "main",
+        targetBranch: "main",
+      },
+      cookie,
+    );
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toMatch(/different/);
@@ -131,10 +163,14 @@ describe("POST /api/repos/:owner/:repo/pulls", () => {
 describe("GET /api/repos/:owner/:repo/pulls/:number", () => {
   it("returns PR detail with diff and comments", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "Add feature",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "Add feature",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
 
     const res = await get(`/api/repos/testuser/my-repo/pulls/${created.pullRequest.number}`);
@@ -159,10 +195,14 @@ describe("GET /api/repos/:owner/:repo/pulls/:number", () => {
 describe("PATCH /api/repos/:owner/:repo/pulls/:number", () => {
   it("updates PR title", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "Old title",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "Old title",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
 
     const res = await patch(
@@ -177,10 +217,14 @@ describe("PATCH /api/repos/:owner/:repo/pulls/:number", () => {
 
   it("closes a PR", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
 
     const res = await patch(
@@ -194,15 +238,18 @@ describe("PATCH /api/repos/:owner/:repo/pulls/:number", () => {
 
   it("returns 401 without auth", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "feature",
-    }, cookie);
-    const created = await createRes.json();
-    const res = await patch(
-      `/api/repos/testuser/my-repo/pulls/${created.pullRequest.number}`,
-      { title: "x" },
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "feature",
+      },
+      cookie,
     );
+    const created = await createRes.json();
+    const res = await patch(`/api/repos/testuser/my-repo/pulls/${created.pullRequest.number}`, {
+      title: "x",
+    });
     expect(res.status).toBe(401);
   });
 });
@@ -210,10 +257,14 @@ describe("PATCH /api/repos/:owner/:repo/pulls/:number", () => {
 describe("POST /api/repos/:owner/:repo/pulls/:number/merge", () => {
   it("merges a PR (fast-forward)", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "Add feature",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "Add feature",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
 
     const res = await post(
@@ -234,10 +285,14 @@ describe("POST /api/repos/:owner/:repo/pulls/:number/merge", () => {
 
   it("returns 403 for non-owner", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
 
     const { cookie: bobCookie } = await registerUser("bob", "bob@test.com");
@@ -251,17 +306,17 @@ describe("POST /api/repos/:owner/:repo/pulls/:number/merge", () => {
 
   it("returns 400 for already merged PR", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "feature",
-    }, cookie);
-    const created = await createRes.json();
-
-    await post(
-      `/api/repos/testuser/my-repo/pulls/${created.pullRequest.number}/merge`,
-      {},
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "feature",
+      },
       cookie,
     );
+    const created = await createRes.json();
+
+    await post(`/api/repos/testuser/my-repo/pulls/${created.pullRequest.number}/merge`, {}, cookie);
 
     // Try to merge again
     const res = await post(
@@ -276,10 +331,14 @@ describe("POST /api/repos/:owner/:repo/pulls/:number/merge", () => {
 
   it("returns 401 without auth", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
     const res = await post(
       `/api/repos/testuser/my-repo/pulls/${created.pullRequest.number}/merge`,
@@ -292,10 +351,14 @@ describe("POST /api/repos/:owner/:repo/pulls/:number/merge", () => {
 describe("POST /api/repos/:owner/:repo/pulls/:number/comments", () => {
   it("adds a comment to a PR", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
 
     const res = await post(
@@ -311,10 +374,14 @@ describe("POST /api/repos/:owner/:repo/pulls/:number/comments", () => {
 
   it("returns 400 for empty body", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
 
     const res = await post(
@@ -327,10 +394,14 @@ describe("POST /api/repos/:owner/:repo/pulls/:number/comments", () => {
 
   it("returns 401 without auth", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
     const res = await post(
       `/api/repos/testuser/my-repo/pulls/${created.pullRequest.number}/comments`,
@@ -341,10 +412,14 @@ describe("POST /api/repos/:owner/:repo/pulls/:number/comments", () => {
 
   it("shows comments in PR detail", async () => {
     const { cookie } = await createRepoWithBranches();
-    const createRes = await post("/api/repos/testuser/my-repo/pulls", {
-      title: "PR",
-      sourceBranch: "feature",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/pulls",
+      {
+        title: "PR",
+        sourceBranch: "feature",
+      },
+      cookie,
+    );
     const created = await createRes.json();
 
     await post(

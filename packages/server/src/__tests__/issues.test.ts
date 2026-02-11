@@ -18,11 +18,19 @@ describe("GET /api/repos/:owner/:repo/issues", () => {
   it("filters by status", async () => {
     const { cookie } = await createRepo("my-repo");
     await post("/api/repos/testuser/my-repo/issues", { title: "Open bug" }, cookie);
-    const createRes = await post("/api/repos/testuser/my-repo/issues", { title: "Fixed bug" }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/issues",
+      { title: "Fixed bug" },
+      cookie,
+    );
     const created = await createRes.json();
 
     // Close the second issue
-    await patch(`/api/repos/testuser/my-repo/issues/${created.issue.number}`, { status: "closed" }, cookie);
+    await patch(
+      `/api/repos/testuser/my-repo/issues/${created.issue.number}`,
+      { status: "closed" },
+      cookie,
+    );
 
     const openRes = await get("/api/repos/testuser/my-repo/issues?status=open");
     const openData = await openRes.json();
@@ -39,10 +47,14 @@ describe("GET /api/repos/:owner/:repo/issues", () => {
 describe("POST /api/repos/:owner/:repo/issues", () => {
   it("creates an issue", async () => {
     const { cookie } = await createRepo("my-repo");
-    const res = await post("/api/repos/testuser/my-repo/issues", {
-      title: "Bug report",
-      body: "Something broke",
-    }, cookie);
+    const res = await post(
+      "/api/repos/testuser/my-repo/issues",
+      {
+        title: "Bug report",
+        body: "Something broke",
+      },
+      cookie,
+    );
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.issue.title).toBe("Bug report");
@@ -88,10 +100,14 @@ describe("POST /api/repos/:owner/:repo/issues", () => {
 describe("GET /api/repos/:owner/:repo/issues/:number", () => {
   it("returns issue detail with comments", async () => {
     const { cookie } = await createRepo("my-repo");
-    const createRes = await post("/api/repos/testuser/my-repo/issues", {
-      title: "Bug",
-      body: "Details here",
-    }, cookie);
+    const createRes = await post(
+      "/api/repos/testuser/my-repo/issues",
+      {
+        title: "Bug",
+        body: "Details here",
+      },
+      cookie,
+    );
     const created = await createRes.json();
 
     const res = await get(`/api/repos/testuser/my-repo/issues/${created.issue.number}`);
@@ -165,7 +181,9 @@ describe("PATCH /api/repos/:owner/:repo/issues/:number", () => {
     const { cookie } = await createRepo("my-repo");
     const createRes = await post("/api/repos/testuser/my-repo/issues", { title: "Bug" }, cookie);
     const created = await createRes.json();
-    const res = await patch(`/api/repos/testuser/my-repo/issues/${created.issue.number}`, { title: "x" });
+    const res = await patch(`/api/repos/testuser/my-repo/issues/${created.issue.number}`, {
+      title: "x",
+    });
     expect(res.status).toBe(401);
   });
 });
@@ -205,10 +223,9 @@ describe("POST /api/repos/:owner/:repo/issues/:number/comments", () => {
     const createRes = await post("/api/repos/testuser/my-repo/issues", { title: "Bug" }, cookie);
     const created = await createRes.json();
 
-    const res = await post(
-      `/api/repos/testuser/my-repo/issues/${created.issue.number}/comments`,
-      { body: "test" },
-    );
+    const res = await post(`/api/repos/testuser/my-repo/issues/${created.issue.number}/comments`, {
+      body: "test",
+    });
     expect(res.status).toBe(401);
   });
 

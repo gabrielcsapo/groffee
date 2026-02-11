@@ -143,10 +143,7 @@ export async function getCommitLog(
   }));
 }
 
-export async function getCommit(
-  repoPath: string,
-  oid: string,
-): Promise<CommitInfo> {
+export async function getCommit(repoPath: string, oid: string): Promise<CommitInfo> {
   const { commit } = await git.readCommit({ ...bareOpts(repoPath), oid });
 
   return {

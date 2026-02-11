@@ -1,14 +1,14 @@
-'use client'
+"use client";
 
-import { useId } from 'react'
+import { useId } from "react";
 
 interface GroffeeLogoProps {
-  size?: number
-  className?: string
+  size?: number;
+  className?: string;
 }
 
-export function GroffeeLogo({ size = 48, className = '' }: GroffeeLogoProps) {
-  const maskId = useId()
+export function GroffeeLogo({ size = 48, className = "" }: GroffeeLogoProps) {
+  const maskId = useId();
 
   return (
     <svg
@@ -47,5 +47,5 @@ export function GroffeeLogo({ size = 48, className = '' }: GroffeeLogoProps) {
       </defs>
       <circle cx="12" cy="12" r="10" mask={`url(#${maskId})`} />
     </svg>
-  )
+  );
 }

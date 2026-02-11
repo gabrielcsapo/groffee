@@ -1,5 +1,5 @@
-import { PullFilesView } from './pull-files.client'
+import { PullFilesView } from "./pull-files.client";
 
 export default function PullFiles() {
-  return <PullFilesView />
+  return <PullFilesView />;
 }

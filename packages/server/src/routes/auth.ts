@@ -19,21 +19,13 @@ authRoutes.post("/register", async (c) => {
   }
 
   // Check if username or email already exists
-  const [existing] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, username))
-    .limit(1);
+  const [existing] = await db.select().from(users).where(eq(users.username, username)).limit(1);
 
   if (existing) {
     return c.json({ error: "Username already taken" }, 409);
   }
 
-  const [existingEmail] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  const [existingEmail] = await db.select().from(users).where(eq(users.email, email)).limit(1);
 
   if (existingEmail) {
     return c.json({ error: "Email already registered" }, 409);
@@ -74,11 +66,7 @@ authRoutes.post("/login", async (c) => {
     return c.json({ error: "Missing required fields" }, 400);
   }
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, username))
-    .limit(1);
+  const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
 
   if (!user) {
     return c.json({ error: "Invalid credentials" }, 401);

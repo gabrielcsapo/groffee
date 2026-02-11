@@ -16,14 +16,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { hash } from "@node-rs/argon2";
-import {
-  db,
-  users,
-  repositories,
-  issues,
-  pullRequests,
-  comments,
-} from "@groffee/db";
+import { db, users, repositories, issues, pullRequests, comments } from "@groffee/db";
 import { eq } from "drizzle-orm";
 import { initBareRepo } from "@groffee/git";
 
@@ -57,9 +50,7 @@ function git(repoPath: string, args: string[], input?: string): string {
     GIT_COMMITTER_NAME: "Seed",
     GIT_COMMITTER_EMAIL: "seed@groffee.local",
   };
-  return execFileSync("git", args, { cwd: repoPath, env, input })
-    .toString()
-    .trim();
+  return execFileSync("git", args, { cwd: repoPath, env, input }).toString().trim();
 }
 
 /** Create a blob from content */
@@ -68,14 +59,9 @@ function makeBlob(repoPath: string, content: string): string {
 }
 
 /** Build a flat tree from entries: [mode, type, hash, name][] */
-function makeTree(
-  repoPath: string,
-  entries: [string, string, string, string][],
-): string {
+function makeTree(repoPath: string, entries: [string, string, string, string][]): string {
   const input =
-    entries
-      .map(([mode, type, h, name]) => `${mode} ${type} ${h}\t${name}`)
-      .join("\n") + "\n";
+    entries.map(([mode, type, h, name]) => `${mode} ${type} ${h}\t${name}`).join("\n") + "\n";
   return git(repoPath, ["mktree"], input);
 }
 
@@ -345,11 +331,7 @@ const COMMENT_BODIES = [
 
 async function main() {
   // Check idempotency
-  const existing = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, "alice"))
-    .limit(1);
+  const existing = await db.select().from(users).where(eq(users.username, "alice")).limit(1);
 
   if (existing.length > 0) {
     console.log("⚠ Seed data already exists (user 'alice' found). Skipping.");
@@ -464,26 +446,11 @@ async function main() {
         "src/routes/posts.ts": tsFileContent("src/routes/posts.ts", 55),
         "src/routes/comments.ts": tsFileContent("src/routes/comments.ts", 40),
         "src/routes/tags.ts": tsFileContent("src/routes/tags.ts", 30),
-        "src/routes/middleware.ts": tsFileContent(
-          "src/routes/middleware.ts",
-          35,
-        ),
-        "src/services/auth-service.ts": tsFileContent(
-          "src/services/auth-service.ts",
-          70,
-        ),
-        "src/services/user-service.ts": tsFileContent(
-          "src/services/user-service.ts",
-          55,
-        ),
-        "src/services/post-service.ts": tsFileContent(
-          "src/services/post-service.ts",
-          45,
-        ),
-        "src/services/email-service.ts": tsFileContent(
-          "src/services/email-service.ts",
-          30,
-        ),
+        "src/routes/middleware.ts": tsFileContent("src/routes/middleware.ts", 35),
+        "src/services/auth-service.ts": tsFileContent("src/services/auth-service.ts", 70),
+        "src/services/user-service.ts": tsFileContent("src/services/user-service.ts", 55),
+        "src/services/post-service.ts": tsFileContent("src/services/post-service.ts", 45),
+        "src/services/email-service.ts": tsFileContent("src/services/email-service.ts", 30),
         "src/types/index.ts": tsFileContent("src/types/index.ts", 20),
         "src/types/api.ts": tsFileContent("src/types/api.ts", 40),
         "src/types/models.ts": tsFileContent("src/types/models.ts", 35),
@@ -495,14 +462,8 @@ async function main() {
         "tests/auth.test.ts": tsFileContent("tests/auth.test.ts", 80),
         "tests/users.test.ts": tsFileContent("tests/users.test.ts", 60),
         "tests/posts.test.ts": tsFileContent("tests/posts.test.ts", 70),
-        "tests/integration/api.test.ts": tsFileContent(
-          "tests/integration/api.test.ts",
-          100,
-        ),
-        "tests/integration/db.test.ts": tsFileContent(
-          "tests/integration/db.test.ts",
-          50,
-        ),
+        "tests/integration/api.test.ts": tsFileContent("tests/integration/api.test.ts", 100),
+        "tests/integration/db.test.ts": tsFileContent("tests/integration/db.test.ts", 50),
       },
       branches: [
         "develop",
@@ -524,10 +485,8 @@ async function main() {
       isPublic: true,
       files: {
         "README.md": "# tiny-lib\n\nA tiny utility library.\n",
-        "index.ts":
-          "export function add(a: number, b: number) { return a + b; }\n",
-        "index.test.ts":
-          'import { add } from "./index";\nconsole.assert(add(1, 2) === 3);\n',
+        "index.ts": "export function add(a: number, b: number) { return a + b; }\n",
+        "index.test.ts": 'import { add } from "./index";\nconsole.assert(add(1, 2) === 3);\n',
       },
       branches: ["feature/multiply"],
       commitCount: 3,
@@ -547,10 +506,7 @@ async function main() {
         "src/routes/users.ts": tsFileContent("src/routes/users.ts", 35),
         "src/routes/posts.ts": tsFileContent("src/routes/posts.ts", 40),
         "src/middleware/auth.ts": tsFileContent("src/middleware/auth.ts", 20),
-        "src/middleware/logger.ts": tsFileContent(
-          "src/middleware/logger.ts",
-          15,
-        ),
+        "src/middleware/logger.ts": tsFileContent("src/middleware/logger.ts", 15),
         "src/db/schema.ts": tsFileContent("src/db/schema.ts", 50),
         "src/db/client.ts": tsFileContent("src/db/client.ts", 10),
         "tests/auth.test.ts": tsFileContent("tests/auth.test.ts", 45),
@@ -558,12 +514,7 @@ async function main() {
         "tests/posts.test.ts": tsFileContent("tests/posts.test.ts", 35),
         ".env.example": "DATABASE_URL=sqlite:./data.db\nPORT=3001\n",
       },
-      branches: [
-        "develop",
-        "feature/rate-limiting",
-        "fix/cors",
-        "release/v0.2",
-      ],
+      branches: ["develop", "feature/rate-limiting", "fix/cors", "release/v0.2"],
       commitCount: 15,
       daysOld: 70,
     },
@@ -608,16 +559,13 @@ async function main() {
       description: "Personal notes — private.",
       isPublic: false,
       files: {
-        "README.md":
-          "# Private Notes\n\nPersonal notes. Not for public consumption.\n",
-        "todo.md":
-          "- [ ] Buy groceries\n- [x] Finish seed script\n- [ ] Review PR #42\n",
+        "README.md": "# Private Notes\n\nPersonal notes. Not for public consumption.\n",
+        "todo.md": "- [ ] Buy groceries\n- [x] Finish seed script\n- [ ] Review PR #42\n",
         "ideas.md":
           "## Project Ideas\n\n1. A better git UI\n2. An offline-first note-taking app\n3. A CLI for managing dotfiles\n",
         "bookmarks.md":
           "## Bookmarks\n\n- [Hono docs](https://hono.dev)\n- [Drizzle docs](https://orm.drizzle.team)\n",
-        "journal/2024-01.md":
-          "## January 2024\n\nStarted working on the new project...\n",
+        "journal/2024-01.md": "## January 2024\n\nStarted working on the new project...\n",
       },
       branches: [],
       commitCount: 5,
@@ -626,8 +574,7 @@ async function main() {
     {
       name: "docs-site",
       owner: "bob",
-      description:
-        "Documentation website built with Astro. Markdown-based with full-text search.",
+      description: "Documentation website built with Astro. Markdown-based with full-text search.",
       isPublic: true,
       files: {
         "README.md": mdFileContent("Docs Site", 3),
@@ -673,10 +620,7 @@ async function main() {
     },
   ];
 
-  const repoMap: Record<
-    string,
-    { id: string; diskPath: string; branches: string[] }
-  > = {};
+  const repoMap: Record<string, { id: string; diskPath: string; branches: string[] }> = {};
 
   for (const r of repoDefs) {
     const id = randomUUID();
@@ -702,13 +646,7 @@ async function main() {
         let treeHash = rootTree;
         if (i > 0) {
           // Add a small change to create distinct commits
-          const changeBlob = makeBlob(
-            diskPath,
-            `// Change ${i}\nexport default ${i};\n`,
-          );
-          const changeTree = makeTree(diskPath, [
-            ["100644", "blob", changeBlob, `.change-${i}`],
-          ]);
+          const changeBlob = makeBlob(diskPath, `// Change ${i}\nexport default ${i};\n`);
           // Merge with root tree using read-tree workaround: just use root tree
           // For simplicity, all commits point to the same tree but are linked in a chain
           treeHash = rootTree;
@@ -720,12 +658,7 @@ async function main() {
             .map((line) => {
               const [meta, name] = line.split("\t");
               const [mode, type, hash] = meta.split(" ");
-              return [mode, type, hash, name] as [
-                string,
-                string,
-                string,
-                string,
-              ];
+              return [mode, type, hash, name] as [string, string, string, string];
             });
           existingEntries.push(["100644", "blob", changeBlob, `.change-${i}`]);
           treeHash = makeTree(diskPath, existingEntries);
@@ -806,19 +739,12 @@ async function main() {
               const [mode, type, h] = meta.split(" ");
               return [mode, type, h, name] as [string, string, string, string];
             });
-          branchEntries.push([
-            "100644",
-            "blob",
-            branchBlob,
-            `${branch.replace(/\//g, "-")}.ts`,
-          ]);
+          branchEntries.push(["100644", "blob", branchBlob, `${branch.replace(/\//g, "-")}.ts`]);
           branchTree = makeTree(diskPath, branchEntries);
           commitMsg = `feat: ${branch} changes`;
         }
 
-        const branchCommit = makeCommit(diskPath, branchTree, commitMsg, [
-          parentHash!,
-        ]);
+        const branchCommit = makeCommit(diskPath, branchTree, commitMsg, [parentHash!]);
         updateRef(diskPath, `refs/heads/${branch}`, branchCommit);
       }
     }
@@ -923,9 +849,7 @@ async function main() {
         authorId,
         status: isClosed ? "closed" : "open",
         createdAt: created,
-        updatedAt: isClosed
-          ? hoursAgo(Math.floor(Math.random() * 200))
-          : created,
+        updatedAt: isClosed ? hoursAgo(Math.floor(Math.random() * 200)) : created,
         closedAt: isClosed ? hoursAgo(Math.floor(Math.random() * 200)) : null,
       });
       totalIssues++;
@@ -947,9 +871,7 @@ async function main() {
       }
     }
   }
-  console.log(
-    `  Created ${totalIssues} issues with ${totalComments} comments\n`,
-  );
+  console.log(`  Created ${totalIssues} issues with ${totalComments} comments\n`);
 
   // -----------------------------------------------------------------------
   // 4. Create pull requests
@@ -1040,14 +962,8 @@ async function main() {
         targetBranch,
         status,
         createdAt: created,
-        updatedAt:
-          status !== "open"
-            ? hoursAgo(Math.floor(Math.random() * 100))
-            : created,
-        mergedAt:
-          status === "merged"
-            ? hoursAgo(Math.floor(Math.random() * 200))
-            : null,
+        updatedAt: status !== "open" ? hoursAgo(Math.floor(Math.random() * 100)) : created,
+        mergedAt: status === "merged" ? hoursAgo(Math.floor(Math.random() * 200)) : null,
         mergedById: status === "merged" ? pick(userIds) : null,
       });
       totalPRs++;
@@ -1069,9 +985,7 @@ async function main() {
       }
     }
   }
-  console.log(
-    `  Created ${totalPRs} pull requests with ${totalPRComments} comments\n`,
-  );
+  console.log(`  Created ${totalPRs} pull requests with ${totalPRComments} comments\n`);
 
   console.log("✅ Seed complete!");
   console.log(

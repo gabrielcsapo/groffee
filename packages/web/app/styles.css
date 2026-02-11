@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
 @theme {
@@ -36,7 +36,8 @@
   }
 
   @keyframes pulse-subtle {
-    0%, 100% {
+    0%,
+    100% {
       opacity: 1;
     }
     50% {
@@ -71,7 +72,8 @@
 @layer base {
   body {
     @apply bg-surface-secondary text-text-primary text-sm antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
     min-height: 100vh;
   }
 
@@ -80,12 +82,18 @@
   }
 
   /* Smooth transitions on interactive elements */
-  button, a, input, select, textarea {
+  button,
+  a,
+  input,
+  select,
+  textarea {
     @apply transition-colors duration-150;
   }
 
   /* Better focus ring for accessibility */
-  input:focus-visible, select:focus-visible, textarea:focus-visible {
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
     @apply outline-none ring-2 ring-primary/40 border-primary;
   }
 }

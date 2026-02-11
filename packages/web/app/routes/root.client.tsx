@@ -1,55 +1,62 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { Link, useNavigation, useRouteError } from 'react-router'
+import { useState, useEffect } from "react";
+import { Link, useNavigation, useRouteError } from "react-router";
 
 export function GlobalNavigationLoadingBar() {
-  const navigation = useNavigation()
+  const navigation = useNavigation();
 
-  if (navigation.state === 'idle') return null
+  if (navigation.state === "idle") return null;
 
   return (
     <div className="h-0.5 w-full bg-primary/20 overflow-hidden fixed top-0 left-0 z-50">
       <div className="animate-progress origin-[0%_50%] w-full h-full bg-primary" />
     </div>
-  )
+  );
 }
 
 export function UserNav() {
-  const [user, setUser] = useState<{ username: string } | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [user, setUser] = useState<{ username: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.user) setUser(data.user)
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.user) setUser(data.user);
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+      .finally(() => setLoading(false));
+  }, []);
 
   if (loading) {
-    return <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse-subtle" />
+    return <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse-subtle" />;
   }
 
   if (!user) {
     return (
       <div className="flex items-center gap-3">
-        <Link to="/login" className="text-white/70 text-sm hover:text-white hover:no-underline transition-colors">
+        <Link
+          to="/login"
+          className="text-white/70 text-sm hover:text-white hover:no-underline transition-colors"
+        >
           Sign in
         </Link>
         <Link to="/register" className="btn-primary btn-sm hover:no-underline">
           Sign up
         </Link>
       </div>
-    )
+    );
   }
 
   return (
     <div className="flex items-center gap-3">
-      <Link to="/new" className="text-white/60 hover:text-white hover:no-underline p-1.5 rounded-md hover:bg-white/10 transition-colors" title="New repository">
+      <Link
+        to="/new"
+        className="text-white/60 hover:text-white hover:no-underline p-1.5 rounded-md hover:bg-white/10 transition-colors"
+        title="New repository"
+      >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
@@ -74,8 +81,18 @@ export function UserNav() {
                   className="flex items-center gap-2 px-4 py-2 text-sm text-text-primary hover:bg-surface-secondary hover:no-underline"
                   onClick={() => setMenuOpen(false)}
                 >
-                  <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  <svg
+                    className="w-4 h-4 text-text-secondary"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
                   </svg>
                   Your profile
                 </Link>
@@ -84,8 +101,18 @@ export function UserNav() {
                   className="flex items-center gap-2 px-4 py-2 text-sm text-text-primary hover:bg-surface-secondary hover:no-underline"
                   onClick={() => setMenuOpen(false)}
                 >
-                  <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  <svg
+                    className="w-4 h-4 text-text-secondary"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                    />
                   </svg>
                   New repository
                 </Link>
@@ -93,13 +120,23 @@ export function UserNav() {
               <div className="border-t border-border py-1">
                 <button
                   onClick={async () => {
-                    await fetch('/api/auth/logout', { method: 'POST' })
-                    window.location.href = '/'
+                    await fetch("/api/auth/logout", { method: "POST" });
+                    window.location.href = "/";
                   }}
                   className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-text-primary hover:bg-surface-secondary"
                 >
-                  <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  <svg
+                    className="w-4 h-4 text-text-secondary"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                    />
                   </svg>
                   Sign out
                 </button>
@@ -109,14 +146,13 @@ export function UserNav() {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 export function DumpError() {
-  const error = useRouteError()
-  const message =
-    error instanceof Error ? error.message : 'An unexpected error occurred'
-  const stack = error instanceof Error ? error.stack : undefined
+  const error = useRouteError();
+  const message = error instanceof Error ? error.message : "An unexpected error occurred";
+  const stack = error instanceof Error ? error.stack : undefined;
 
   return (
     <div className="max-w-2xl mx-auto mt-16">
@@ -129,9 +165,11 @@ export function DumpError() {
           </pre>
         )}
         <div className="mt-4">
-          <Link to="/" className="btn-secondary btn-sm">Go home</Link>
+          <Link to="/" className="btn-secondary btn-sm">
+            Go home
+          </Link>
         </div>
       </div>
     </div>
-  )
+  );
 }

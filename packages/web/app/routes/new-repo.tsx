@@ -1,34 +1,34 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useState } from "react";
+import { useNavigate } from "react-router";
 
 export default function NewRepo() {
-  const [error, setError] = useState('')
-  const navigate = useNavigate()
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError('')
+    e.preventDefault();
+    setError("");
 
-    const form = new FormData(e.currentTarget)
-    const res = await fetch('/api/repos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const form = new FormData(e.currentTarget);
+    const res = await fetch("/api/repos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: form.get('name'),
-        description: form.get('description'),
-        isPublic: form.get('visibility') === 'public',
+        name: form.get("name"),
+        description: form.get("description"),
+        isPublic: form.get("visibility") === "public",
       }),
-    })
+    });
 
-    const data = await res.json()
+    const data = await res.json();
     if (!res.ok) {
-      setError(data.error || 'Failed to create repository')
-      return
+      setError(data.error || "Failed to create repository");
+      return;
     }
 
-    navigate(`/${data.repository.owner}/${data.repository.name}`)
+    navigate(`/${data.repository.owner}/${data.repository.name}`);
   }
 
   return (
@@ -78,7 +78,13 @@ export default function NewRepo() {
           <fieldset className="border-t border-border pt-4">
             <div className="flex flex-col gap-3">
               <label className="flex items-start gap-3 cursor-pointer">
-                <input type="radio" name="visibility" value="public" defaultChecked className="mt-1" />
+                <input
+                  type="radio"
+                  name="visibility"
+                  value="public"
+                  defaultChecked
+                  className="mt-1"
+                />
                 <div>
                   <span className="font-medium text-sm">Public</span>
                   <p className="text-xs text-text-secondary">Anyone can see this repository.</p>
@@ -88,7 +94,9 @@ export default function NewRepo() {
                 <input type="radio" name="visibility" value="private" className="mt-1" />
                 <div>
                   <span className="font-medium text-sm">Private</span>
-                  <p className="text-xs text-text-secondary">You choose who can see and commit to this repository.</p>
+                  <p className="text-xs text-text-secondary">
+                    You choose who can see and commit to this repository.
+                  </p>
                 </div>
               </label>
             </div>
@@ -105,5 +113,5 @@ export default function NewRepo() {
         </form>
       </div>
     </div>
-  )
+  );
 }

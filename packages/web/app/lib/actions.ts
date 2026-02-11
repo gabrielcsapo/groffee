@@ -5,7 +5,7 @@ import { eq, desc, inArray } from "drizzle-orm";
 
 export async function getEditHistory(
   targetType: "issue" | "pull_request" | "comment",
-  targetId: string
+  targetId: string,
 ) {
   const condition =
     targetType === "issue"

@@ -52,9 +52,7 @@ export const repositories = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
-  (table) => [
-    uniqueIndex("repo_owner_name_idx").on(table.ownerId, table.name),
-  ],
+  (table) => [uniqueIndex("repo_owner_name_idx").on(table.ownerId, table.name)],
 );
 
 // --- Pull Requests ---

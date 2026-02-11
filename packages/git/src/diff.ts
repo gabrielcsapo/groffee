@@ -23,11 +23,10 @@ export async function getDiff(
   fromOid: string,
   toOid: string,
 ): Promise<DiffFile[]> {
-  const { stdout } = await execFileAsync(
-    "git",
-    ["diff", "--no-color", "-M", fromOid, toOid],
-    { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 },
-  );
+  const { stdout } = await execFileAsync("git", ["diff", "--no-color", "-M", fromOid, toOid], {
+    cwd: repoPath,
+    maxBuffer: 10 * 1024 * 1024,
+  });
 
   return parseDiff(stdout);
 }

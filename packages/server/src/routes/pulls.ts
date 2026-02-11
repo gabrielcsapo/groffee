@@ -5,10 +5,11 @@ import { requireAuth, optionalAuth } from "../middleware/auth.js";
 import { listRefs, getDiff } from "@groffee/git";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import type { AppEnv } from "../types.js";
 
 const execFileAsync = promisify(execFile);
 
-export const pullRoutes = new Hono();
+export const pullRoutes = new Hono<AppEnv>();
 
 // Helper: find repo + check visibility
 async function findRepoForPulls(ownerName: string, repoName: string, currentUserId?: string) {
@@ -38,17 +39,25 @@ pullRoutes.get("/:owner/:repo/pulls", optionalAuth, async (c) => {
   const prList = await db
     .select()
     .from(pullRequests)
-    .where(and(eq(pullRequests.repoId, result.repo.id), eq(pullRequests.status, status as "open" | "closed" | "merged")))
+    .where(
+      and(
+        eq(pullRequests.repoId, result.repo.id),
+        eq(pullRequests.status, status as "open" | "closed" | "merged"),
+      ),
+    )
     .orderBy(desc(pullRequests.createdAt));
 
   // Attach author usernames
   const authorIds = [...new Set(prList.map((p) => p.authorId))];
-  const authors = authorIds.length > 0
-    ? await Promise.all(authorIds.map(async (id) => {
-        const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-        return u;
-      }))
-    : [];
+  const authors =
+    authorIds.length > 0
+      ? await Promise.all(
+          authorIds.map(async (id) => {
+            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+            return u;
+          }),
+        )
+      : [];
   const authorMap = new Map(authors.filter(Boolean).map((u) => [u.id, u.username]));
 
   const prsWithAuthors = prList.map((p) => ({
@@ -98,12 +107,15 @@ pullRoutes.get("/:owner/:repo/pulls/:number", optionalAuth, async (c) => {
     .orderBy(comments.createdAt);
 
   const commentAuthorIds = [...new Set(commentList.map((c) => c.authorId))];
-  const commentAuthors = commentAuthorIds.length > 0
-    ? await Promise.all(commentAuthorIds.map(async (id) => {
-        const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-        return u;
-      }))
-    : [];
+  const commentAuthors =
+    commentAuthorIds.length > 0
+      ? await Promise.all(
+          commentAuthorIds.map(async (id) => {
+            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+            return u;
+          }),
+        )
+      : [];
   const commentAuthorMap = new Map(commentAuthors.filter(Boolean).map((u) => [u.id, u.username]));
 
   // Get edit count for the PR
@@ -114,19 +126,23 @@ pullRoutes.get("/:owner/:repo/pulls/:number", optionalAuth, async (c) => {
 
   // Get edit counts for comments
   const commentIds = commentList.map((c) => c.id);
-  const commentEditCounts = commentIds.length > 0
-    ? await db
-        .select({
-          commentId: editHistory.commentId,
-          editCount: count(),
-          lastEditedAt: max(editHistory.createdAt),
-        })
-        .from(editHistory)
-        .where(inArray(editHistory.commentId, commentIds))
-        .groupBy(editHistory.commentId)
-    : [];
+  const commentEditCounts =
+    commentIds.length > 0
+      ? await db
+          .select({
+            commentId: editHistory.commentId,
+            editCount: count(),
+            lastEditedAt: max(editHistory.createdAt),
+          })
+          .from(editHistory)
+          .where(inArray(editHistory.commentId, commentIds))
+          .groupBy(editHistory.commentId)
+      : [];
   const commentEditMap = new Map(
-    commentEditCounts.map((e) => [e.commentId, { editCount: e.editCount, lastEditedAt: e.lastEditedAt }])
+    commentEditCounts.map((e) => [
+      e.commentId,
+      { editCount: e.editCount, lastEditedAt: e.lastEditedAt },
+    ]),
   );
 
   const commentsWithAuthors = commentList.map((c) => ({
@@ -172,9 +188,11 @@ pullRoutes.post("/:owner/:repo/pulls", requireAuth, async (c) => {
   // Verify branches exist
   const refs = await listRefs(result.repo.diskPath);
   const refNames = refs.map((r) => r.name);
-  if (!refNames.includes(sourceBranch)) return c.json({ error: `Branch '${sourceBranch}' not found` }, 400);
+  if (!refNames.includes(sourceBranch))
+    return c.json({ error: `Branch '${sourceBranch}' not found` }, 400);
   if (!refNames.includes(target)) return c.json({ error: `Branch '${target}' not found` }, 400);
-  if (sourceBranch === target) return c.json({ error: "Source and target branches must be different" }, 400);
+  if (sourceBranch === target)
+    return c.json({ error: "Source and target branches must be different" }, 400);
 
   // Get next number (shared with issues)
   const { issues } = await import("@groffee/db");
@@ -236,8 +254,9 @@ pullRoutes.patch("/:owner/:repo/pulls/:number", requireAuth, async (c) => {
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
 
-  const newTitle = typeof body.title === "string" && body.title.trim() ? body.title.trim() : undefined;
-  const newBody = typeof body.body === "string" ? (body.body.trim() || null) : undefined;
+  const newTitle =
+    typeof body.title === "string" && body.title.trim() ? body.title.trim() : undefined;
+  const newBody = typeof body.body === "string" ? body.body.trim() || null : undefined;
 
   // Record edit history if title or body actually changed
   if (
@@ -300,19 +319,15 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
       { cwd: result.repo.diskPath },
     );
 
-    const { stdout: targetTip } = await execFileAsync(
-      "git",
-      ["rev-parse", pr.targetBranch],
-      { cwd: result.repo.diskPath },
-    );
+    const { stdout: targetTip } = await execFileAsync("git", ["rev-parse", pr.targetBranch], {
+      cwd: result.repo.diskPath,
+    });
 
     if (mergeBase.trim() === targetTip.trim()) {
       // Fast-forward: just update the target ref
-      const { stdout: sourceTip } = await execFileAsync(
-        "git",
-        ["rev-parse", pr.sourceBranch],
-        { cwd: result.repo.diskPath },
-      );
+      const { stdout: sourceTip } = await execFileAsync("git", ["rev-parse", pr.sourceBranch], {
+        cwd: result.repo.diskPath,
+      });
       await execFileAsync(
         "git",
         ["update-ref", `refs/heads/${pr.targetBranch}`, sourceTip.trim()],
@@ -330,10 +345,14 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
       const { stdout: commitOid } = await execFileAsync(
         "git",
         [
-          "commit-tree", treeOid.trim(),
-          "-p", targetTip.trim(),
-          "-p", pr.sourceBranch,
-          "-m", mergeMessage,
+          "commit-tree",
+          treeOid.trim(),
+          "-p",
+          targetTip.trim(),
+          "-p",
+          pr.sourceBranch,
+          "-m",
+          mergeMessage,
         ],
         {
           cwd: result.repo.diskPath,
@@ -356,12 +375,15 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
 
     // Update PR status
     const now = new Date();
-    await db.update(pullRequests).set({
-      status: "merged",
-      mergedAt: now,
-      mergedById: user.id,
-      updatedAt: now,
-    }).where(eq(pullRequests.id, pr.id));
+    await db
+      .update(pullRequests)
+      .set({
+        status: "merged",
+        mergedAt: now,
+        mergedById: user.id,
+        updatedAt: now,
+      })
+      .where(eq(pullRequests.id, pr.id));
 
     return c.json({ merged: true });
   } catch (e: unknown) {
@@ -377,11 +399,7 @@ pullRoutes.patch("/:owner/:repo/pulls/:number/comments/:commentId", requireAuth,
   if (!result) return c.json({ error: "Repository not found" }, 404);
 
   const commentId = c.req.param("commentId");
-  const [comment] = await db
-    .select()
-    .from(comments)
-    .where(eq(comments.id, commentId))
-    .limit(1);
+  const [comment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
 
   if (!comment) return c.json({ error: "Comment not found" }, 404);
 

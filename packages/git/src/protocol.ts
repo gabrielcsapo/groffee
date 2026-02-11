@@ -17,10 +17,7 @@ function pktLine(data: string): string {
  * Handle GET /info/refs?service=git-upload-pack|git-receive-pack
  * Returns a web Response with the ref advertisement stream.
  */
-export function handleInfoRefs(
-  repoPath: string,
-  service: ServiceType,
-): Response {
+export function handleInfoRefs(repoPath: string, service: ServiceType): Response {
   const header = `# service=git-${service}\n`;
   const headerBytes = new TextEncoder().encode(pktLine(header) + "0000");
 

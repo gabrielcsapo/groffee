@@ -11,20 +11,14 @@ async function resolveRepo(owner: string, repoName: string) {
   // Strip .git suffix if present
   const name = repoName.replace(/\.git$/, "");
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, owner))
-    .limit(1);
+  const [user] = await db.select().from(users).where(eq(users.username, owner)).limit(1);
 
   if (!user) return null;
 
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(
-      and(eq(repositories.ownerId, user.id), eq(repositories.name, name)),
-    )
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, name)))
     .limit(1);
 
   return repo ?? null;
@@ -33,10 +27,7 @@ async function resolveRepo(owner: string, repoName: string) {
 // GET /:owner/:repo.git/info/refs?service=git-upload-pack|git-receive-pack
 gitProtocolRoutes.get("/:owner/:repo/info/refs", async (c) => {
   const service = c.req.query("service") as ServiceType | undefined;
-  if (
-    !service ||
-    !["git-upload-pack", "git-receive-pack"].includes(service)
-  ) {
+  if (!service || !["git-upload-pack", "git-receive-pack"].includes(service)) {
     return c.text("Invalid service", 400);
   }
 

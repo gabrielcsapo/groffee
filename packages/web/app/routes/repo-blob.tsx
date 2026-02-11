@@ -1,11 +1,15 @@
-import { Link } from 'react-router'
-import { apiFetch } from '../lib/api'
+import { Link } from "react-router";
+import { apiFetch } from "../lib/api";
 
-export default async function RepoBlob({ params }: { params: { owner: string; repo: string; '*': string } }) {
-  const { owner, repo: repoName } = params
-  const splat = params['*'] || ''
+export default async function RepoBlob({
+  params,
+}: {
+  params: { owner: string; repo: string; "*": string };
+}) {
+  const { owner, repo: repoName } = params;
+  const splat = params["*"] || "";
 
-  const blobData = await apiFetch(`/api/repos/${owner}/${repoName}/blob/${splat}`)
+  const blobData = await apiFetch(`/api/repos/${owner}/${repoName}/blob/${splat}`);
 
   if (blobData.error) {
     return (
@@ -15,40 +19,47 @@ export default async function RepoBlob({ params }: { params: { owner: string; re
           <p className="text-sm text-text-secondary mt-2">{blobData.error}</p>
         </div>
       </div>
-    )
+    );
   }
 
-  const { content, ref, path: filePath } = blobData
-  const pathParts = filePath.split('/')
-  const fileName = pathParts[pathParts.length - 1]
-  const parentPath = pathParts.slice(0, -1).join('/')
-  const lines = content.split('\n')
-  const lineCount = lines[lines.length - 1] === '' ? lines.length - 1 : lines.length
+  const { content, ref, path: filePath } = blobData;
+  const pathParts = filePath.split("/");
+  const fileName = pathParts[pathParts.length - 1];
+  const parentPath = pathParts.slice(0, -1).join("/");
+  const lines = content.split("\n");
+  const lineCount = lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
 
   return (
     <div className="max-w-4xl mx-auto mt-8">
       {/* Breadcrumbs */}
       <div className="flex items-center gap-1.5 text-lg mb-4">
-        <Link to={`/${owner}`} className="text-text-link hover:underline">{owner}</Link>
+        <Link to={`/${owner}`} className="text-text-link hover:underline">
+          {owner}
+        </Link>
         <span className="text-text-secondary">/</span>
-        <Link to={`/${owner}/${repoName}`} className="text-text-link hover:underline">{repoName}</Link>
+        <Link to={`/${owner}/${repoName}`} className="text-text-link hover:underline">
+          {repoName}
+        </Link>
         <span className="text-text-secondary">/</span>
         <span className="text-text-secondary text-sm">{ref}</span>
         {pathParts.map((part: string, i: number) => {
-          const partPath = pathParts.slice(0, i + 1).join('/')
-          const isLast = i === pathParts.length - 1
+          const partPath = pathParts.slice(0, i + 1).join("/");
+          const isLast = i === pathParts.length - 1;
           return (
             <span key={partPath} className="flex items-center gap-1.5">
               <span className="text-text-secondary">/</span>
               {isLast ? (
                 <span className="font-semibold text-text-primary">{part}</span>
               ) : (
-                <Link to={`/${owner}/${repoName}/tree/${ref}/${partPath}`} className="text-text-link hover:underline">
+                <Link
+                  to={`/${owner}/${repoName}/tree/${ref}/${partPath}`}
+                  className="text-text-link hover:underline"
+                >
                   {part}
                 </Link>
               )}
             </span>
-          )
+          );
         })}
       </div>
 
@@ -77,9 +88,8 @@ export default async function RepoBlob({ params }: { params: { owner: string; re
       {/* Back link */}
       <div className="mt-4">
         <Link
-          to={parentPath
-            ? `/${owner}/${repoName}/tree/${ref}/${parentPath}`
-            : `/${owner}/${repoName}`
+          to={
+            parentPath ? `/${owner}/${repoName}/tree/${ref}/${parentPath}` : `/${owner}/${repoName}`
           }
           className="text-sm text-text-link hover:underline"
         >
@@ -87,5 +97,5 @@ export default async function RepoBlob({ params }: { params: { owner: string; re
         </Link>
       </div>
     </div>
-  )
+  );
 }

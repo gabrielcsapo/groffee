@@ -6,10 +6,7 @@ export default function Docs() {
         <nav className="sticky top-24 text-sm space-y-4">
           <div>
             <h3 className="font-semibold text-text-primary mb-1">Overview</h3>
-            <a
-              href="#overview"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
+            <a href="#overview" className="block text-text-secondary hover:text-text-link py-0.5">
               Introduction
             </a>
             <a
@@ -21,16 +18,10 @@ export default function Docs() {
           </div>
           <div>
             <h3 className="font-semibold text-text-primary mb-1">Endpoints</h3>
-            <a
-              href="#health"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
+            <a href="#health" className="block text-text-secondary hover:text-text-link py-0.5">
               Health
             </a>
-            <a
-              href="#auth"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
+            <a href="#auth" className="block text-text-secondary hover:text-text-link py-0.5">
               Auth
             </a>
             <a
@@ -39,10 +30,7 @@ export default function Docs() {
             >
               Repositories
             </a>
-            <a
-              href="#issues"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
+            <a href="#issues" className="block text-text-secondary hover:text-text-link py-0.5">
               Issues
             </a>
             <a
@@ -65,53 +53,42 @@ export default function Docs() {
       <div className="flex-1 min-w-0">
         {/* Intro */}
         <section id="overview" className="mb-10">
-          <h1 className="text-2xl font-bold text-text-primary mb-2">
-            API Documentation
-          </h1>
+          <h1 className="text-2xl font-bold text-text-primary mb-2">API Documentation</h1>
           <p className="text-text-secondary text-sm mb-4">
-            Groffee exposes a JSON REST API for managing repositories, issues,
-            pull requests, and more. All endpoints are prefixed with{" "}
-            <Code>/api</Code> and return JSON unless otherwise noted.
+            Groffee exposes a JSON REST API for managing repositories, issues, pull requests, and
+            more. All endpoints are prefixed with <Code>/api</Code> and return JSON unless otherwise
+            noted.
           </p>
           <div className="card p-4 text-sm space-y-2">
             <p>
-              <span className="font-medium">Base URL:</span>{" "}
-              <Code>/api</Code>
+              <span className="font-medium">Base URL:</span> <Code>/api</Code>
             </p>
             <p>
-              <span className="font-medium">Content-Type:</span>{" "}
-              <Code>application/json</Code>
+              <span className="font-medium">Content-Type:</span> <Code>application/json</Code>
             </p>
             <p>
               <span className="font-medium">Error format:</span>{" "}
-              <Code>{'{ "error": "message" }'}</Code> with appropriate HTTP
-              status code
+              <Code>{'{ "error": "message" }'}</Code> with appropriate HTTP status code
             </p>
           </div>
         </section>
 
         <section id="authentication" className="mb-10">
-          <h2 className="text-xl font-bold text-text-primary mb-2">
-            Authentication
-          </h2>
+          <h2 className="text-xl font-bold text-text-primary mb-2">Authentication</h2>
           <p className="text-text-secondary text-sm mb-3">
-            Authentication is cookie-based. Call{" "}
-            <Code>POST /api/auth/login</Code> or{" "}
-            <Code>POST /api/auth/register</Code> to obtain a session cookie.
-            Include credentials in subsequent requests.
+            Authentication is cookie-based. Call <Code>POST /api/auth/login</Code> or{" "}
+            <Code>POST /api/auth/register</Code> to obtain a session cookie. Include credentials in
+            subsequent requests.
           </p>
           <div className="card p-4 text-sm">
-            <p className="font-medium mb-1">
-              Auth levels used in this documentation:
-            </p>
+            <p className="font-medium mb-1">Auth levels used in this documentation:</p>
             <ul className="list-disc list-inside text-text-secondary space-y-1">
               <li>
-                <AuthBadge level="required" /> — Request fails with{" "}
-                <Code>401</Code> without a valid session
+                <AuthBadge level="required" /> — Request fails with <Code>401</Code> without a valid
+                session
               </li>
               <li>
-                <AuthBadge level="optional" /> — Works without auth but may
-                return fewer results
+                <AuthBadge level="optional" /> — Works without auth but may return fewer results
               </li>
               <li>
                 <AuthBadge level="none" /> — No authentication needed
@@ -349,8 +326,7 @@ export default function Docs() {
             { name: "name", description: "Repository name" },
             {
               name: "ref",
-              description:
-                'Branch/tag, optionally followed by path (e.g. "main/src/lib")',
+              description: 'Branch/tag, optionally followed by path (e.g. "main/src/lib")',
             },
           ]}
           response={{
@@ -377,8 +353,7 @@ export default function Docs() {
             { name: "name", description: "Repository name" },
             {
               name: "ref",
-              description:
-                'Branch/tag followed by file path (e.g. "main/README.md")',
+              description: 'Branch/tag followed by file path (e.g. "main/README.md")',
             },
           ]}
           response={{
@@ -741,11 +716,10 @@ export default function Docs() {
         <SectionHeader id="git-protocol" title="Git Protocol (Smart HTTP)" />
 
         <div className="card p-4 text-sm text-text-secondary mb-6">
-          These endpoints implement Git's Smart HTTP protocol for{" "}
-          <Code>git clone</Code>, <Code>git fetch</Code>, and{" "}
-          <Code>git push</Code>. They use binary git protocol streams, not JSON.
-          You typically interact with these via the <Code>git</Code> CLI rather
-          than calling them directly.
+          These endpoints implement Git's Smart HTTP protocol for <Code>git clone</Code>,{" "}
+          <Code>git fetch</Code>, and <Code>git push</Code>. They use binary git protocol streams,
+          not JSON. You typically interact with these via the <Code>git</Code> CLI rather than
+          calling them directly.
         </div>
 
         <Endpoint
@@ -832,9 +806,7 @@ function AuthBadge({ level }: { level: "required" | "optional" | "none" }) {
     none: "No Auth",
   };
   return (
-    <span
-      className={`inline-block text-xs px-2 py-0.5 rounded border ${styles[level]}`}
-    >
+    <span className={`inline-block text-xs px-2 py-0.5 rounded border ${styles[level]}`}>
       {labels[level]}
     </span>
   );
@@ -872,9 +844,7 @@ function Endpoint({
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-surface-secondary border-b border-border flex-wrap">
         <MethodBadge method={method} />
-        <code className="text-sm font-mono font-medium text-text-primary">
-          {path}
-        </code>
+        <code className="text-sm font-mono font-medium text-text-primary">{path}</code>
         <div className="flex-1" />
         <AuthBadge level={auth} />
       </div>
@@ -884,44 +854,34 @@ function Endpoint({
 
         {pathParams && pathParams.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold text-text-primary mb-1">
-              Path Parameters
-            </h4>
+            <h4 className="text-xs font-semibold text-text-primary mb-1">Path Parameters</h4>
             <ParamTable params={pathParams} />
           </div>
         )}
 
         {queryParams && queryParams.length > 0 && (
           <div>
-            <h4 className="text-xs font-semibold text-text-primary mb-1">
-              Query Parameters
-            </h4>
+            <h4 className="text-xs font-semibold text-text-primary mb-1">Query Parameters</h4>
             <ParamTable params={queryParams} />
           </div>
         )}
 
         {body && (
           <div>
-            <h4 className="text-xs font-semibold text-text-primary mb-1">
-              Request Body
-            </h4>
+            <h4 className="text-xs font-semibold text-text-primary mb-1">Request Body</h4>
             <JsonBlock value={body} />
           </div>
         )}
 
         {response && (
           <div>
-            <h4 className="text-xs font-semibold text-text-primary mb-1">
-              Response
-            </h4>
+            <h4 className="text-xs font-semibold text-text-primary mb-1">Response</h4>
             <JsonBlock value={response} />
           </div>
         )}
 
         {notes && (
-          <p className="text-xs text-text-secondary border-t border-border-muted pt-2">
-            {notes}
-          </p>
+          <p className="text-xs text-text-secondary border-t border-border-muted pt-2">{notes}</p>
         )}
       </div>
     </div>
@@ -934,9 +894,7 @@ function ParamTable({ params }: { params: ParamDef[] }) {
       <thead>
         <tr className="text-left text-text-secondary">
           <th className="pb-1 pr-4 font-medium">Name</th>
-          {params.some((p) => p.type) && (
-            <th className="pb-1 pr-4 font-medium">Type</th>
-          )}
+          {params.some((p) => p.type) && <th className="pb-1 pr-4 font-medium">Type</th>}
           <th className="pb-1 font-medium">Description</th>
         </tr>
       </thead>
@@ -945,9 +903,7 @@ function ParamTable({ params }: { params: ParamDef[] }) {
           <tr key={p.name} className="text-text-primary">
             <td className="py-0.5 pr-4 font-mono">{p.name}</td>
             {params.some((pp) => pp.type) && (
-              <td className="py-0.5 pr-4 text-text-secondary">
-                {p.type || "—"}
-              </td>
+              <td className="py-0.5 pr-4 text-text-secondary">{p.type || "—"}</td>
             )}
             <td className="py-0.5 text-text-secondary">{p.description}</td>
           </tr>

@@ -1,23 +1,23 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useRef, useCallback, memo } from 'react'
-import { usePullDetailContext } from './pull-detail.client'
+import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { usePullDetailContext } from "./pull-detail.client";
 
 interface DiffFile {
-  oldPath: string
-  newPath: string
-  status: string
+  oldPath: string;
+  newPath: string;
+  status: string;
   hunks: Array<{
-    oldStart: number
-    oldLines: number
-    newStart: number
-    newLines: number
-    lines: string[]
-  }>
+    oldStart: number;
+    oldLines: number;
+    newStart: number;
+    newLines: number;
+    lines: string[];
+  }>;
 }
 
-const INITIAL_RENDER_COUNT = 20
-const BATCH_SIZE = 30
+const INITIAL_RENDER_COUNT = 20;
+const BATCH_SIZE = 30;
 
 // ---------------------------------------------------------------------------
 // DiffFileCard — full diff rendering for a single file (memoized)
@@ -27,11 +27,15 @@ const DiffFileCard = memo(function DiffFileCard({ file }: { file: DiffFile }) {
   return (
     <div className="border border-border rounded-lg overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2 bg-surface-secondary border-b border-border">
-        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-          file.status === 'added' ? 'bg-diff-add-bg text-success' :
-          file.status === 'deleted' ? 'bg-diff-del-bg text-danger' :
-          'bg-yellow-50 text-yellow-700'
-        }`}>
+        <span
+          className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+            file.status === "added"
+              ? "bg-diff-add-bg text-success"
+              : file.status === "deleted"
+                ? "bg-diff-del-bg text-danger"
+                : "bg-yellow-50 text-yellow-700"
+          }`}
+        >
           {file.status}
         </span>
         <span className="text-sm font-medium text-text-primary font-mono">
@@ -47,15 +51,19 @@ const DiffFileCard = memo(function DiffFileCard({ file }: { file: DiffFile }) {
             <table className="w-full text-sm font-mono">
               <tbody>
                 {hunk.lines.map((line, lineIdx) => {
-                  const isAdd = line.startsWith('+')
-                  const isDel = line.startsWith('-')
-                  const bg = isAdd ? 'bg-diff-add-bg' : isDel ? 'bg-diff-del-bg' : ''
-                  const textColor = isAdd ? 'text-success' : isDel ? 'text-danger' : 'text-text-primary'
+                  const isAdd = line.startsWith("+");
+                  const isDel = line.startsWith("-");
+                  const bg = isAdd ? "bg-diff-add-bg" : isDel ? "bg-diff-del-bg" : "";
+                  const textColor = isAdd
+                    ? "text-success"
+                    : isDel
+                      ? "text-danger"
+                      : "text-text-primary";
                   return (
                     <tr key={lineIdx} className={bg}>
                       <td className={`py-0 px-4 whitespace-pre ${textColor}`}>{line}</td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -63,8 +71,8 @@ const DiffFileCard = memo(function DiffFileCard({ file }: { file: DiffFile }) {
         ))}
       </div>
     </div>
-  )
-})
+  );
+});
 
 // ---------------------------------------------------------------------------
 // DiffSidebar — sticky file list with search filter
@@ -77,26 +85,26 @@ function DiffSidebar({
   scrollToFile,
   activeFileIdx,
 }: {
-  diff: DiffFile[]
-  fileFilter: string
-  setFileFilter: (v: string) => void
-  scrollToFile: (idx: number) => void
-  activeFileIdx: number
+  diff: DiffFile[];
+  fileFilter: string;
+  setFileFilter: (v: string) => void;
+  scrollToFile: (idx: number) => void;
+  activeFileIdx: number;
 }) {
-  const activeRef = useRef<HTMLButtonElement>(null)
+  const activeRef = useRef<HTMLButtonElement>(null);
 
   // Auto-scroll sidebar to keep active file visible
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [activeFileIdx])
+    activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeFileIdx]);
 
   const filtered = diff
     .map((file, idx) => ({ file, idx }))
     .filter(({ file }) => {
-      if (!fileFilter) return true
-      const path = (file.newPath || file.oldPath).toLowerCase()
-      return path.includes(fileFilter.toLowerCase())
-    })
+      if (!fileFilter) return true;
+      const path = (file.newPath || file.oldPath).toLowerCase();
+      return path.includes(fileFilter.toLowerCase());
+    });
 
   return (
     <aside className="w-64 shrink-0 hidden lg:block">
@@ -111,7 +119,7 @@ function DiffSidebar({
           <input
             type="text"
             value={fileFilter}
-            onChange={e => setFileFilter(e.target.value)}
+            onChange={(e) => setFileFilter(e.target.value)}
             placeholder="Filter files..."
             className="w-full px-2 py-1.5 border border-border rounded text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
           />
@@ -131,24 +139,26 @@ function DiffSidebar({
               onClick={() => scrollToFile(idx)}
               className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate flex items-center gap-1.5 border-b border-border/50 ${
                 idx === activeFileIdx
-                  ? 'bg-primary/5 text-text-link'
-                  : 'hover:bg-surface-secondary text-text-primary'
+                  ? "bg-primary/5 text-text-link"
+                  : "hover:bg-surface-secondary text-text-primary"
               }`}
             >
-              <span className={`shrink-0 w-1.5 h-1.5 rounded-full ${
-                file.status === 'added' ? 'bg-success' :
-                file.status === 'deleted' ? 'bg-danger' :
-                'bg-yellow-500'
-              }`} />
-              <span className="truncate">
-                {file.newPath || file.oldPath}
-              </span>
+              <span
+                className={`shrink-0 w-1.5 h-1.5 rounded-full ${
+                  file.status === "added"
+                    ? "bg-success"
+                    : file.status === "deleted"
+                      ? "bg-danger"
+                      : "bg-yellow-500"
+                }`}
+              />
+              <span className="truncate">{file.newPath || file.oldPath}</span>
             </button>
           ))}
         </div>
       </div>
     </aside>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -156,79 +166,79 @@ function DiffSidebar({
 // ---------------------------------------------------------------------------
 
 export function PullFilesView() {
-  const { diff } = usePullDetailContext()
+  const { diff } = usePullDetailContext();
 
-  const [fileFilter, setFileFilter] = useState('')
-  const [renderedCount, setRenderedCount] = useState(INITIAL_RENDER_COUNT)
-  const [activeFileIdx, setActiveFileIdx] = useState(0)
+  const [fileFilter, setFileFilter] = useState("");
+  const [renderedCount, setRenderedCount] = useState(INITIAL_RENDER_COUNT);
+  const [activeFileIdx, setActiveFileIdx] = useState(0);
 
   // Refs for DOM elements
-  const sentinelRef = useRef<HTMLDivElement>(null)
-  const fileElRefs = useRef<Map<number, HTMLDivElement>>(new Map())
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const fileElRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   // Sentinel-based batch loading: observe a single sentinel div placed after
   // the last rendered file. When it enters the viewport, load the next batch.
   useEffect(() => {
-    if (!diff || renderedCount >= diff.length) return
+    if (!diff || renderedCount >= diff.length) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {
-          setRenderedCount(prev => Math.min(prev + BATCH_SIZE, diff.length))
+          setRenderedCount((prev) => Math.min(prev + BATCH_SIZE, diff.length));
         }
       },
-      { rootMargin: '300px 0px' },
-    )
+      { rootMargin: "300px 0px" },
+    );
 
-    if (sentinelRef.current) observer.observe(sentinelRef.current)
-    return () => observer.disconnect()
-  }, [diff, renderedCount])
+    if (sentinelRef.current) observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [diff, renderedCount]);
 
   // Active file tracking — observe rendered file wrappers to highlight
   // which file the user is currently reading in the sidebar.
   useEffect(() => {
-    if (!diff || diff.length === 0) return
+    if (!diff || diff.length === 0) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            const idx = Number(entry.target.getAttribute('data-file-idx'))
-            if (!isNaN(idx)) setActiveFileIdx(idx)
+            const idx = Number(entry.target.getAttribute("data-file-idx"));
+            if (!isNaN(idx)) setActiveFileIdx(idx);
           }
         }
       },
-      { rootMargin: '-80px 0px -80% 0px', threshold: 0 },
-    )
+      { rootMargin: "-80px 0px -80% 0px", threshold: 0 },
+    );
 
-    fileElRefs.current.forEach(el => observer.observe(el))
-    return () => observer.disconnect()
-  }, [diff?.length, renderedCount])
+    fileElRefs.current.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [diff, renderedCount]);
 
   // Store ref for a file element (stable callback, no observation side effects)
   const storeRef = useCallback((idx: number, el: HTMLDivElement | null) => {
-    if (el) fileElRefs.current.set(idx, el)
-    else fileElRefs.current.delete(idx)
-  }, [])
+    if (el) fileElRefs.current.set(idx, el);
+    else fileElRefs.current.delete(idx);
+  }, []);
 
   // Scroll to a specific file — ensure it's rendered first
   const scrollToFile = useCallback((idx: number) => {
-    setRenderedCount(prev => Math.max(prev, idx + 1))
+    setRenderedCount((prev) => Math.max(prev, idx + 1));
     // Wait for render, then scroll
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const el = fileElRefs.current.get(idx)
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      })
-    })
-  }, [])
+        const el = fileElRefs.current.get(idx);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }, []);
 
   if (!diff) {
     return (
       <div className="border border-border rounded-lg p-8 text-center text-text-secondary">
         No diff available.
       </div>
-    )
+    );
   }
 
   return (
@@ -247,7 +257,7 @@ export function PullFilesView() {
         {diff.slice(0, renderedCount).map((file, fileIdx) => (
           <div
             key={fileIdx}
-            ref={el => storeRef(fileIdx, el)}
+            ref={(el) => storeRef(fileIdx, el)}
             data-file-idx={fileIdx}
             className="scroll-mt-24"
           >
@@ -265,5 +275,5 @@ export function PullFilesView() {
         )}
       </div>
     </div>
-  )
+  );
 }

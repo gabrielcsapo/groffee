@@ -4,32 +4,43 @@ import { resolve } from "node:path";
 
 const DATA_DIR = process.env.DATA_DIR!;
 
+// Response with json() typed as any for test convenience
+type TestResponse = Omit<Response, "json"> & { json(): Promise<any> };
+
 /** Make a JSON POST request */
-export async function post(path: string, body: unknown, cookie?: string) {
+export async function post(path: string, body: unknown, cookie?: string): Promise<TestResponse> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (cookie) headers["Cookie"] = cookie;
-  return app.request(path, { method: "POST", headers, body: JSON.stringify(body) });
+  return app.request(path, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  }) as Promise<TestResponse>;
 }
 
 /** Make a GET request */
-export async function get(path: string, cookie?: string) {
+export async function get(path: string, cookie?: string): Promise<TestResponse> {
   const headers: Record<string, string> = {};
   if (cookie) headers["Cookie"] = cookie;
-  return app.request(path, { headers });
+  return app.request(path, { headers }) as Promise<TestResponse>;
 }
 
 /** Make a PATCH request */
-export async function patch(path: string, body: unknown, cookie?: string) {
+export async function patch(path: string, body: unknown, cookie?: string): Promise<TestResponse> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (cookie) headers["Cookie"] = cookie;
-  return app.request(path, { method: "PATCH", headers, body: JSON.stringify(body) });
+  return app.request(path, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(body),
+  }) as Promise<TestResponse>;
 }
 
 /** Make a DELETE request */
-export async function del(path: string, cookie?: string) {
+export async function del(path: string, cookie?: string): Promise<TestResponse> {
   const headers: Record<string, string> = {};
   if (cookie) headers["Cookie"] = cookie;
-  return app.request(path, { method: "DELETE", headers });
+  return app.request(path, { method: "DELETE", headers }) as Promise<TestResponse>;
 }
 
 /** Extract session cookie from a Set-Cookie header */
@@ -102,11 +113,7 @@ export function populateTestRepo(bareRepoPath: string) {
     .trim();
 
   // Create initial commit on main
-  const commitHash = execFileSync(
-    "git",
-    ["commit-tree", treeHash, "-m", "Initial commit"],
-    opts,
-  )
+  const commitHash = execFileSync("git", ["commit-tree", treeHash, "-m", "Initial commit"], opts)
     .toString()
     .trim();
 
@@ -135,11 +142,7 @@ export function populateTestRepo(bareRepoPath: string) {
     .toString()
     .trim();
 
-  execFileSync(
-    "git",
-    ["update-ref", "refs/heads/feature", featureCommit],
-    opts,
-  );
+  execFileSync("git", ["update-ref", "refs/heads/feature", featureCommit], opts);
 
   return { mainCommit: commitHash, featureCommit };
 }

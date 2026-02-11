@@ -12,6 +12,8 @@
     "db:migrate": "pnpm --filter @groffee/db migrate",
     "test": "pnpm --filter @groffee/server test",
     "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "fmt": "pnpm -r fmt",
     "seed": "pnpm --filter @groffee/server exec tsx src/seed.ts"
   },
   "repository": {
@@ -27,6 +29,8 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "concurrently": "^9.2.1",
+    "oxfmt": "^0.31.0",
+    "oxlint": "^1.46.0",
     "typescript": "^5.9.3"
   },
   "pnpm": {
