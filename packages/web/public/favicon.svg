@@ -1,20 +1,12 @@
-<svg
-  xmlns="http://www.w3.org/2000/svg"
-  viewBox="0 0 24 24"
-  width="64"
-  height="64"
-  fill="#1a1a1a"
-  aria-hidden="true"
->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="64" height="64"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="64" height="64"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64" fill="currentColor" aria-hidden="true">
   <defs>
     <!-- Mask: white = visible, black = cut out -->
     <mask id="coffee-cutout">
       <!-- Everything visible by default -->
-      <rect width="24" height="24" fill="white" />
+      <rect width="24" height="24" fill="white"></rect>
 
       <!-- Cup body (square bottom) -->
-      <path
-        d="M8 9.8
+      <path d="M8 9.8
            c0-.44.36-.8.8-.8
            h6.4
            c.44 0 .8.36.8.8
@@ -22,13 +14,10 @@
            c0 1.6-1.3 2.9-2.9 2.9
            h-2.2
            c-1.6 0-2.9-1.3-2.9-2.9
-           v-4.9z"
-        fill="black"
-      />
+           v-4.9z" fill="black"></path>
 
       <!-- Handle -->
-      <path
-        d="M15.6 10.6h.9
+      <path d="M15.6 10.6h.9
            c1.05 0 1.9.85 1.9 1.9
            v.4
            c0 1.05-.85 1.9-1.9 1.9
@@ -37,13 +26,10 @@
            c.4 0 .7-.3.7-.7
            v-.4
            c0-.4-.3-.7-.7-.7
-           h-.8v-1.2z"
-        fill="black"
-      />
+           h-.8v-1.2z" fill="black"></path>
 
       <!-- Steam (minimal) -->
-      <path
-        d="M10.2 7.2
+      <path d="M10.2 7.2
            c0-.28.22-.5.5-.5
            s.5.22.5.5
            c0 .42-.16.66-.3.88
@@ -51,11 +37,8 @@
            0 .28-.22.5-.5.5
            s-.5-.22-.5-.5
            c0-.42.16-.66.3-.88
-           .12-.18.2-.3.2-.52z"
-        fill="black"
-      />
-      <path
-        d="M12 7.2
+           .12-.18.2-.3.2-.52z" fill="black"></path>
+      <path d="M12 7.2
            c0-.28.22-.5.5-.5
            s.5.22.5.5
            c0 .42-.16.66-.3.88
@@ -63,11 +46,8 @@
            0 .28-.22.5-.5.5
            s-.5-.22-.5-.5
            c0-.42.16-.66.3-.88
-           .12-.18.2-.3.2-.52z"
-        fill="black"
-      />
-      <path
-        d="M13.8 7.2
+           .12-.18.2-.3.2-.52z" fill="black"></path>
+      <path d="M13.8 7.2
            c0-.28.22-.5.5-.5
            s.5.22.5.5
            c0 .42-.16.66-.3.88
@@ -75,17 +55,12 @@
            0 .28-.22.5-.5.5
            s-.5-.22-.5-.5
            c0-.42.16-.66.3-.88
-           .12-.18.2-.3.2-.52z"
-        fill="black"
-      />
+           .12-.18.2-.3.2-.52z" fill="black"></path>
     </mask>
   </defs>
 
   <!-- Circle badge with cup punched out -->
-  <circle
-    cx="12"
-    cy="12"
-    r="10"
-    mask="url(#coffee-cutout)"
-  />
-</svg>
+  <circle cx="12" cy="12" r="10" mask="url(#coffee-cutout)"></circle>
+</svg></svg><style>@media (prefers-color-scheme: light) { :root { filter: none; } }
+@media (prefers-color-scheme: dark) { :root { filter: none; } }
+</style></svg>

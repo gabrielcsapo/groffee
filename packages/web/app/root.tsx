@@ -1,6 +1,10 @@
 import "./styles.css";
 import { Link, Outlet } from "react-router";
-import { DumpError, GlobalNavigationLoadingBar, UserNav } from "./routes/root.client";
+import {
+  DumpError,
+  GlobalNavigationLoadingBar,
+  UserNav,
+} from "./routes/root.client";
 import { GroffeeLogo } from "./components/groffee-logo";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -9,7 +13,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link
+          rel="icon"
+          type="image/png"
+          href="/favicon-96x96.png"
+          sizes="96x96"
+        />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link
+          rel="apple-touch-icon"
+          sizes="180x180"
+          href="/apple-touch-icon.png"
+        />
+        <link rel="manifest" href="/site.webmanifest" />
         <title>Groffee</title>
       </head>
       <body className="flex flex-col min-h-screen">
@@ -28,7 +45,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             >
               Explore
             </Link>
-            <Link to="/docs" className="text-white/70 text-sm hover:text-white hover:no-underline">
+            <Link
+              to="/docs"
+              className="text-white/70 text-sm hover:text-white hover:no-underline"
+            >
               API Docs
             </Link>
             <div className="flex-1" />
@@ -36,7 +56,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </nav>
         </header>
         <GlobalNavigationLoadingBar />
-        <main className="flex-1 max-w-[1280px] w-full mx-auto px-6 py-6">{children}</main>
+        <main className="flex-1 max-w-[1280px] w-full mx-auto px-6 py-6">
+          {children}
+        </main>
         <footer className="border-t border-border mt-auto">
           <div className="max-w-[1280px] mx-auto px-6 py-6 flex items-center justify-between text-xs text-text-secondary">
             <p>Powered by Groffee</p>
