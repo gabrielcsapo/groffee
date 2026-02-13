@@ -40,7 +40,7 @@ export default function NewRepo() {
 
       <div className="border-t border-border pt-6">
         {error && (
-          <div className="mb-4 p-3 rounded-md bg-red-50 border border-danger/30 text-danger text-sm">
+          <div className="mb-4 p-3 rounded-md bg-danger-bg border border-danger/30 text-danger text-sm">
             {error}
           </div>
         )}
@@ -105,7 +105,7 @@ export default function NewRepo() {
           <div className="border-t border-border pt-4">
             <button
               type="submit"
-              className="bg-success text-white px-4 py-2 rounded-md font-medium text-sm hover:opacity-90"
+              className="btn-primary"
             >
               Create repository
             </button>

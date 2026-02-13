@@ -48,19 +48,19 @@ export function PullsList({
         <div className="flex gap-1 bg-surface border border-border rounded-md overflow-hidden">
           <button
             onClick={() => setSearchParams({ status: "open" })}
-            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "open" ? "bg-text-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
+            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "open" ? "bg-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
           >
             Open
           </button>
           <button
             onClick={() => setSearchParams({ status: "closed" })}
-            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "closed" ? "bg-text-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
+            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "closed" ? "bg-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
           >
             Closed
           </button>
           <button
             onClick={() => setSearchParams({ status: "merged" })}
-            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "merged" ? "bg-text-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
+            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "merged" ? "bg-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
           >
             Merged
           </button>
@@ -97,7 +97,7 @@ export function PullsList({
                     pr.status === "open"
                       ? "text-success"
                       : pr.status === "merged"
-                        ? "text-purple-600"
+                        ? "text-merged"
                         : "text-danger"
                   }`}
                   fill="currentColor"

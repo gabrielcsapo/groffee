@@ -33,7 +33,7 @@ const DiffFileCard = memo(function DiffFileCard({ file }: { file: DiffFile }) {
               ? "bg-diff-add-bg text-success"
               : file.status === "deleted"
                 ? "bg-diff-del-bg text-danger"
-                : "bg-yellow-50 text-yellow-700"
+                : "bg-warning-bg text-warning"
           }`}
         >
           {file.status}
@@ -149,7 +149,7 @@ function DiffSidebar({
                     ? "bg-success"
                     : file.status === "deleted"
                       ? "bg-danger"
-                      : "bg-yellow-500"
+                      : "bg-warning"
                 }`}
               />
               <span className="truncate">{file.newPath || file.oldPath}</span>

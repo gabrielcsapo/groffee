@@ -49,6 +49,18 @@ db.run(sql`CREATE TABLE IF NOT EXISTS repositories (
 
 db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS repo_owner_name_idx ON repositories(owner_id, name)`);
 
+db.run(sql`CREATE TABLE IF NOT EXISTS repo_collaborators (
+  id TEXT PRIMARY KEY,
+  repo_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  permission TEXT NOT NULL DEFAULT 'write',
+  created_at INTEGER NOT NULL
+)`);
+
+db.run(
+  sql`CREATE UNIQUE INDEX IF NOT EXISTS collab_repo_user_idx ON repo_collaborators(repo_id, user_id)`,
+);
+
 db.run(sql`CREATE TABLE IF NOT EXISTS pull_requests (
   id TEXT PRIMARY KEY,
   number INTEGER NOT NULL,
@@ -93,6 +105,7 @@ beforeEach(() => {
   db.run(sql`DELETE FROM comments`);
   db.run(sql`DELETE FROM pull_requests`);
   db.run(sql`DELETE FROM issues`);
+  db.run(sql`DELETE FROM repo_collaborators`);
   db.run(sql`DELETE FROM repositories`);
   db.run(sql`DELETE FROM sessions`);
   db.run(sql`DELETE FROM ssh_keys`);

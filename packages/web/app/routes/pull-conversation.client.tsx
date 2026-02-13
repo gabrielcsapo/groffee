@@ -360,8 +360,8 @@ export function PullConversationView() {
       )}
 
       {pr.status === "merged" && (
-        <div className="border border-purple-200 rounded-lg p-4 mb-4 bg-purple-50">
-          <p className="text-sm text-purple-700 font-medium">
+        <div className="border border-merged/30 rounded-lg p-4 mb-4 bg-merged-bg">
+          <p className="text-sm text-merged font-medium">
             This pull request was merged{pr.mergedBy ? ` by ${pr.mergedBy}` : ""}.
           </p>
         </div>

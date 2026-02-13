@@ -2,17 +2,55 @@ import { Hono } from "hono";
 import { db, repositories, users } from "@groffee/db";
 import { eq, and } from "drizzle-orm";
 import { handleInfoRefs, handleServiceRpc } from "@groffee/git";
+import { verifyPassword } from "../lib/password.js";
+import { canPush, canRead } from "../lib/permissions.js";
 
 type ServiceType = "git-upload-pack" | "git-receive-pack";
 
 export const gitProtocolRoutes = new Hono();
 
+function parseBasicAuth(header: string | null): { username: string; password: string } | null {
+  if (!header || !header.startsWith("Basic ")) return null;
+  try {
+    const decoded = atob(header.slice(6));
+    const colonIndex = decoded.indexOf(":");
+    if (colonIndex === -1) return null;
+    return {
+      username: decoded.slice(0, colonIndex),
+      password: decoded.slice(colonIndex + 1),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function authenticateGitUser(authHeader: string | null) {
+  const creds = parseBasicAuth(authHeader);
+  if (!creds) return null;
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, creds.username))
+    .limit(1);
+
+  if (!user) return null;
+
+  const valid = await verifyPassword(user.passwordHash, creds.password);
+  return valid ? user : null;
+}
+
+function authChallenge() {
+  return new Response("Authentication required", {
+    status: 401,
+    headers: { "WWW-Authenticate": 'Basic realm="Groffee"' },
+  });
+}
+
 async function resolveRepo(owner: string, repoName: string) {
-  // Strip .git suffix if present
   const name = repoName.replace(/\.git$/, "");
 
   const [user] = await db.select().from(users).where(eq(users.username, owner)).limit(1);
-
   if (!user) return null;
 
   const [repo] = await db
@@ -34,6 +72,20 @@ gitProtocolRoutes.get("/:owner/:repo/info/refs", async (c) => {
   const repo = await resolveRepo(c.req.param("owner"), c.req.param("repo"));
   if (!repo) return c.text("Repository not found", 404);
 
+  if (service === "git-receive-pack") {
+    const user = await authenticateGitUser(c.req.header("Authorization") ?? null);
+    if (!user) return authChallenge();
+
+    const allowed = await canPush(user.id, repo.id);
+    if (!allowed) return c.text("Permission denied", 403);
+  } else if (!repo.isPublic) {
+    const user = await authenticateGitUser(c.req.header("Authorization") ?? null);
+    if (!user) return authChallenge();
+
+    const allowed = await canRead(user.id, repo.id);
+    if (!allowed) return c.text("Repository not found", 404);
+  }
+
   const serviceType = service.replace("git-", "") as "upload-pack" | "receive-pack";
   return handleInfoRefs(repo.diskPath, serviceType);
 });
@@ -43,6 +95,14 @@ gitProtocolRoutes.post("/:owner/:repo/git-upload-pack", async (c) => {
   const repo = await resolveRepo(c.req.param("owner"), c.req.param("repo"));
   if (!repo) return c.text("Repository not found", 404);
 
+  if (!repo.isPublic) {
+    const user = await authenticateGitUser(c.req.header("Authorization") ?? null);
+    if (!user) return authChallenge();
+
+    const allowed = await canRead(user.id, repo.id);
+    if (!allowed) return c.text("Repository not found", 404);
+  }
+
   return handleServiceRpc(repo.diskPath, "upload-pack", c.req.raw.body!);
 });
 
@@ -51,6 +111,11 @@ gitProtocolRoutes.post("/:owner/:repo/git-receive-pack", async (c) => {
   const repo = await resolveRepo(c.req.param("owner"), c.req.param("repo"));
   if (!repo) return c.text("Repository not found", 404);
 
-  // TODO: require auth for push
+  const user = await authenticateGitUser(c.req.header("Authorization") ?? null);
+  if (!user) return authChallenge();
+
+  const allowed = await canPush(user.id, repo.id);
+  if (!allowed) return c.text("Permission denied", 403);
+
   return handleServiceRpc(repo.diskPath, "receive-pack", c.req.raw.body!);
 });

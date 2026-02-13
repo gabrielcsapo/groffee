@@ -55,6 +55,25 @@ export const repositories = sqliteTable(
   (table) => [uniqueIndex("repo_owner_name_idx").on(table.ownerId, table.name)],
 );
 
+// --- Repository Collaborators ---
+export const repoCollaborators = sqliteTable(
+  "repo_collaborators",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    permission: text("permission", { enum: ["read", "write", "admin"] })
+      .notNull()
+      .default("write"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [uniqueIndex("collab_repo_user_idx").on(table.repoId, table.userId)],
+);
+
 // --- Pull Requests ---
 export const pullRequests = sqliteTable("pull_requests", {
   id: text("id").primaryKey(),

@@ -79,13 +79,7 @@ export default async function RepoTree({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-surface border border-border rounded-md overflow-hidden">
-            <span className="px-3 py-1.5 text-xs font-mono text-text-secondary select-all">
-              <CloneUrl path={clonePath} />
-            </span>
-          </div>
-        </div>
+        <CloneUrl path={clonePath} />
       </div>
 
       {/* Breadcrumbs (when navigating into subdirectories) */}

@@ -17,6 +17,12 @@ export default function RepoSettings() {
   const [confirmDelete, setConfirmDelete] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [collaborators, setCollaborators] = useState<
+    { id: string; username: string; permission: string; createdAt: string }[]
+  >([]);
+  const [newCollab, setNewCollab] = useState("");
+  const [newCollabPerm, setNewCollabPerm] = useState("write");
+  const [addingCollab, setAddingCollab] = useState(false);
 
   useEffect(() => {
     fetch(`/api/repos/${owner}/${repoName}`)
@@ -28,6 +34,12 @@ export default function RepoSettings() {
           setIsPublic(data.repository.isPublic);
         }
       });
+    fetch(`/api/repos/${owner}/${repoName}/collaborators`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.collaborators) setCollaborators(data.collaborators);
+      })
+      .catch(() => {});
   }, [owner, repoName]);
 
   async function handleSave(e: React.FormEvent) {
@@ -90,7 +102,7 @@ export default function RepoSettings() {
         </div>
       )}
       {error && (
-        <div className="mb-4 p-3 rounded-md bg-red-50 border border-danger/30 text-danger text-sm">
+        <div className="mb-4 p-3 rounded-md bg-danger-bg border border-danger/30 text-danger text-sm">
           {error}
         </div>
       )}
@@ -145,6 +157,99 @@ export default function RepoSettings() {
               {saving ? "Saving..." : "Save changes"}
             </button>
           </div>
+        </form>
+      </div>
+
+      {/* Collaborators */}
+      <div className="bg-surface border border-border rounded-lg p-6 mb-6">
+        <h2 className="text-lg font-semibold text-text-primary mb-1">Collaborators</h2>
+        <p className="text-sm text-text-secondary mb-4">
+          Collaborators can push to this repository.
+        </p>
+
+        {collaborators.length > 0 && (
+          <div className="border border-border rounded-md mb-4">
+            {collaborators.map((collab, i) => (
+              <div
+                key={collab.id}
+                className={`flex items-center justify-between px-4 py-3 ${i > 0 ? "border-t border-border" : ""}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-text-primary">{collab.username}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-surface-secondary text-text-secondary border border-border">
+                    {collab.permission}
+                  </span>
+                </div>
+                <button
+                  onClick={async () => {
+                    const res = await fetch(
+                      `/api/repos/${owner}/${repoName}/collaborators/${collab.id}`,
+                      { method: "DELETE" },
+                    );
+                    if (res.ok) {
+                      setCollaborators(collaborators.filter((c) => c.id !== collab.id));
+                    }
+                  }}
+                  className="btn-danger btn-sm"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!newCollab.trim()) return;
+            setAddingCollab(true);
+            setError("");
+            setMessage("");
+
+            const res = await fetch(`/api/repos/${owner}/${repoName}/collaborators`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username: newCollab.trim(), permission: newCollabPerm }),
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+              setCollaborators([...collaborators, data.collaborator]);
+              setNewCollab("");
+              setMessage("Collaborator added.");
+            } else {
+              setError(data.error || "Failed to add collaborator");
+            }
+            setAddingCollab(false);
+          }}
+          className="flex items-end gap-3"
+        >
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-text-primary mb-1">Username</label>
+            <input
+              type="text"
+              value={newCollab}
+              onChange={(e) => setNewCollab(e.target.value)}
+              className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              placeholder="Enter username"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1">Permission</label>
+            <select
+              value={newCollabPerm}
+              onChange={(e) => setNewCollabPerm(e.target.value)}
+              className="px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+            >
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <button type="submit" disabled={addingCollab} className="btn-primary">
+            {addingCollab ? "Adding..." : "Add"}
+          </button>
         </form>
       </div>
 

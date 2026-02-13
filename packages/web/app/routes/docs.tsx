@@ -779,26 +779,24 @@ function Code({ children }: { children: React.ReactNode }) {
 }
 
 function MethodBadge({ method }: { method: string }) {
-  const colors: Record<string, string> = {
-    GET: "bg-blue-100 text-blue-800 border-blue-200",
-    POST: "bg-green-100 text-green-800 border-green-200",
-    PATCH: "bg-yellow-100 text-yellow-800 border-yellow-200",
-    DELETE: "bg-red-100 text-red-800 border-red-200",
+  const classes: Record<string, string> = {
+    GET: "badge-method-get",
+    POST: "badge-method-post",
+    PATCH: "badge-method-patch",
+    DELETE: "badge-method-delete",
   };
   return (
-    <span
-      className={`inline-block text-xs font-bold font-mono px-2 py-0.5 rounded border ${colors[method] || ""}`}
-    >
+    <span className={`inline-block ${classes[method] || ""}`}>
       {method}
     </span>
   );
 }
 
 function AuthBadge({ level }: { level: "required" | "optional" | "none" }) {
-  const styles: Record<string, string> = {
-    required: "bg-red-50 text-red-700 border-red-200",
-    optional: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    none: "bg-gray-50 text-gray-600 border-gray-200",
+  const classes: Record<string, string> = {
+    required: "badge-auth-required",
+    optional: "badge-auth-optional",
+    none: "badge-auth-none",
   };
   const labels: Record<string, string> = {
     required: "Auth Required",
@@ -806,7 +804,7 @@ function AuthBadge({ level }: { level: "required" | "optional" | "none" }) {
     none: "No Auth",
   };
   return (
-    <span className={`inline-block text-xs px-2 py-0.5 rounded border ${styles[level]}`}>
+    <span className={`inline-block ${classes[level]}`}>
       {labels[level]}
     </span>
   );

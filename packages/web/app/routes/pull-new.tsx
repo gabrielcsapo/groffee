@@ -48,7 +48,7 @@ export default function NewPullRequest() {
   return (
     <div className="max-w-2xl mx-auto mt-4">
       {error && (
-        <div className="mb-4 p-3 rounded-md bg-red-50 border border-danger/30 text-danger text-sm">
+        <div className="mb-4 p-3 rounded-md bg-danger-bg border border-danger/30 text-danger text-sm">
           {error}
         </div>
       )}

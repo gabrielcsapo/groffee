@@ -29,13 +29,14 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "oxfmt": "^0.31.0",
-    "oxlint": "^1.46.0",
+    "oxfmt": "^0.32.0",
+    "oxlint": "^1.47.0",
     "typescript": "^5.9.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3",
+      "cpu-features",
       "esbuild",
       "@node-rs/argon2"
     ]

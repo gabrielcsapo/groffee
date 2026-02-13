@@ -13,6 +13,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark')})()`,
+          }}
+        />
         <link
           rel="icon"
           type="image/png"
@@ -30,7 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <title>Groffee</title>
       </head>
       <body className="flex flex-col min-h-screen">
-        <header className="bg-text-primary shadow-md sticky top-0 z-30">
+        <header className="bg-header-bg shadow-md sticky top-0 z-30">
           <nav className="max-w-[1280px] mx-auto px-6 h-16 flex items-center gap-6">
             <Link
               to="/"

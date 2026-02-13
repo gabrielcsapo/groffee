@@ -37,6 +37,11 @@ export const routes: unstable_RSCRouteConfigEntry[] = [
         lazy: () => import("./routes/docs"),
       },
       {
+        id: "settings-keys",
+        path: "settings/keys",
+        lazy: () => import("./routes/settings-keys"),
+      },
+      {
         id: "user-profile",
         path: ":owner",
         lazy: () => import("./routes/user-profile"),

@@ -38,7 +38,7 @@ export default function Login() {
       </div>
       <div className="bg-surface border border-border rounded-lg p-6 shadow-sm">
         {error && (
-          <div className="mb-4 p-3 rounded-md bg-red-50 border border-danger/30 text-danger text-sm">
+          <div className="mb-4 p-3 rounded-md bg-danger-bg border border-danger/30 text-danger text-sm">
             {error}
           </div>
         )}
