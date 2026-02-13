@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { apiFetch } from "../lib/api";
+import { highlightCode, getLangFromFilename } from "../lib/highlight";
 
 export default async function RepoBlob({
   params,
@@ -28,6 +29,10 @@ export default async function RepoBlob({
   const parentPath = pathParts.slice(0, -1).join("/");
   const lines = content.split("\n");
   const lineCount = lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
+
+  // Server-side syntax highlighting
+  const lang = getLangFromFilename(fileName);
+  const highlightedLines = lang ? await highlightCode(content, lang) : null;
 
   return (
     <div className="max-w-4xl mx-auto mt-8">
@@ -69,7 +74,7 @@ export default async function RepoBlob({
           <span className="text-sm font-medium text-text-primary">{fileName}</span>
           <span className="text-xs text-text-secondary">{lineCount} lines</span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto bg-surface">
           <table className="w-full text-sm font-mono">
             <tbody>
               {lines.map((line: string, i: number) => (
@@ -77,7 +82,14 @@ export default async function RepoBlob({
                   <td className="py-0 px-4 text-right text-text-secondary select-none w-[1%] whitespace-nowrap border-r border-border">
                     {i + 1}
                   </td>
-                  <td className="py-0 px-4 whitespace-pre text-text-primary">{line}</td>
+                  {highlightedLines?.[i] != null ? (
+                    <td
+                      className="py-0 px-4 whitespace-pre shiki-line"
+                      dangerouslySetInnerHTML={{ __html: highlightedLines[i] }}
+                    />
+                  ) : (
+                    <td className="py-0 px-4 whitespace-pre text-text-primary">{line}</td>
+                  )}
                 </tr>
               ))}
             </tbody>

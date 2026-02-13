@@ -16,7 +16,8 @@
     "drizzle-orm": "^0.45.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router": "7.13.0"
+    "react-router": "7.13.0",
+    "shiki": "^3.22.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
