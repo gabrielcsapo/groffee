@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 
 // --- Users ---
 export const users = sqliteTable("users", {
@@ -148,3 +148,120 @@ export const editHistory = sqliteTable("edit_history", {
     .references(() => users.id),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
+
+// =====================================================
+// Git Content Index Tables
+// =====================================================
+
+// --- Git Refs (branches/tags per repo) ---
+export const gitRefs = sqliteTable(
+  "git_refs",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    type: text("type", { enum: ["branch", "tag"] }).notNull(),
+    commitOid: text("commit_oid").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [uniqueIndex("git_refs_repo_name_idx").on(table.repoId, table.name)],
+);
+
+// --- Git Commits (deduplicated by OID per repo) ---
+export const gitCommits = sqliteTable(
+  "git_commits",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    oid: text("oid").notNull(),
+    message: text("message").notNull(),
+    authorName: text("author_name").notNull(),
+    authorEmail: text("author_email").notNull(),
+    authorTimestamp: integer("author_timestamp").notNull(),
+    committerName: text("committer_name").notNull(),
+    committerEmail: text("committer_email").notNull(),
+    committerTimestamp: integer("committer_timestamp").notNull(),
+    parentOids: text("parent_oids").notNull().default("[]"),
+    treeOid: text("tree_oid").notNull(),
+  },
+  (table) => [uniqueIndex("git_commits_repo_oid_idx").on(table.repoId, table.oid)],
+);
+
+// --- Git Commit Ancestry (which commits belong to which ref, with depth) ---
+export const gitCommitAncestry = sqliteTable(
+  "git_commit_ancestry",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    refName: text("ref_name").notNull(),
+    commitOid: text("commit_oid").notNull(),
+    depth: integer("depth").notNull(),
+  },
+  (table) => [
+    uniqueIndex("git_ancestry_repo_ref_commit_idx").on(table.repoId, table.refName, table.commitOid),
+    index("git_ancestry_repo_ref_depth_idx").on(table.repoId, table.refName, table.depth),
+  ],
+);
+
+// --- Git Tree Entries (flattened directory listings keyed by root tree OID) ---
+export const gitTreeEntries = sqliteTable(
+  "git_tree_entries",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    rootTreeOid: text("root_tree_oid").notNull(),
+    parentPath: text("parent_path").notNull(),
+    entryName: text("entry_name").notNull(),
+    entryPath: text("entry_path").notNull(),
+    entryType: text("entry_type", { enum: ["blob", "tree"] }).notNull(),
+    entryOid: text("entry_oid").notNull(),
+    entrySize: integer("entry_size"),
+  },
+  (table) => [
+    uniqueIndex("git_tree_entry_tree_path_idx").on(table.repoId, table.rootTreeOid, table.entryPath),
+    index("git_tree_entry_listing_idx").on(table.repoId, table.rootTreeOid, table.parentPath),
+  ],
+);
+
+// --- Git Blobs (file content, deduplicated by OID per repo) ---
+export const gitBlobs = sqliteTable(
+  "git_blobs",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    oid: text("oid").notNull(),
+    content: text("content"),
+    size: integer("size").notNull(),
+    isBinary: integer("is_binary", { mode: "boolean" }).notNull().default(false),
+    isTruncated: integer("is_truncated", { mode: "boolean" }).notNull().default(false),
+  },
+  (table) => [uniqueIndex("git_blobs_repo_oid_idx").on(table.repoId, table.oid)],
+);
+
+// --- Git Commit Files (which files each commit touched) ---
+export const gitCommitFiles = sqliteTable(
+  "git_commit_files",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    commitOid: text("commit_oid").notNull(),
+    filePath: text("file_path").notNull(),
+    changeType: text("change_type", { enum: ["add", "modify", "delete", "rename"] }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("git_commit_files_repo_commit_path_idx").on(table.repoId, table.commitOid, table.filePath),
+    index("git_commit_files_repo_path_idx").on(table.repoId, table.filePath),
+  ],
+);

@@ -1,6 +1,16 @@
 import { Hono } from "hono";
-import { db, repositories, users } from "@groffee/db";
-import { eq, and, like, desc } from "drizzle-orm";
+import {
+  db,
+  repositories,
+  users,
+  gitRefs,
+  gitCommits,
+  gitCommitAncestry,
+  gitTreeEntries,
+  gitBlobs,
+  gitCommitFiles,
+} from "@groffee/db";
+import { eq, and, like, desc, asc, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
 import {
   initBareRepo,
@@ -82,7 +92,23 @@ repoRoutes.get("/", async (c) => {
     owner: ownerMap.get(r.ownerId) || "unknown",
   }));
 
-  return c.json({ repositories: result });
+  // Count total matching repos for pagination
+  let total: number;
+  if (q) {
+    const [row] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(repositories)
+      .where(and(eq(repositories.isPublic, true), like(repositories.name, `%${q}%`)));
+    total = row.count;
+  } else {
+    const [row] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(repositories)
+      .where(eq(repositories.isPublic, true));
+    total = row.count;
+  }
+
+  return c.json({ repositories: result, total });
 });
 
 // Create repository
@@ -237,7 +263,7 @@ repoRoutes.delete("/:owner/:name", requireAuth, async (c) => {
 
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
-  // Delete from DB (cascades to issues, PRs, comments)
+  // Delete from DB (cascades to issues, PRs, comments, and all git index tables)
   await db.delete(repositories).where(eq(repositories.id, repo.id));
 
   // Delete bare git repo from disk
@@ -271,12 +297,59 @@ async function findRepo(ownerName: string, repoName: string, currentUserId?: str
   return repo;
 }
 
+// Helper: resolve ref name from a combined "ref/path" string using indexed refs
+async function resolveRefAndPath(
+  repoId: string,
+  defaultBranch: string,
+  refAndPath: string,
+): Promise<{ ref: string; subPath: string; fromIndex: boolean }> {
+  // Try to resolve against indexed refs first
+  const indexedRefs = await db
+    .select({ name: gitRefs.name })
+    .from(gitRefs)
+    .where(eq(gitRefs.repoId, repoId));
+
+  const refNames = indexedRefs.map((r) => r.name);
+
+  if (refNames.length > 0) {
+    const parts = refAndPath.split("/");
+    for (let i = parts.length; i > 0; i--) {
+      const candidate = parts.slice(0, i).join("/");
+      if (refNames.includes(candidate)) {
+        return { ref: candidate, subPath: parts.slice(i).join("/"), fromIndex: true };
+      }
+    }
+    // No match — use first segment as ref
+    if (parts.length > 0) {
+      return { ref: parts[0], subPath: parts.slice(1).join("/"), fromIndex: true };
+    }
+  }
+
+  return { ref: defaultBranch, subPath: refAndPath, fromIndex: false };
+}
+
 // Get refs (branches + tags)
 repoRoutes.get("/:owner/:name/refs", optionalAuth, async (c) => {
   const currentUser = c.get("user") as { id: string } | undefined;
   const repo = await findRepo(c.req.param("owner"), c.req.param("name"), currentUser?.id);
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
+  // Try indexed refs first
+  const indexedRefs = await db
+    .select({
+      name: gitRefs.name,
+      oid: gitRefs.commitOid,
+      type: gitRefs.type,
+    })
+    .from(gitRefs)
+    .where(eq(gitRefs.repoId, repo.id));
+
+  if (indexedRefs.length > 0) {
+    const headBranch = await resolveHead(repo.diskPath);
+    return c.json({ refs: indexedRefs, defaultBranch: headBranch || repo.defaultBranch });
+  }
+
+  // Fallback to git
   try {
     const refs = await listRefs(repo.diskPath);
     const headBranch = await resolveHead(repo.diskPath);
@@ -293,35 +366,134 @@ repoRoutes.get("/:owner/:name/tree/:ref{.+}", optionalAuth, async (c) => {
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
   const refAndPath = c.req.param("ref");
-  // The ref could be "main" or "main/src/lib" — we need to split ref from path
-  // Try the full string as a ref first, then progressively strip path segments
-  const refs = await listRefs(repo.diskPath);
-  const refNames = refs.map((r) => r.name);
+  const { ref, subPath: treePath } = await resolveRefAndPath(
+    repo.id,
+    repo.defaultBranch,
+    refAndPath,
+  );
 
-  let ref = repo.defaultBranch;
-  let treePath = "";
-
-  // Find the longest matching ref
-  const parts = refAndPath.split("/");
-  for (let i = parts.length; i > 0; i--) {
-    const candidate = parts.slice(0, i).join("/");
-    if (refNames.includes(candidate)) {
-      ref = candidate;
-      treePath = parts.slice(i).join("/");
-      break;
-    }
-  }
-
-  // If no ref matched, try using first segment as ref
-  if (ref === repo.defaultBranch && parts.length > 0) {
-    ref = parts[0];
-    treePath = parts.slice(1).join("/");
-  }
-
+  // Try indexed data first
   try {
-    const entries = await getTree(repo.diskPath, ref, treePath);
+    const [refRecord] = await db
+      .select({ commitOid: gitRefs.commitOid })
+      .from(gitRefs)
+      .where(and(eq(gitRefs.repoId, repo.id), eq(gitRefs.name, ref)))
+      .limit(1);
+
+    if (refRecord) {
+      const [commitRecord] = await db
+        .select({ treeOid: gitCommits.treeOid })
+        .from(gitCommits)
+        .where(and(eq(gitCommits.repoId, repo.id), eq(gitCommits.oid, refRecord.commitOid)))
+        .limit(1);
+
+      if (commitRecord) {
+        // Fetch tree entries for this directory
+        const entries = await db
+          .select({
+            name: gitTreeEntries.entryName,
+            path: gitTreeEntries.entryPath,
+            type: gitTreeEntries.entryType,
+            oid: gitTreeEntries.entryOid,
+          })
+          .from(gitTreeEntries)
+          .where(
+            and(
+              eq(gitTreeEntries.repoId, repo.id),
+              eq(gitTreeEntries.rootTreeOid, commitRecord.treeOid),
+              eq(gitTreeEntries.parentPath, treePath),
+            ),
+          )
+          .orderBy(desc(gitTreeEntries.entryType), asc(gitTreeEntries.entryName));
+
+        if (entries.length > 0) {
+          // Get last commit per path via indexed data
+          const paths = entries.map((e) => e.path);
+          const lastCommitRows = await db
+            .select({
+              filePath: gitCommitFiles.filePath,
+              commitOid: gitCommitAncestry.commitOid,
+              depth: gitCommitAncestry.depth,
+              message: gitCommits.message,
+              authorTimestamp: gitCommits.authorTimestamp,
+              authorName: gitCommits.authorName,
+              authorEmail: gitCommits.authorEmail,
+            })
+            .from(gitCommitFiles)
+            .innerJoin(
+              gitCommitAncestry,
+              and(
+                eq(gitCommitAncestry.repoId, gitCommitFiles.repoId),
+                eq(gitCommitAncestry.commitOid, gitCommitFiles.commitOid),
+                eq(gitCommitAncestry.refName, ref),
+              ),
+            )
+            .innerJoin(
+              gitCommits,
+              and(
+                eq(gitCommits.repoId, gitCommitFiles.repoId),
+                eq(gitCommits.oid, gitCommitFiles.commitOid),
+              ),
+            )
+            .where(
+              and(
+                eq(gitCommitFiles.repoId, repo.id),
+                sql`${gitCommitFiles.filePath} IN ${paths}`,
+              ),
+            )
+            .orderBy(asc(gitCommitAncestry.depth));
+
+          // Take the first (shallowest depth = most recent) result per path
+          const lastCommitMap = new Map<
+            string,
+            { oid: string; message: string; timestamp: number; author: string; authorEmail: string }
+          >();
+          for (const row of lastCommitRows) {
+            if (!lastCommitMap.has(row.filePath)) {
+              lastCommitMap.set(row.filePath, {
+                oid: row.commitOid,
+                message: row.message,
+                timestamp: row.authorTimestamp,
+                author: row.authorName,
+                authorEmail: row.authorEmail,
+              });
+            }
+          }
+
+          const entriesWithCommits = entries.map((entry) => ({
+            ...entry,
+            lastCommit: lastCommitMap.get(entry.path) || null,
+          }));
+
+          return c.json({ entries: entriesWithCommits, ref, path: treePath });
+        }
+      }
+    }
+  } catch {
+    // Index read failed, fall through to git
+  }
+
+  // Fallback to git
+  try {
+    const refs = await listRefs(repo.diskPath);
+    const refNames = refs.map((r) => r.name);
+
+    // Re-resolve ref from git refs if index resolution failed
+    let gitRef = ref;
+    let gitTreePath = treePath;
+    const parts = refAndPath.split("/");
+    for (let i = parts.length; i > 0; i--) {
+      const candidate = parts.slice(0, i).join("/");
+      if (refNames.includes(candidate)) {
+        gitRef = candidate;
+        gitTreePath = parts.slice(i).join("/");
+        break;
+      }
+    }
+
+    const entries = await getTree(repo.diskPath, gitRef, gitTreePath);
     const paths = entries.map((e) => e.path);
-    const lastCommits = await getLastCommitsForPaths(repo.diskPath, ref, paths);
+    const lastCommits = await getLastCommitsForPaths(repo.diskPath, gitRef, paths);
 
     const entriesWithCommits = entries.map((entry) => {
       const commit = lastCommits.get(entry.path);
@@ -331,7 +503,7 @@ repoRoutes.get("/:owner/:name/tree/:ref{.+}", optionalAuth, async (c) => {
       };
     });
 
-    return c.json({ entries: entriesWithCommits, ref, path: treePath });
+    return c.json({ entries: entriesWithCommits, ref: gitRef, path: gitTreePath });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to read tree";
     return c.json({ error: message }, 404);
@@ -345,31 +517,91 @@ repoRoutes.get("/:owner/:name/blob/:ref{.+}", optionalAuth, async (c) => {
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
   const refAndPath = c.req.param("ref");
-  const refs = await listRefs(repo.diskPath);
-  const refNames = refs.map((r) => r.name);
+  const { ref, subPath: filePath } = await resolveRefAndPath(
+    repo.id,
+    repo.defaultBranch,
+    refAndPath,
+  );
 
-  let ref = repo.defaultBranch;
-  let filePath = refAndPath;
-
-  const parts = refAndPath.split("/");
-  for (let i = parts.length - 1; i > 0; i--) {
-    const candidate = parts.slice(0, i).join("/");
-    if (refNames.includes(candidate)) {
-      ref = candidate;
-      filePath = parts.slice(i).join("/");
-      break;
-    }
-  }
-
-  if (ref === repo.defaultBranch && parts.length > 1) {
-    ref = parts[0];
-    filePath = parts.slice(1).join("/");
-  }
-
+  // Try indexed data first
   try {
-    const { content, oid } = await getBlob(repo.diskPath, ref, filePath);
+    const [refRecord] = await db
+      .select({ commitOid: gitRefs.commitOid })
+      .from(gitRefs)
+      .where(and(eq(gitRefs.repoId, repo.id), eq(gitRefs.name, ref)))
+      .limit(1);
+
+    if (refRecord) {
+      const [commitRecord] = await db
+        .select({ treeOid: gitCommits.treeOid })
+        .from(gitCommits)
+        .where(and(eq(gitCommits.repoId, repo.id), eq(gitCommits.oid, refRecord.commitOid)))
+        .limit(1);
+
+      if (commitRecord) {
+        const [treeEntry] = await db
+          .select({ entryOid: gitTreeEntries.entryOid })
+          .from(gitTreeEntries)
+          .where(
+            and(
+              eq(gitTreeEntries.repoId, repo.id),
+              eq(gitTreeEntries.rootTreeOid, commitRecord.treeOid),
+              eq(gitTreeEntries.entryPath, filePath),
+            ),
+          )
+          .limit(1);
+
+        if (treeEntry) {
+          const [blob] = await db
+            .select()
+            .from(gitBlobs)
+            .where(and(eq(gitBlobs.repoId, repo.id), eq(gitBlobs.oid, treeEntry.entryOid)))
+            .limit(1);
+
+          if (blob) {
+            if (blob.isBinary) {
+              return c.json({
+                content: null,
+                isBinary: true,
+                oid: blob.oid,
+                size: blob.size,
+                ref,
+                path: filePath,
+              });
+            }
+            if (blob.isTruncated) {
+              // Fall through to git for full content
+            } else {
+              return c.json({ content: blob.content, oid: blob.oid, ref, path: filePath });
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // Index read failed, fall through to git
+  }
+
+  // Fallback to git
+  try {
+    const refs = await listRefs(repo.diskPath);
+    const refNames = refs.map((r) => r.name);
+
+    let gitRef = ref;
+    let gitFilePath = filePath;
+    const parts = refAndPath.split("/");
+    for (let i = parts.length - 1; i > 0; i--) {
+      const candidate = parts.slice(0, i).join("/");
+      if (refNames.includes(candidate)) {
+        gitRef = candidate;
+        gitFilePath = parts.slice(i).join("/");
+        break;
+      }
+    }
+
+    const { content, oid } = await getBlob(repo.diskPath, gitRef, gitFilePath);
     const text = new TextDecoder().decode(content);
-    return c.json({ content: text, oid, ref, path: filePath });
+    return c.json({ content: text, oid, ref: gitRef, path: gitFilePath });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to read file";
     return c.json({ error: message }, 404);
@@ -385,6 +617,57 @@ repoRoutes.get("/:owner/:name/commits/:ref", optionalAuth, async (c) => {
   const ref = c.req.param("ref");
   const limit = parseInt(c.req.query("limit") || "30", 10);
 
+  // Try indexed data first
+  try {
+    const commitList = await db
+      .select({
+        oid: gitCommits.oid,
+        message: gitCommits.message,
+        authorName: gitCommits.authorName,
+        authorEmail: gitCommits.authorEmail,
+        authorTimestamp: gitCommits.authorTimestamp,
+        committerName: gitCommits.committerName,
+        committerEmail: gitCommits.committerEmail,
+        committerTimestamp: gitCommits.committerTimestamp,
+        parentOids: gitCommits.parentOids,
+      })
+      .from(gitCommitAncestry)
+      .innerJoin(
+        gitCommits,
+        and(
+          eq(gitCommits.repoId, gitCommitAncestry.repoId),
+          eq(gitCommits.oid, gitCommitAncestry.commitOid),
+        ),
+      )
+      .where(
+        and(eq(gitCommitAncestry.repoId, repo.id), eq(gitCommitAncestry.refName, ref)),
+      )
+      .orderBy(asc(gitCommitAncestry.depth))
+      .limit(limit);
+
+    if (commitList.length > 0) {
+      const commits = commitList.map((c) => ({
+        oid: c.oid,
+        message: c.message,
+        author: {
+          name: c.authorName,
+          email: c.authorEmail,
+          timestamp: c.authorTimestamp,
+        },
+        committer: {
+          name: c.committerName,
+          email: c.committerEmail,
+          timestamp: c.committerTimestamp,
+        },
+        parents: JSON.parse(c.parentOids) as string[],
+      }));
+      return c.json({ commits, ref });
+    }
+  } catch {
+    // Index read failed, fall through to git
+  }
+
+  // Fallback to git
   try {
     const commits = await getCommitLog(repo.diskPath, ref, limit);
     return c.json({ commits, ref });
@@ -394,7 +677,7 @@ repoRoutes.get("/:owner/:name/commits/:ref", optionalAuth, async (c) => {
   }
 });
 
-// Get single commit with diff
+// Get single commit with diff (always uses git for diff)
 repoRoutes.get("/:owner/:name/commit/:sha", optionalAuth, async (c) => {
   const currentUser = c.get("user") as { id: string } | undefined;
   const repo = await findRepo(c.req.param("owner"), c.req.param("name"), currentUser?.id);
@@ -402,6 +685,44 @@ repoRoutes.get("/:owner/:name/commit/:sha", optionalAuth, async (c) => {
 
   const sha = c.req.param("sha");
 
+  // Try indexed commit metadata
+  try {
+    const [indexed] = await db
+      .select()
+      .from(gitCommits)
+      .where(and(eq(gitCommits.repoId, repo.id), eq(gitCommits.oid, sha)))
+      .limit(1);
+
+    if (indexed) {
+      const parents = JSON.parse(indexed.parentOids) as string[];
+      const commit = {
+        oid: indexed.oid,
+        message: indexed.message,
+        author: {
+          name: indexed.authorName,
+          email: indexed.authorEmail,
+          timestamp: indexed.authorTimestamp,
+        },
+        committer: {
+          name: indexed.committerName,
+          email: indexed.committerEmail,
+          timestamp: indexed.committerTimestamp,
+        },
+        parents,
+      };
+
+      // Diff still comes from git (on-demand)
+      let diff = null;
+      if (parents.length > 0) {
+        diff = await getDiff(repo.diskPath, parents[0], sha);
+      }
+      return c.json({ commit, diff });
+    }
+  } catch {
+    // Fall through to git
+  }
+
+  // Fallback to git
   try {
     const commit = await getCommit(repo.diskPath, sha);
     let diff = null;

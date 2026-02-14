@@ -7,7 +7,7 @@
   "scripts": {
     "start": "concurrently -n web,server -c blue,green \"pnpm --filter @groffee/web preview\" \"pnpm --filter @groffee/server start\"",
     "dev": "concurrently -n web,server -c blue,green \"pnpm --filter @groffee/web dev\" \"pnpm --filter @groffee/server dev\"",
-    "build": "pnpm --filter @groffee/server build && pnpm --filter @groffee/web build",
+    "build": "pnpm -r build",
     "db:generate": "pnpm --filter @groffee/db generate",
     "db:migrate": "pnpm --filter @groffee/db migrate",
     "test": "pnpm --filter @groffee/server test",

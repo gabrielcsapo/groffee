@@ -70,6 +70,7 @@ export function handleServiceRpc(
   repoPath: string,
   service: ServiceType,
   req: IncomingMessage | ReadableStream,
+  onComplete?: (exitCode: number) => void,
 ): Response {
   const proc = spawn("git", [service, "--stateless-rpc", "."], {
     cwd: repoPath,
@@ -88,6 +89,10 @@ export function handleServiceRpc(
 
   proc.on("error", (err) => {
     console.error(`git ${service} spawn error:`, err);
+  });
+
+  proc.on("exit", (code) => {
+    if (onComplete) onComplete(code ?? 1);
   });
 
   const stream = new ReadableStream({

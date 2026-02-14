@@ -19,3 +19,21 @@ export { getBlame, type BlameLine } from "./blame.js";
 export { handleInfoRefs, handleServiceRpc } from "./protocol.js";
 
 export { initBareRepo } from "./init.js";
+
+export {
+  walkTree,
+  readBlobForIndex,
+  getChangedFiles,
+  readCommitForIndex,
+  getCommitParents,
+  listAllRefsWithOids,
+  snapshotRefs,
+  diffRefSnapshots,
+  walkAncestry,
+  type WalkedTree,
+  type WalkedTreeEntry,
+  type BlobIndexData,
+  type ChangedFile,
+  type RefChange,
+  type CommitMeta,
+} from "./indexer.js";

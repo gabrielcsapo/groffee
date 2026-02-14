@@ -8,6 +8,7 @@ import { pullRoutes } from "./routes/pulls.js";
 import { gitProtocolRoutes } from "./routes/git-protocol.js";
 import { sshKeyRoutes } from "./routes/ssh-keys.js";
 import { collaboratorRoutes } from "./routes/collaborators.js";
+import { searchRoutes } from "./routes/search.js";
 
 export const app = new Hono();
 
@@ -24,6 +25,8 @@ app.route("/api/repos", issueRoutes);
 app.route("/api/repos", pullRoutes);
 app.route("/api/user/ssh-keys", sshKeyRoutes);
 app.route("/api/repos", collaboratorRoutes);
+app.route("/api/repos", searchRoutes);
+app.route("/api", searchRoutes);
 
 // Smart HTTP Git Protocol routes
 // Git clients expect URLs like: /:owner/:repo.git/info/refs
