@@ -39,6 +39,18 @@ export default defineConfig({
       },
     }),
   ],
+  environments: {
+    rsc: {
+      resolve: {
+        external: ["better-sqlite3"],
+      },
+    },
+    ssr: {
+      resolve: {
+        external: ["better-sqlite3"],
+      },
+    },
+  },
   optimizeDeps: {
     include: ["react-router", "react-router/internal/react-server-client"],
   },

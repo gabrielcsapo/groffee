@@ -51,6 +51,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
               Explore
             </Link>
             <Link
+              to="/search"
+              className="text-white/70 text-sm hover:text-white hover:no-underline"
+            >
+              Search
+            </Link>
+            <Link
               to="/docs"
               className="text-white/70 text-sm hover:text-white hover:no-underline"
             >

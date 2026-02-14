@@ -25,10 +25,22 @@ export default function Docs() {
               Auth
             </a>
             <a
+              href="#ssh-keys"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              SSH Keys
+            </a>
+            <a
               href="#repositories"
               className="block text-text-secondary hover:text-text-link py-0.5"
             >
               Repositories
+            </a>
+            <a
+              href="#collaborators"
+              className="block text-text-secondary hover:text-text-link py-0.5"
+            >
+              Collaborators
             </a>
             <a href="#issues" className="block text-text-secondary hover:text-text-link py-0.5">
               Issues
@@ -38,6 +50,9 @@ export default function Docs() {
               className="block text-text-secondary hover:text-text-link py-0.5"
             >
               Pull Requests
+            </a>
+            <a href="#search" className="block text-text-secondary hover:text-text-link py-0.5">
+              Search
             </a>
             <a
               href="#git-protocol"
@@ -166,6 +181,56 @@ export default function Docs() {
             },
           }}
           notes="Returns { user: null } if not authenticated."
+        />
+
+        {/* SSH Keys */}
+        <SectionHeader id="ssh-keys" title="SSH Keys" />
+
+        <Endpoint
+          method="GET"
+          path="/api/user/ssh-keys"
+          auth="required"
+          description="List the authenticated user's SSH keys."
+          response={{
+            keys: [
+              {
+                id: "string",
+                title: "string",
+                fingerprint: "string",
+                createdAt: "datetime",
+              },
+            ],
+          }}
+        />
+
+        <Endpoint
+          method="POST"
+          path="/api/user/ssh-keys"
+          auth="required"
+          description="Add a new SSH public key."
+          body={{
+            title: "string (required)",
+            publicKey: "string (required, OpenSSH format)",
+          }}
+          response={{
+            key: {
+              id: "string",
+              title: "string",
+              fingerprint: "string",
+              createdAt: "datetime",
+            },
+          }}
+          notes="Returns 400 if the key format is invalid. Returns 409 if the key fingerprint is already registered."
+        />
+
+        <Endpoint
+          method="DELETE"
+          path="/api/user/ssh-keys/:id"
+          auth="required"
+          description="Delete an SSH key."
+          pathParams={[{ name: "id", description: "SSH key ID" }]}
+          response={{ deleted: true }}
+          notes="Returns 404 if the key does not exist or does not belong to the authenticated user."
         />
 
         {/* Repositories */}
@@ -417,6 +482,70 @@ export default function Docs() {
             diff: "object | null",
           }}
           notes="Diff is null for the root (initial) commit."
+        />
+
+        {/* Collaborators */}
+        <SectionHeader id="collaborators" title="Collaborators" />
+
+        <Endpoint
+          method="GET"
+          path="/api/repos/:owner/:repo/collaborators"
+          auth="required"
+          description="List collaborators for a repository. Must be the repo owner."
+          pathParams={[
+            { name: "owner", description: "Username" },
+            { name: "repo", description: "Repository name" },
+          ]}
+          response={{
+            collaborators: [
+              {
+                id: "string",
+                userId: "string",
+                username: "string",
+                permission: "read | write | admin",
+                createdAt: "datetime",
+              },
+            ],
+          }}
+          notes="Returns 403 if you are not the repo owner."
+        />
+
+        <Endpoint
+          method="POST"
+          path="/api/repos/:owner/:repo/collaborators"
+          auth="required"
+          description="Add a collaborator to a repository. Must be the repo owner."
+          pathParams={[
+            { name: "owner", description: "Username" },
+            { name: "repo", description: "Repository name" },
+          ]}
+          body={{
+            username: "string (required)",
+            permission: '"read", "write" (default), or "admin"',
+          }}
+          response={{
+            collaborator: {
+              id: "string",
+              username: "string",
+              permission: "string",
+              createdAt: "datetime",
+            },
+          }}
+          notes="Returns 400 if you try to add the owner as a collaborator. Returns 409 if the user is already a collaborator."
+        />
+
+        <Endpoint
+          method="DELETE"
+          path="/api/repos/:owner/:repo/collaborators/:collabId"
+          auth="required"
+          description="Remove a collaborator from a repository. Must be the repo owner."
+          pathParams={[
+            { name: "owner", description: "Username" },
+            { name: "repo", description: "Repository name" },
+            { name: "collabId", description: "Collaborator record ID" },
+          ]}
+          response={{ deleted: true }}
+          notes="Returns 403 if not the repo owner. Returns 404 if the collaborator record does not exist."
         />
 
         {/* Issues */}
@@ -712,14 +841,225 @@ export default function Docs() {
           }}
         />
 
+        {/* Search */}
+        <SectionHeader id="search" title="Search" />
+
+        <div className="card p-4 text-sm text-text-secondary mb-6 space-y-3">
+          <p>
+            Search endpoints use SQLite FTS5 full-text search. Queries support the following syntax:
+          </p>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-text-secondary border-b border-border-muted">
+                <th className="pb-1 pr-4 font-medium">Syntax</th>
+                <th className="pb-1 pr-4 font-medium">Description</th>
+                <th className="pb-1 font-medium">Example</th>
+              </tr>
+            </thead>
+            <tbody className="text-text-primary">
+              <SyntaxRow syntax={'"exact phrase"'} desc="Match exact sequence of words" example={'"hello world"'} />
+              <SyntaxRow syntax="word1 word2" desc="Implicit AND — both must appear" example="react router" />
+              <SyntaxRow syntax="word1 OR word2" desc="Match either word" example="useState OR useReducer" />
+              <SyntaxRow syntax="NOT word" desc="Exclude documents containing word" example="router NOT express" />
+              <SyntaxRow syntax="prefix*" desc="Prefix matching" example="func*" />
+              <SyntaxRow syntax="(a OR b) AND c" desc="Group with parentheses" example={'(error OR warning) AND "log"'} />
+            </tbody>
+          </table>
+          <p>
+            FTS5 uses Porter stemming, so <Code>running</Code> also matches <Code>run</Code>. Code
+            search results can be filtered by language/extension using the <Code>ext</Code> query
+            parameter.
+          </p>
+        </div>
+
+        <Endpoint
+          method="GET"
+          path="/api/repos/:owner/:repo/search/code"
+          auth="optional"
+          description="Search code within a repository."
+          pathParams={[
+            { name: "owner", description: "Username" },
+            { name: "repo", description: "Repository name" },
+          ]}
+          queryParams={[
+            { name: "q", type: "string", description: "Search query (required)" },
+            {
+              name: "ext",
+              type: "string",
+              description: 'File extension filter (e.g., "ts", "py")',
+            },
+            {
+              name: "limit",
+              type: "number",
+              description: "Max results (default: 20, max: 100)",
+            },
+            {
+              name: "offset",
+              type: "number",
+              description: "Pagination offset (default: 0)",
+            },
+          ]}
+          response={{
+            results: [
+              {
+                file_path: "string",
+                blob_oid: "string",
+                snippet: "string (HTML with <mark> highlights)",
+              },
+            ],
+            total: "number",
+            limit: "number",
+            offset: "number",
+          }}
+        />
+
+        <Endpoint
+          method="GET"
+          path="/api/search/code"
+          auth="optional"
+          description="Search code across all public repositories."
+          queryParams={[
+            { name: "q", type: "string", description: "Search query (required)" },
+            {
+              name: "ext",
+              type: "string",
+              description: 'File extension filter (e.g., "ts", "py")',
+            },
+            {
+              name: "limit",
+              type: "number",
+              description: "Max results (default: 20, max: 100)",
+            },
+            {
+              name: "offset",
+              type: "number",
+              description: "Pagination offset (default: 0)",
+            },
+          ]}
+          response={{
+            results: [
+              {
+                repo_id: "string",
+                file_path: "string",
+                blob_oid: "string",
+                snippet: "string (HTML with <mark> highlights)",
+                repo_name: "string",
+                repo_owner: "string",
+              },
+            ],
+            total: "number",
+            limit: "number",
+            offset: "number",
+          }}
+          notes="Only searches public repositories."
+        />
+
+        <Endpoint
+          method="GET"
+          path="/api/search/code/languages"
+          auth="optional"
+          description="Get language breakdown for code search results."
+          queryParams={[
+            { name: "q", type: "string", description: "Search query (required)" },
+          ]}
+          response={{
+            languages: [
+              {
+                ext: "string",
+                count: "number",
+              },
+            ],
+          }}
+          notes="Returns up to 20 languages sorted by count. Only includes public repositories."
+        />
+
+        <Endpoint
+          method="GET"
+          path="/api/repos/:owner/:repo/search/issues"
+          auth="optional"
+          description="Search issues within a repository."
+          pathParams={[
+            { name: "owner", description: "Username" },
+            { name: "repo", description: "Repository name" },
+          ]}
+          queryParams={[
+            { name: "q", type: "string", description: "Search query (required)" },
+            {
+              name: "limit",
+              type: "number",
+              description: "Max results (default: 20, max: 100)",
+            },
+            {
+              name: "offset",
+              type: "number",
+              description: "Pagination offset (default: 0)",
+            },
+          ]}
+          response={{
+            results: [
+              {
+                issue_id: "string",
+                title_snippet: "string (HTML)",
+                body_snippet: "string (HTML)",
+              },
+            ],
+            total: "number",
+            limit: "number",
+            offset: "number",
+          }}
+        />
+
+        <Endpoint
+          method="GET"
+          path="/api/repos/:owner/:repo/search/pulls"
+          auth="optional"
+          description="Search pull requests within a repository."
+          pathParams={[
+            { name: "owner", description: "Username" },
+            { name: "repo", description: "Repository name" },
+          ]}
+          queryParams={[
+            { name: "q", type: "string", description: "Search query (required)" },
+            {
+              name: "limit",
+              type: "number",
+              description: "Max results (default: 20, max: 100)",
+            },
+            {
+              name: "offset",
+              type: "number",
+              description: "Pagination offset (default: 0)",
+            },
+          ]}
+          response={{
+            results: [
+              {
+                pr_id: "string",
+                title_snippet: "string (HTML)",
+                body_snippet: "string (HTML)",
+              },
+            ],
+            total: "number",
+            limit: "number",
+            offset: "number",
+          }}
+        />
+
         {/* Git Protocol */}
         <SectionHeader id="git-protocol" title="Git Protocol (Smart HTTP)" />
 
         <div className="card p-4 text-sm text-text-secondary mb-6">
-          These endpoints implement Git's Smart HTTP protocol for <Code>git clone</Code>,{" "}
-          <Code>git fetch</Code>, and <Code>git push</Code>. They use binary git protocol streams,
-          not JSON. You typically interact with these via the <Code>git</Code> CLI rather than
-          calling them directly.
+          <p className="mb-2">
+            These endpoints implement Git's Smart HTTP protocol for <Code>git clone</Code>,{" "}
+            <Code>git fetch</Code>, and <Code>git push</Code>. They use binary git protocol
+            streams, not JSON. You typically interact with these via the <Code>git</Code> CLI rather
+            than calling them directly.
+          </p>
+          <p>
+            Groffee also supports <strong>SSH git access</strong> (port 2222). Push operations
+            require SSH key authentication — add your public key via{" "}
+            <Code>POST /api/user/ssh-keys</Code> or the Settings page.
+          </p>
         </div>
 
         <Endpoint
@@ -750,7 +1090,7 @@ export default function Docs() {
           path="/:owner/:repo.git/git-receive-pack"
           auth="none"
           description="Git push data exchange."
-          notes="Binary git protocol. Used by git push. Auth for push is planned but not yet implemented."
+          notes="Binary git protocol. Used by git push. Push via HTTP requires the repo owner or a collaborator with write access. SSH push requires a registered SSH key."
         />
       </div>
     </div>
@@ -908,6 +1248,16 @@ function ParamTable({ params }: { params: ParamDef[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+function SyntaxRow({ syntax, desc, example }: { syntax: string; desc: string; example: string }) {
+  return (
+    <tr>
+      <td className="py-1 pr-4 font-mono"><Code>{syntax}</Code></td>
+      <td className="py-1 pr-4">{desc}</td>
+      <td className="py-1 font-mono text-text-secondary">{example}</td>
+    </tr>
   );
 }
 

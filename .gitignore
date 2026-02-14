@@ -74,3 +74,4 @@ data/
 
 # OS
 .DS_Store
+deploy.json

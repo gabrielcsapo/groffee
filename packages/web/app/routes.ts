@@ -32,6 +32,11 @@ export const routes: unstable_RSCRouteConfigEntry[] = [
         lazy: () => import("./routes/new-repo"),
       },
       {
+        id: "search",
+        path: "search",
+        lazy: () => import("./routes/search"),
+      },
+      {
         id: "docs",
         path: "docs",
         lazy: () => import("./routes/docs"),

@@ -11,6 +11,7 @@ WORKDIR /app
 COPY . .
 
 RUN pnpm install --frozen-lockfile
+RUN pnpm run build
 
 EXPOSE 3000
 

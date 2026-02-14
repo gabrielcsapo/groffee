@@ -9,6 +9,8 @@ import { spawn, execFileSync } from "node:child_process";
 import { db, sshKeys, users, repositories } from "@groffee/db";
 import { eq, and } from "drizzle-orm";
 import { canPush, canRead } from "./lib/permissions.js";
+import { snapshotRefs } from "@groffee/git";
+import { triggerIncrementalIndex } from "./lib/indexer.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -154,6 +156,10 @@ export function startSshServer() {
 
           const channel = accept();
 
+          // Snapshot refs before push to detect changes afterwards
+          const refsBefore =
+            parsed.service === "receive-pack" ? await snapshotRefs(repo.diskPath) : null;
+
           // SSH uses the interactive (non-stateless) git protocol
           const gitProc = spawn("git", [parsed.service, repo.diskPath]);
 
@@ -191,6 +197,12 @@ export function startSshServer() {
           gitProc.on("exit", (code) => {
             exitCode = code ?? 1;
             tryClose();
+            // Trigger indexing after successful push
+            if (parsed.service === "receive-pack" && code === 0 && refsBefore) {
+              triggerIncrementalIndex(repo.id, repo.diskPath, refsBefore).catch((err) =>
+                console.error("Post-push SSH indexing failed:", err),
+              );
+            }
           });
 
           channel.on("close", () => {

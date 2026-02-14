@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db, repositories, users, issues, comments, editHistory } from "@groffee/db";
-import { eq, and, desc, max, count, inArray } from "drizzle-orm";
+import { eq, and, desc, max, count, inArray, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
 import type { AppEnv } from "../types.js";
 
@@ -191,6 +191,15 @@ issueRoutes.post("/:owner/:repo/issues", requireAuth, async (c) => {
     updatedAt: now,
   });
 
+  // Sync FTS5 search index
+  try {
+    db.run(
+      sql`INSERT INTO issue_search(issue_id, repo_id, title, body) VALUES (${id}, ${result.repo.id}, ${title.trim()}, ${body?.trim() || ""})`,
+    );
+  } catch {
+    // FTS5 sync failure is non-fatal
+  }
+
   return c.json({ issue: { id, number: nextNumber, title, author: user.username } });
 });
 
@@ -249,6 +258,20 @@ issueRoutes.patch("/:owner/:repo/issues/:number", requireAuth, async (c) => {
   }
 
   await db.update(issues).set(updates).where(eq(issues.id, issue.id));
+
+  // Sync FTS5 search index if title or body changed
+  if (newTitle !== undefined || newBody !== undefined) {
+    try {
+      db.run(sql`DELETE FROM issue_search WHERE issue_id = ${issue.id}`);
+      const finalTitle = newTitle ?? issue.title;
+      const finalBody = newBody ?? issue.body;
+      db.run(
+        sql`INSERT INTO issue_search(issue_id, repo_id, title, body) VALUES (${issue.id}, ${result.repo.id}, ${finalTitle}, ${finalBody || ""})`,
+      );
+    } catch {
+      // FTS5 sync failure is non-fatal
+    }
+  }
 
   const [updated] = await db.select().from(issues).where(eq(issues.id, issue.id)).limit(1);
   return c.json({ issue: updated });

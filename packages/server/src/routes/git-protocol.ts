@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { db, repositories, users } from "@groffee/db";
 import { eq, and } from "drizzle-orm";
-import { handleInfoRefs, handleServiceRpc } from "@groffee/git";
+import { handleInfoRefs, handleServiceRpc, snapshotRefs } from "@groffee/git";
 import { verifyPassword } from "../lib/password.js";
 import { canPush, canRead } from "../lib/permissions.js";
+import { triggerIncrementalIndex } from "../lib/indexer.js";
 
 type ServiceType = "git-upload-pack" | "git-receive-pack";
 
@@ -117,5 +118,14 @@ gitProtocolRoutes.post("/:owner/:repo/git-receive-pack", async (c) => {
   const allowed = await canPush(user.id, repo.id);
   if (!allowed) return c.text("Permission denied", 403);
 
-  return handleServiceRpc(repo.diskPath, "receive-pack", c.req.raw.body!);
+  // Snapshot refs before push to detect changes afterwards
+  const refsBefore = await snapshotRefs(repo.diskPath);
+
+  return handleServiceRpc(repo.diskPath, "receive-pack", c.req.raw.body!, (exitCode) => {
+    if (exitCode === 0) {
+      triggerIncrementalIndex(repo.id, repo.diskPath, refsBefore).catch((err) =>
+        console.error("Post-push indexing failed:", err),
+      );
+    }
+  });
 });

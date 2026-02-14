@@ -12,7 +12,7 @@ function getHighlighter() {
   return highlighterPromise;
 }
 
-const extToLang: Record<string, string> = {
+export const extToLang: Record<string, string> = {
   // JavaScript / TypeScript
   js: "javascript",
   mjs: "javascript",
