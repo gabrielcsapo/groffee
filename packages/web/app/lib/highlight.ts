@@ -123,7 +123,8 @@ const MAX_HIGHLIGHT_LINES = 5000;
  */
 function extractLines(html: string): string[] | null {
   // shiki wraps each line in <span class="line">...</span>
-  const lineRegex = /<span class="line">([\s\S]*?)<\/span>(?=<span class="line">|<\/code>)/g;
+  // \s* handles newlines/whitespace shiki places between </span> and next <span class="line">
+  const lineRegex = /<span class="line">([\s\S]*?)<\/span>\s*(?=<span class="line">|<\/code>)/g;
   const lines: string[] = [];
   let match;
   while ((match = lineRegex.exec(html)) !== null) {
