@@ -35,10 +35,11 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@node-rs/argon2",
       "better-sqlite3",
       "cpu-features",
       "esbuild",
-      "@node-rs/argon2"
+      "ssh2"
     ]
   },
   "engines": {
