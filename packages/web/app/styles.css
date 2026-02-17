@@ -29,6 +29,10 @@
   --color-diff-add-text: #116329;
   --color-diff-del-text: #82071e;
   --color-header-bg: #24292f;
+  --heatmap-l1: #9be9a8;
+  --heatmap-l2: #40c463;
+  --heatmap-l3: #30a14e;
+  --heatmap-l4: #216e39;
 
   --animate-progress: progress 1s infinite linear;
   --animate-pulse-subtle: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -95,6 +99,10 @@
   --color-diff-add-text: #3fb950;
   --color-diff-del-text: #f85149;
   --color-header-bg: #010409;
+  --heatmap-l1: #0e4429;
+  --heatmap-l2: #006d32;
+  --heatmap-l3: #26a641;
+  --heatmap-l4: #39d353;
 }
 
 /* Shiki syntax highlighting — dark mode uses CSS custom properties */
@@ -257,6 +265,108 @@
 
   .btn-sm {
     @apply text-sm px-3 py-1.5;
+  }
+
+  /* Markdown body — rendered README content */
+  .markdown-body {
+    @apply text-text-primary text-sm leading-relaxed;
+  }
+
+  .markdown-body h1 {
+    @apply text-2xl font-bold text-text-primary mt-6 mb-3 pb-2 border-b border-border;
+  }
+
+  .markdown-body h2 {
+    @apply text-xl font-semibold text-text-primary mt-5 mb-3 pb-1.5 border-b border-border;
+  }
+
+  .markdown-body h3 {
+    @apply text-lg font-semibold text-text-primary mt-4 mb-2;
+  }
+
+  .markdown-body h4,
+  .markdown-body h5,
+  .markdown-body h6 {
+    @apply text-base font-semibold text-text-primary mt-4 mb-2;
+  }
+
+  .markdown-body h1:first-child,
+  .markdown-body h2:first-child,
+  .markdown-body h3:first-child {
+    @apply mt-0;
+  }
+
+  .markdown-body p {
+    @apply my-3;
+  }
+
+  .markdown-body a {
+    @apply text-text-link underline;
+  }
+
+  .markdown-body strong {
+    @apply font-semibold;
+  }
+
+  .markdown-body ul {
+    @apply list-disc pl-6 my-3;
+  }
+
+  .markdown-body ol {
+    @apply list-decimal pl-6 my-3;
+  }
+
+  .markdown-body li {
+    @apply my-1;
+  }
+
+  .markdown-body li > ul,
+  .markdown-body li > ol {
+    @apply my-0;
+  }
+
+  .markdown-body blockquote {
+    @apply border-l-4 border-border pl-4 text-text-secondary my-3;
+  }
+
+  .markdown-body code {
+    @apply px-1.5 py-0.5 rounded bg-surface-secondary text-sm font-mono;
+  }
+
+  .markdown-body pre {
+    @apply p-4 rounded-md border border-border bg-surface-secondary overflow-x-auto my-3;
+  }
+
+  .markdown-body pre code {
+    @apply p-0 bg-transparent rounded-none;
+  }
+
+  .markdown-body table {
+    @apply w-full my-3 border-collapse;
+  }
+
+  .markdown-body th {
+    @apply px-3 py-2 text-left font-semibold bg-surface-secondary border border-border;
+  }
+
+  .markdown-body td {
+    @apply px-3 py-2 border border-border;
+  }
+
+  .markdown-body img {
+    @apply max-w-full rounded;
+  }
+
+  .markdown-body hr {
+    @apply border-border my-6;
+  }
+
+  .markdown-body input[type="checkbox"] {
+    @apply mr-1.5;
+  }
+
+  .markdown-body del {
+    @apply line-through text-text-secondary;
   }
 
   /* Docs page — method badges */

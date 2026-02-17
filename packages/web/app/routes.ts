@@ -47,6 +47,11 @@ export const routes: unstable_RSCRouteConfigEntry[] = [
         lazy: () => import("./routes/settings-keys"),
       },
       {
+        id: "settings-tokens",
+        path: "settings/tokens",
+        lazy: () => import("./routes/settings-tokens"),
+      },
+      {
         id: "user-profile",
         path: ":owner",
         lazy: () => import("./routes/user-profile"),
@@ -80,6 +85,11 @@ export const routes: unstable_RSCRouteConfigEntry[] = [
             id: "repo-commit",
             path: "commit/:sha",
             lazy: () => import("./routes/repo-commit"),
+          },
+          {
+            id: "repo-activity",
+            path: "activity",
+            lazy: () => import("./routes/repo-activity"),
           },
           {
             id: "repo-settings",

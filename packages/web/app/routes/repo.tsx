@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { apiFetch } from "../lib/api";
 import { CloneUrl } from "../components/clone-url";
 import { BranchSwitcher } from "../components/branch-switcher";
+import { renderMarkdown } from "../lib/markdown";
 
 function formatRelativeDate(timestamp: number): string {
   const seconds = Math.floor(Date.now() / 1000 - timestamp);
@@ -45,6 +46,30 @@ export default async function Repo({ params }: { params: { owner: string; repo: 
   const entries = treeData.entries || [];
   const branches = (refsData.refs || []).filter((r: { type: string }) => r.type === "branch");
   const clonePath = `/${owner}/${repoName}.git`;
+
+  // Detect README file
+  const readmeEntry = entries.find(
+    (e: { name: string; type: string }) =>
+      e.type === "blob" && /^readme(\.(md|txt|markdown|rst))?$/i.test(e.name),
+  );
+
+  let readmeHtml: string | null = null;
+  let readmeFileName: string | null = null;
+  if (readmeEntry) {
+    const blobData = await apiFetch(
+      `/api/repos/${owner}/${repoName}/blob/${encodeURIComponent(ref)}/${readmeEntry.path}`,
+    );
+    if (blobData.content) {
+      readmeFileName = readmeEntry.name;
+      const ext = readmeEntry.name.split(".").pop()?.toLowerCase();
+      if (ext === "md" || ext === "markdown") {
+        readmeHtml = renderMarkdown(blobData.content);
+      } else {
+        // Plain text or no extension — wrap in <pre>
+        readmeHtml = `<pre>${blobData.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+      }
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto mt-8">
@@ -183,6 +208,32 @@ export default async function Repo({ params }: { params: { owner: string; repo: 
             git remote add origin <CloneUrl path={clonePath} />
             {"\n"}git push -u origin main
           </pre>
+        </div>
+      )}
+
+      {/* README */}
+      {readmeHtml && readmeFileName && (
+        <div className="border border-border rounded-lg overflow-hidden bg-surface mt-4">
+          <div className="flex items-center gap-2 px-4 py-2 bg-surface-secondary border-b border-border">
+            <svg
+              className="w-4 h-4 text-text-secondary"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+              />
+            </svg>
+            <span className="text-sm font-medium text-text-primary">{readmeFileName}</span>
+          </div>
+          <div
+            className="markdown-body px-6 py-5"
+            dangerouslySetInnerHTML={{ __html: readmeHtml }}
+          />
         </div>
       )}
     </div>

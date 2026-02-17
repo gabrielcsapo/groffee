@@ -9,6 +9,7 @@ import {
   gitTreeEntries,
   gitBlobs,
   gitCommitFiles,
+  auditLogs,
 } from "@groffee/db";
 import { eq, and, like, desc, asc, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
@@ -26,6 +27,7 @@ import { getDiff } from "@groffee/git";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AppEnv } from "../types.js";
+import { logAudit, getClientIp } from "../lib/audit.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
@@ -154,6 +156,15 @@ repoRoutes.post("/", requireAuth, async (c) => {
     updatedAt: now,
   });
 
+  logAudit({
+    userId: user.id,
+    action: "repo.create",
+    targetType: "repository",
+    targetId: id,
+    metadata: { name, isPublic },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
   return c.json({
     repository: { id, name, description, isPublic, owner: user.username },
   });
@@ -237,6 +248,15 @@ repoRoutes.patch("/:owner/:name", requireAuth, async (c) => {
 
   await db.update(repositories).set(updates).where(eq(repositories.id, repo.id));
 
+  logAudit({
+    userId: user.id,
+    action: "repo.update",
+    targetType: "repository",
+    targetId: repo.id,
+    metadata: updates,
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
   const [updated] = await db
     .select()
     .from(repositories)
@@ -273,6 +293,15 @@ repoRoutes.delete("/:owner/:name", requireAuth, async (c) => {
   } catch {
     // Best effort — DB record is already gone
   }
+
+  logAudit({
+    userId: user.id,
+    action: "repo.delete",
+    targetType: "repository",
+    targetId: repo.id,
+    metadata: { name: repoName },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
 
   return c.json({ deleted: true });
 });
@@ -734,4 +763,226 @@ repoRoutes.get("/:owner/:name/commit/:sha", optionalAuth, async (c) => {
     const message = e instanceof Error ? e.message : "Failed to read commit";
     return c.json({ error: message }, 404);
   }
+});
+
+// --- Raw blob (binary content with correct Content-Type) ---
+
+const CONTENT_TYPE_MAP: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  ico: "image/x-icon",
+  bmp: "image/bmp",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  ogg: "video/ogg",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  pdf: "application/pdf",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+};
+
+repoRoutes.get("/:owner/:name/raw/:ref{.+}", optionalAuth, async (c) => {
+  const currentUser = c.get("user") as { id: string } | undefined;
+  const repo = await findRepo(c.req.param("owner"), c.req.param("name"), currentUser?.id);
+  if (!repo) return c.text("Not found", 404);
+
+  const refAndPath = c.req.param("ref");
+  const { ref, subPath: filePath } = await resolveRefAndPath(
+    repo.id,
+    repo.defaultBranch,
+    refAndPath,
+  );
+
+  try {
+    // Try git CLI for raw binary content
+    const refs = await listRefs(repo.diskPath);
+    const refNames = refs.map((r) => r.name);
+
+    let gitRef = ref;
+    let gitFilePath = filePath;
+    const parts = refAndPath.split("/");
+    for (let i = parts.length - 1; i > 0; i--) {
+      const candidate = parts.slice(0, i).join("/");
+      if (refNames.includes(candidate)) {
+        gitRef = candidate;
+        gitFilePath = parts.slice(i).join("/");
+        break;
+      }
+    }
+
+    const { content } = await getBlob(repo.diskPath, gitRef, gitFilePath);
+
+    const ext = gitFilePath.split(".").pop()?.toLowerCase() || "";
+    const contentType = CONTENT_TYPE_MAP[ext] || "application/octet-stream";
+
+    return new Response(content, {
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=3600, immutable",
+      },
+    });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Failed to read file";
+    return c.text(message, 404);
+  }
+});
+
+// --- Repository activity (commit heatmap + contributors) ---
+
+repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
+  const currentUser = c.get("user") as { id: string } | undefined;
+  const repo = await findRepo(c.req.param("owner"), c.req.param("name"), currentUser?.id);
+  if (!repo) return c.json({ error: "Repository not found" }, 404);
+
+  const now = Math.floor(Date.now() / 1000);
+  const oneYearAgo = now - 365 * 86400;
+
+  // Daily commit counts for heatmap (last 365 days)
+  const dailyRows = await db
+    .select({
+      day: sql<number>`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`,
+      count: sql<number>`cast(count(*) as integer)`,
+    })
+    .from(gitCommits)
+    .where(
+      and(eq(gitCommits.repoId, repo.id), sql`${gitCommits.authorTimestamp} >= ${oneYearAgo}`),
+    )
+    .groupBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`)
+    .orderBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`);
+
+  // Weekly commit counts (last 52 weeks)
+  const weeklyRows = await db
+    .select({
+      week: sql<number>`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
+      count: sql<number>`cast(count(*) as integer)`,
+    })
+    .from(gitCommits)
+    .where(
+      and(eq(gitCommits.repoId, repo.id), sql`${gitCommits.authorTimestamp} >= ${oneYearAgo}`),
+    )
+    .groupBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`)
+    .orderBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`);
+
+  // Top contributors (all time)
+  const contributors = await db
+    .select({
+      name: gitCommits.authorName,
+      email: gitCommits.authorEmail,
+      commits: sql<number>`cast(count(*) as integer)`,
+      lastCommitAt: sql<number>`cast(max(${gitCommits.authorTimestamp}) as integer)`,
+    })
+    .from(gitCommits)
+    .where(eq(gitCommits.repoId, repo.id))
+    .groupBy(gitCommits.authorEmail)
+    .orderBy(sql`count(*) desc`)
+    .limit(20);
+
+  // Total commit count
+  const [totalRow] = await db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(gitCommits)
+    .where(eq(gitCommits.repoId, repo.id));
+
+  return c.json({
+    daily: dailyRows,
+    weekly: weeklyRows,
+    contributors,
+    totalCommits: totalRow?.count || 0,
+  });
+});
+
+// --- Activity drill-down: commits by day or author ---
+
+repoRoutes.get("/:owner/:name/activity/commits", optionalAuth, async (c) => {
+  const currentUser = c.get("user") as { id: string } | undefined;
+  const repo = await findRepo(c.req.param("owner"), c.req.param("name"), currentUser?.id);
+  if (!repo) return c.json({ error: "Repository not found" }, 404);
+
+  const day = c.req.query("day"); // unix timestamp of day start
+  const authorEmail = c.req.query("author");
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+
+  const conditions = [eq(gitCommits.repoId, repo.id)];
+
+  if (day) {
+    const dayStart = parseInt(day, 10);
+    const dayEnd = dayStart + 86400;
+    conditions.push(sql`${gitCommits.authorTimestamp} >= ${dayStart}`);
+    conditions.push(sql`${gitCommits.authorTimestamp} < ${dayEnd}`);
+  }
+
+  if (authorEmail) {
+    conditions.push(eq(gitCommits.authorEmail, authorEmail));
+  }
+
+  const rows = await db
+    .select({
+      oid: gitCommits.oid,
+      message: gitCommits.message,
+      authorName: gitCommits.authorName,
+      authorEmail: gitCommits.authorEmail,
+      authorTimestamp: gitCommits.authorTimestamp,
+    })
+    .from(gitCommits)
+    .where(and(...conditions))
+    .orderBy(sql`${gitCommits.authorTimestamp} desc`)
+    .limit(limit);
+
+  return c.json({
+    commits: rows.map((r) => ({
+      oid: r.oid,
+      message: r.message,
+      author: { name: r.authorName, email: r.authorEmail, timestamp: r.authorTimestamp },
+    })),
+  });
+});
+
+// --- Audit log for a repository (owner only) ---
+
+repoRoutes.get("/:owner/:name/audit", requireAuth, async (c) => {
+  const user = c.get("user") as { id: string; username: string };
+  const ownerName = c.req.param("owner");
+  const repoName = c.req.param("name");
+
+  if (user.username !== ownerName) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const [repo] = await db
+    .select()
+    .from(repositories)
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)))
+    .limit(1);
+
+  if (!repo) return c.json({ error: "Repository not found" }, 404);
+
+  const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
+  const offset = parseInt(c.req.query("offset") || "0", 10);
+
+  const logs = await db
+    .select({
+      id: auditLogs.id,
+      action: auditLogs.action,
+      targetType: auditLogs.targetType,
+      targetId: auditLogs.targetId,
+      metadata: auditLogs.metadata,
+      ipAddress: auditLogs.ipAddress,
+      createdAt: auditLogs.createdAt,
+      username: users.username,
+    })
+    .from(auditLogs)
+    .innerJoin(users, eq(users.id, auditLogs.userId))
+    .where(and(eq(auditLogs.targetType, "repository"), eq(auditLogs.targetId, repo.id)))
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return c.json({ logs });
 });

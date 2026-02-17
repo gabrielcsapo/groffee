@@ -4,6 +4,7 @@ import { db, users } from "@groffee/db";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { createSession, validateSession, deleteSession } from "../lib/session.js";
+import { logAudit, getClientIp } from "../lib/audit.js";
 
 export const authRoutes = new Hono();
 
@@ -54,6 +55,15 @@ authRoutes.post("/register", async (c) => {
     secure: process.env.NODE_ENV === "production",
   });
 
+  logAudit({
+    userId: id,
+    action: "auth.register",
+    targetType: "user",
+    targetId: id,
+    metadata: { username },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
   return c.json({
     user: { id, username, email },
   });
@@ -86,6 +96,14 @@ authRoutes.post("/login", async (c) => {
     expires: session.expiresAt,
     secure: process.env.NODE_ENV === "production",
   });
+
+  logAudit({
+    userId: user.id,
+    action: "auth.login",
+    targetType: "user",
+    targetId: user.id,
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
 
   return c.json({
     user: { id: user.id, username: user.username, email: user.email },

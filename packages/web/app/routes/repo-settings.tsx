@@ -23,6 +23,16 @@ export default function RepoSettings() {
   const [newCollab, setNewCollab] = useState("");
   const [newCollabPerm, setNewCollabPerm] = useState("write");
   const [addingCollab, setAddingCollab] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<
+    {
+      id: string;
+      action: string;
+      username: string;
+      metadata: string | null;
+      ipAddress: string | null;
+      createdAt: string;
+    }[]
+  >([]);
 
   useEffect(() => {
     fetch(`/api/repos/${owner}/${repoName}`)
@@ -38,6 +48,12 @@ export default function RepoSettings() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.collaborators) setCollaborators(data.collaborators);
+      })
+      .catch(() => {});
+    fetch(`/api/repos/${owner}/${repoName}/audit?limit=20`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.logs) setAuditLogs(data.logs);
       })
       .catch(() => {});
   }, [owner, repoName]);
@@ -252,6 +268,50 @@ export default function RepoSettings() {
           </button>
         </form>
       </div>
+
+      {/* Audit Log */}
+      {auditLogs.length > 0 && (
+        <div className="bg-surface border border-border rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-semibold text-text-primary mb-1">Audit log</h2>
+          <p className="text-sm text-text-secondary mb-4">
+            Recent administrative actions on this repository.
+          </p>
+          <div className="border border-border rounded-md overflow-hidden">
+            {auditLogs.map((log, i) => {
+              const meta = log.metadata ? JSON.parse(log.metadata) : {};
+              return (
+                <div
+                  key={log.id}
+                  className={`flex items-center justify-between px-4 py-2.5 ${i > 0 ? "border-t border-border" : ""}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-text-primary">{log.username}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-surface-secondary text-text-secondary border border-border font-mono">
+                        {log.action}
+                      </span>
+                      {meta.name && (
+                        <span className="text-xs text-text-secondary">{meta.name}</span>
+                      )}
+                    </div>
+                    {log.ipAddress && log.ipAddress !== "unknown" && (
+                      <p className="text-xs text-text-secondary mt-0.5">from {log.ipAddress}</p>
+                    )}
+                  </div>
+                  <time className="text-xs text-text-secondary whitespace-nowrap ml-3">
+                    {new Date(log.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Danger zone */}
       <div className="bg-surface border border-danger/30 rounded-lg p-6">

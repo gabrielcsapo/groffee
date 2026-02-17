@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { generateFingerprint } from "../lib/ssh.js";
 import type { AppEnv } from "../types.js";
+import { logAudit, getClientIp } from "../lib/audit.js";
 
 export const sshKeyRoutes = new Hono<AppEnv>();
 
@@ -62,6 +63,15 @@ sshKeyRoutes.post("/", async (c) => {
     createdAt: now,
   });
 
+  logAudit({
+    userId: user.id,
+    action: "ssh_key.add",
+    targetType: "ssh_key",
+    targetId: id,
+    metadata: { title: title.trim(), fingerprint },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
   return c.json({ key: { id, title: title.trim(), fingerprint, createdAt: now } });
 });
 
@@ -81,5 +91,15 @@ sshKeyRoutes.delete("/:id", async (c) => {
   }
 
   await db.delete(sshKeys).where(eq(sshKeys.id, keyId));
+
+  logAudit({
+    userId: user.id,
+    action: "ssh_key.delete",
+    targetType: "ssh_key",
+    targetId: keyId,
+    metadata: { title: key.title },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
   return c.json({ deleted: true });
 });

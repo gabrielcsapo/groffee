@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { db, repositories, users, issues, comments, editHistory } from "@groffee/db";
 import { eq, and, desc, max, count, inArray, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
+import { logAudit, getClientIp } from "../lib/audit.js";
 import type { AppEnv } from "../types.js";
 
 export const issueRoutes = new Hono<AppEnv>();
@@ -200,6 +201,15 @@ issueRoutes.post("/:owner/:repo/issues", requireAuth, async (c) => {
     // FTS5 sync failure is non-fatal
   }
 
+  logAudit({
+    userId: user.id,
+    action: "issue.create",
+    targetType: "issue",
+    targetId: id,
+    metadata: { title, repoName: c.req.param("repo") },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
   return c.json({ issue: { id, number: nextNumber, title, author: user.username } });
 });
 
@@ -272,6 +282,15 @@ issueRoutes.patch("/:owner/:repo/issues/:number", requireAuth, async (c) => {
       // FTS5 sync failure is non-fatal
     }
   }
+
+  logAudit({
+    userId: user.id,
+    action: body.status === "closed" ? "issue.close" : body.status === "open" ? "issue.reopen" : "issue.update",
+    targetType: "issue",
+    targetId: issue.id,
+    metadata: { number: issue.number, repoName: c.req.param("repo") },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
 
   const [updated] = await db.select().from(issues).where(eq(issues.id, issue.id)).limit(1);
   return c.json({ issue: updated });

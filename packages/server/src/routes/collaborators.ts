@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { db, repositories, users, repoCollaborators } from "@groffee/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
+import { logAudit, getClientIp } from "../lib/audit.js";
 import type { AppEnv } from "../types.js";
 
 export const collaboratorRoutes = new Hono<AppEnv>();
@@ -112,6 +113,15 @@ collaboratorRoutes.post("/:owner/:repo/collaborators", async (c) => {
     createdAt: now,
   });
 
+  logAudit({
+    userId: user.id,
+    action: "collaborator.add",
+    targetType: "collaborator",
+    targetId: id,
+    metadata: { username, permission, repoName: c.req.param("repo") },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
   return c.json({
     collaborator: { id, username, permission, createdAt: now },
   });
@@ -145,5 +155,15 @@ collaboratorRoutes.delete("/:owner/:repo/collaborators/:collabId", async (c) => 
   if (!collab) return c.json({ error: "Collaborator not found" }, 404);
 
   await db.delete(repoCollaborators).where(eq(repoCollaborators.id, collabId));
+
+  logAudit({
+    userId: user.id,
+    action: "collaborator.remove",
+    targetType: "collaborator",
+    targetId: collabId,
+    metadata: { repoName: c.req.param("repo") },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
   return c.json({ deleted: true });
 });

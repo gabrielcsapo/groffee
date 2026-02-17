@@ -5,6 +5,7 @@ import { requireAuth, optionalAuth } from "../middleware/auth.js";
 import { listRefs, getDiff } from "@groffee/git";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { logAudit, getClientIp } from "../lib/audit.js";
 import type { AppEnv } from "../types.js";
 
 const execFileAsync = promisify(execFile);
@@ -234,6 +235,15 @@ pullRoutes.post("/:owner/:repo/pulls", requireAuth, async (c) => {
     // FTS5 sync failure is non-fatal
   }
 
+  logAudit({
+    userId: user.id,
+    action: "pr.create",
+    targetType: "pull_request",
+    targetId: id,
+    metadata: { title, sourceBranch, targetBranch, repoName: c.req.param("repo") },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
   return c.json({ pullRequest: { id, number: nextNumber, title, author: user.username } });
 });
 
@@ -304,6 +314,15 @@ pullRoutes.patch("/:owner/:repo/pulls/:number", requireAuth, async (c) => {
       // FTS5 sync failure is non-fatal
     }
   }
+
+  logAudit({
+    userId: user.id,
+    action: body.status === "closed" ? "pr.close" : body.status === "open" ? "pr.reopen" : "pr.update",
+    targetType: "pull_request",
+    targetId: pr.id,
+    metadata: { number: pr.number, repoName: c.req.param("repo") },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
 
   const [updated] = await db.select().from(pullRequests).where(eq(pullRequests.id, pr.id)).limit(1);
   return c.json({ pullRequest: updated });
@@ -407,6 +426,15 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
         updatedAt: now,
       })
       .where(eq(pullRequests.id, pr.id));
+
+    logAudit({
+      userId: user.id,
+      action: "pr.merge",
+      targetType: "pull_request",
+      targetId: pr.id,
+      metadata: { number: pr.number, sourceBranch: pr.sourceBranch, targetBranch: pr.targetBranch, repoName: c.req.param("repo") },
+      ipAddress: getClientIp(c.req.raw.headers),
+    }).catch(console.error);
 
     return c.json({ merged: true });
   } catch (e: unknown) {

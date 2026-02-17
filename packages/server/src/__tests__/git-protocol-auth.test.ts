@@ -197,7 +197,7 @@ describe("Git Protocol Auth", () => {
 
     it("returns 403 for non-owner", async () => {
       const owner = await registerUser("owner", "owner@test.com", "ownerpass");
-      const { data } = await createRepo("myrepo", { cookie: owner.cookie });
+      await createRepo("myrepo", { cookie: owner.cookie });
 
       await registerUser("stranger", "stranger@test.com", "strangerpass");
 

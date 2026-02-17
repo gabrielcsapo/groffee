@@ -100,8 +100,34 @@ db.run(sql`CREATE TABLE IF NOT EXISTS comments (
   updated_at INTEGER NOT NULL
 )`);
 
+db.run(sql`CREATE TABLE IF NOT EXISTS audit_logs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  action TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  metadata TEXT,
+  ip_address TEXT,
+  created_at INTEGER NOT NULL
+)`);
+
+db.run(sql`CREATE TABLE IF NOT EXISTS personal_access_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL,
+  token_prefix TEXT NOT NULL,
+  scopes TEXT NOT NULL DEFAULT '["repo","user"]',
+  expires_at INTEGER,
+  last_used_at INTEGER,
+  created_at INTEGER NOT NULL
+)`);
+db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS pat_hash_idx ON personal_access_tokens(token_hash)`);
+
 // Clean all data before each test
 beforeEach(() => {
+  db.run(sql`DELETE FROM audit_logs`);
+  db.run(sql`DELETE FROM personal_access_tokens`);
   db.run(sql`DELETE FROM comments`);
   db.run(sql`DELETE FROM pull_requests`);
   db.run(sql`DELETE FROM issues`);

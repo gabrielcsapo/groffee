@@ -265,3 +265,53 @@ export const gitCommitFiles = sqliteTable(
     index("git_commit_files_repo_path_idx").on(table.repoId, table.filePath),
   ],
 );
+
+// =====================================================
+// Audit Logs
+// =====================================================
+
+export const auditLogs = sqliteTable(
+  "audit_logs",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    action: text("action").notNull(),
+    targetType: text("target_type").notNull(),
+    targetId: text("target_id").notNull(),
+    metadata: text("metadata"),
+    ipAddress: text("ip_address"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("audit_logs_user_idx").on(table.userId),
+    index("audit_logs_target_idx").on(table.targetType, table.targetId),
+    index("audit_logs_created_idx").on(table.createdAt),
+  ],
+);
+
+// =====================================================
+// Personal Access Tokens
+// =====================================================
+
+export const personalAccessTokens = sqliteTable(
+  "personal_access_tokens",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    tokenPrefix: text("token_prefix").notNull(),
+    scopes: text("scopes").notNull().default('["repo","user"]'),
+    expiresAt: integer("expires_at", { mode: "timestamp" }),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("pat_user_idx").on(table.userId),
+    uniqueIndex("pat_hash_idx").on(table.tokenHash),
+  ],
+);

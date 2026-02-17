@@ -36,6 +36,13 @@
       "when": 1771098631000,
       "tag": "0004_fts5_search",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1771286283450,
+      "tag": "0005_nifty_wasp",
+      "breakpoints": true
     }
   ]
 }

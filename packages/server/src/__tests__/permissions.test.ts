@@ -29,7 +29,7 @@ async function createRepo(ownerId: string, name: string, isPublic = true) {
   return id;
 }
 
-async function addCollaborator(repoId: string, userId: string, permission: string) {
+async function addCollaborator(repoId: string, userId: string, permission: "read" | "write" | "admin") {
   const id = crypto.randomUUID();
   await db.insert(repoCollaborators).values({
     id,
