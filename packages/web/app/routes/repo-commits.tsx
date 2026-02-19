@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { apiFetch } from "../lib/api";
+import { getRepoCommits } from "../lib/server/repos";
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor(Date.now() / 1000 - timestamp);
@@ -21,7 +21,7 @@ export default async function RepoCommits({
 }) {
   const { owner, repo: repoName, ref } = params;
 
-  const data = await apiFetch(`/api/repos/${owner}/${repoName}/commits/${ref}`);
+  const data = await getRepoCommits(owner, repoName, ref);
 
   if (data.error) {
     return (

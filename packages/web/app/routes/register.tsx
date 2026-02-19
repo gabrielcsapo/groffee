@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { GroffeeLogo } from "../components/groffee-logo";
+import { register } from "../lib/server/auth";
 
 export default function Register() {
   const [error, setError] = useState("");
@@ -20,22 +21,18 @@ export default function Register() {
       return;
     }
 
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: form.get("username"),
-        email: form.get("email"),
-        password,
-      }),
-    });
+    const result = await register(
+      form.get("username") as string,
+      form.get("email") as string,
+      password,
+    );
 
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Registration failed");
+    if (result.error) {
+      setError(result.error);
       return;
     }
 
+    if (result.setCookie) document.cookie = result.setCookie;
     window.location.href = "/";
   }
 

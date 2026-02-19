@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router";
 import { timeAgo } from "../lib/time";
+import { searchRepos } from "../lib/server/search";
 
 interface Repo {
   id: string;
@@ -29,9 +30,8 @@ export function ExploreList({ initialRepos }: { initialRepos: Repo[] }) {
         return;
       }
       setLoading(true);
-      fetch(`/api/repos?q=${encodeURIComponent(q)}&limit=30`)
-        .then((r) => r.json())
-        .then((data) => setRepos(data.repositories || []))
+      searchRepos(q, 30)
+        .then((data) => setRepos((data.repositories as Repo[]) || []))
         .catch(() => setRepos([]))
         .finally(() => setLoading(false));
     },

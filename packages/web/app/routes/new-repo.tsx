@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { createRepo } from "../lib/server/repos";
 
 export default function NewRepo() {
   const [error, setError] = useState("");
@@ -12,23 +13,18 @@ export default function NewRepo() {
     setError("");
 
     const form = new FormData(e.currentTarget);
-    const res = await fetch("/api/repos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.get("name"),
-        description: form.get("description"),
-        isPublic: form.get("visibility") === "public",
-      }),
-    });
+    const result = await createRepo(
+      form.get("name") as string,
+      form.get("description") as string,
+      form.get("visibility") === "public",
+    );
 
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Failed to create repository");
+    if (result.error) {
+      setError(result.error);
       return;
     }
 
-    navigate(`/${data.repository.owner}/${data.repository.name}`);
+    navigate(`/${result.repository!.owner}/${result.repository!.name}`);
   }
 
   return (

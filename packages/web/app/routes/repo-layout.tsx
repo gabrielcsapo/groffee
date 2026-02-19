@@ -1,14 +1,16 @@
 import { Link, Outlet } from "react-router";
-import { apiFetch } from "../lib/api";
+import { getRepo } from "../lib/server/repos";
+import { getIssues } from "../lib/server/issues";
+import { getPullRequests } from "../lib/server/pulls";
 import { RepoNav } from "../components/repo-nav";
 
 export default async function RepoLayout({ params }: { params: { owner: string; repo: string } }) {
   const { owner, repo } = params;
 
   const [repoData, issueData, prData] = await Promise.all([
-    apiFetch(`/api/repos/${owner}/${repo}`),
-    apiFetch(`/api/repos/${owner}/${repo}/issues?status=open`),
-    apiFetch(`/api/repos/${owner}/${repo}/pulls?status=open`),
+    getRepo(owner, repo),
+    getIssues(owner, repo, "open"),
+    getPullRequests(owner, repo, "open"),
   ]);
 
   const repository = repoData.repository;

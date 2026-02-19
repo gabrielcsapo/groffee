@@ -98,6 +98,12 @@ importers:
       '@groffee/db':
         specifier: workspace:*
         version: link:../db
+      '@groffee/git':
+        specifier: workspace:*
+        version: link:../git
+      '@node-rs/argon2':
+        specifier: ^2.0.2
+        version: 2.0.2
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.2)

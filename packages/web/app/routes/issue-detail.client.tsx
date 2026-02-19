@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { timeAgo } from "../lib/time";
-import { getEditHistory } from "../lib/actions";
+import { getEditHistory } from "../lib/server/search";
+import { getSessionUser } from "../lib/server/auth";
+import { updateIssue, createIssueComment, updateIssueComment } from "../lib/server/issues";
 
 interface Comment {
   id: string;
@@ -127,10 +129,9 @@ export function IssueDetailView({
   const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.user) setUser(d.user);
+    getSessionUser()
+      .then((u) => {
+        if (u) setUser({ username: u.username });
       })
       .catch(() => {});
   }, []);
@@ -151,12 +152,11 @@ export function IssueDetailView({
   async function saveIssueEdit() {
     if (!issue || !editTitle.trim()) return;
     setEditSaving(true);
-    const res = await fetch(`/api/repos/${owner}/${repo}/issues/${issueNumber}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: editTitle, body: editBody }),
+    const result = await updateIssue(owner, repo, Number(issueNumber), {
+      title: editTitle,
+      body: editBody,
     });
-    if (res.ok) {
+    if (!result.error) {
       setIssue({
         ...issue,
         title: editTitle.trim(),
@@ -178,17 +178,15 @@ export function IssueDetailView({
     if (!editCommentBody.trim()) return;
     setCommentEditSaving(true);
 
-    // Determine the correct API path based on whether this is an issue or PR comment
-    const res = await fetch(
-      `/api/repos/${owner}/${repo}/issues/${issueNumber}/comments/${comment.id}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: editCommentBody }),
-      },
+    const result = await updateIssueComment(
+      owner,
+      repo,
+      Number(issueNumber),
+      comment.id,
+      editCommentBody,
     );
 
-    if (res.ok) {
+    if (!result.error) {
       setCommentsList(
         commentsList.map((c) =>
           c.id === comment.id
@@ -228,15 +226,10 @@ export function IssueDetailView({
     if (!newComment.trim()) return;
     setSubmitting(true);
 
-    const res = await fetch(`/api/repos/${owner}/${repo}/issues/${issueNumber}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: newComment }),
-    });
+    const result = await createIssueComment(owner, repo, Number(issueNumber), newComment);
 
-    const data = await res.json();
-    if (res.ok) {
-      setCommentsList([...commentsList, data.comment]);
+    if (!result.error && result.comment) {
+      setCommentsList([...commentsList, result.comment]);
       setNewComment("");
     }
     setSubmitting(false);
@@ -245,12 +238,10 @@ export function IssueDetailView({
   async function toggleStatus() {
     if (!issue) return;
     const newStatus = issue.status === "open" ? "closed" : "open";
-    const res = await fetch(`/api/repos/${owner}/${repo}/issues/${issueNumber}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
+    const result = await updateIssue(owner, repo, Number(issueNumber), {
+      status: newStatus as "open" | "closed",
     });
-    if (res.ok) setIssue({ ...issue, status: newStatus });
+    if (!result.error) setIssue({ ...issue, status: newStatus });
   }
 
   if (!issue) {

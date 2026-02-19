@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@groffee/db": "workspace:*",
+    "@groffee/git": "workspace:*",
+    "@node-rs/argon2": "^2.0.2",
     "drizzle-orm": "^0.45.1",
     "marked": "^17.0.2",
     "react": "^19.2.4",

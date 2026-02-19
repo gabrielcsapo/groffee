@@ -2,8 +2,14 @@
 
 import { useState } from "react";
 import { timeAgo } from "../lib/time";
-import { getEditHistory } from "../lib/actions";
+import { getEditHistory } from "../lib/server/search";
 import { usePullDetailContext } from "./pull-detail.client";
+import {
+  updatePullRequest,
+  createPRComment,
+  updatePRComment,
+  mergePullRequest,
+} from "../lib/server/pulls";
 
 interface EditEntry {
   id: string;
@@ -108,12 +114,10 @@ export function PullConversationView() {
   async function saveBodyEdit() {
     if (!pr) return;
     setEditSaving(true);
-    const res = await fetch(`/api/repos/${owner}/${repo}/pulls/${prNumber}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: editBody }),
+    const result = await updatePullRequest(owner, repo, Number(prNumber), {
+      body: editBody,
     });
-    if (res.ok) {
+    if (!result.error) {
       setPr({
         ...pr,
         body: editBody.trim() || null,
@@ -133,15 +137,14 @@ export function PullConversationView() {
   async function saveCommentEdit(comment: { id: string }) {
     if (!editCommentBody.trim()) return;
     setCommentEditSaving(true);
-    const res = await fetch(
-      `/api/repos/${owner}/${repo}/pulls/${prNumber}/comments/${comment.id}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: editCommentBody }),
-      },
+    const result = await updatePRComment(
+      owner,
+      repo,
+      Number(prNumber),
+      comment.id,
+      editCommentBody,
     );
-    if (res.ok) {
+    if (!result.error) {
       setCommentsList(
         commentsList.map((c) =>
           c.id === comment.id
@@ -179,14 +182,9 @@ export function PullConversationView() {
     e.preventDefault();
     if (!newComment.trim()) return;
     setSubmitting(true);
-    const res = await fetch(`/api/repos/${owner}/${repo}/pulls/${prNumber}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: newComment }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setCommentsList([...commentsList, data.comment]);
+    const result = await createPRComment(owner, repo, Number(prNumber), newComment);
+    if (!result.error && result.comment) {
+      setCommentsList([...commentsList, result.comment]);
       setNewComment("");
     }
     setSubmitting(false);
@@ -194,14 +192,11 @@ export function PullConversationView() {
 
   async function handleMerge() {
     setMerging(true);
-    const res = await fetch(`/api/repos/${owner}/${repo}/pulls/${prNumber}/merge`, {
-      method: "POST",
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setPr((prev) => (prev ? { ...prev, status: "merged" } : prev));
+    const result = await mergePullRequest(owner, repo, Number(prNumber));
+    if (result.error) {
+      alert(result.error);
     } else {
-      alert(data.error || "Merge failed");
+      setPr((prev) => (prev ? { ...prev, status: "merged" } : prev));
     }
     setMerging(false);
   }
@@ -209,12 +204,10 @@ export function PullConversationView() {
   async function toggleStatus() {
     if (!pr) return;
     const newStatus = pr.status === "open" ? "closed" : "open";
-    const res = await fetch(`/api/repos/${owner}/${repo}/pulls/${prNumber}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
+    const result = await updatePullRequest(owner, repo, Number(prNumber), {
+      status: newStatus as "open" | "closed",
     });
-    if (res.ok) setPr({ ...pr, status: newStatus });
+    if (!result.error) setPr({ ...pr, status: newStatus });
   }
 
   return (

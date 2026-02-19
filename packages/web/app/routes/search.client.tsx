@@ -2,7 +2,13 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Link, useSearchParams } from "react-router";
-import { searchIssues, searchPullRequests } from "../lib/actions";
+import {
+  searchIssues,
+  searchPullRequests,
+  searchCode,
+  searchCodeLanguages,
+  searchRepos,
+} from "../lib/server/search";
 import { extToLang } from "../lib/highlight";
 import { timeAgo } from "../lib/time";
 
@@ -162,16 +168,9 @@ export function SearchView() {
   const [selectedLang, setSelectedLang] = useState<string | null>(initialExt);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  function buildCodeUrl(q: string, limit: number, offset: number, ext: string | null) {
-    let url = `/api/search/code?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`;
-    if (ext) url += `&ext=${encodeURIComponent(ext)}`;
-    return url;
-  }
-
   // Fetch language facets (non-blocking, fire-and-forget)
   function fetchLanguages(q: string) {
-    fetch(`/api/search/code/languages?q=${encodeURIComponent(q)}`)
-      .then((r) => r.json())
+    searchCodeLanguages(q)
       .then((data) => setLangCounts(data.languages || []))
       .catch(() => setLangCounts([]));
   }
@@ -190,12 +189,8 @@ export function SearchView() {
 
       try {
         const [codeRes, repoRes, issueRes, prRes] = await Promise.allSettled([
-          fetch(
-            buildCodeUrl(q, PAGE_SIZE, activeType === "code" ? offset : 0, ext),
-          ).then((r) => r.json()),
-          fetch(
-            `/api/repos?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=${activeType === "repositories" ? offset : 0}`,
-          ).then((r) => r.json()),
+          searchCode(q, PAGE_SIZE, activeType === "code" ? offset : 0, ext),
+          searchRepos(q, PAGE_SIZE, activeType === "repositories" ? offset : 0),
           searchIssues(q, PAGE_SIZE, activeType === "issues" ? offset : 0),
           searchPullRequests(q, PAGE_SIZE, activeType === "pulls" ? offset : 0),
         ]);
@@ -206,8 +201,8 @@ export function SearchView() {
         const prVal = prRes.status === "fulfilled" ? prRes.value : null;
 
         setResults({
-          code: codeVal?.results || [],
-          repositories: repoVal?.repositories || [],
+          code: (codeVal?.results as CodeResult[]) || [],
+          repositories: (repoVal?.repositories as RepoResult[]) || [],
           issues: (issueVal?.results as IssueResult[]) || [],
           pulls: (prVal?.results as PRResult[]) || [],
         });
@@ -239,20 +234,16 @@ export function SearchView() {
       try {
         switch (type) {
           case "code": {
-            const res = await fetch(buildCodeUrl(q, PAGE_SIZE, offset, ext));
-            const data = await res.json();
-            setResults((prev) => ({ ...prev, code: data.results || [] }));
+            const data = await searchCode(q, PAGE_SIZE, offset, ext);
+            setResults((prev) => ({ ...prev, code: (data.results as CodeResult[]) || [] }));
             setCounts((prev) => ({ ...prev, code: data.total ?? prev.code }));
             break;
           }
           case "repositories": {
-            const res = await fetch(
-              `/api/repos?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=${offset}`,
-            );
-            const data = await res.json();
+            const data = await searchRepos(q, PAGE_SIZE, offset);
             setResults((prev) => ({
               ...prev,
-              repositories: data.repositories || [],
+              repositories: (data.repositories as RepoResult[]) || [],
             }));
             setCounts((prev) => ({ ...prev, repositories: data.total ?? prev.repositories }));
             break;
@@ -337,10 +328,9 @@ export function SearchView() {
     if (trimmed && searched) {
       updateParams(trimmed, "code", 1, ext);
       setLoading(true);
-      fetch(buildCodeUrl(trimmed, PAGE_SIZE, 0, ext))
-        .then((r) => r.json())
+      searchCode(trimmed, PAGE_SIZE, 0, ext)
         .then((data) => {
-          setResults((prev) => ({ ...prev, code: data.results || [] }));
+          setResults((prev) => ({ ...prev, code: (data.results as CodeResult[]) || [] }));
           setCounts((prev) => ({ ...prev, code: data.total ?? prev.code }));
         })
         .catch(() => {})

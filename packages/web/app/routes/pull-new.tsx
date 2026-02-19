@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "react-router";
+import { getRepoRefs } from "../lib/server/repos";
+import { createPullRequest } from "../lib/server/pulls";
 
 export default function NewPullRequest() {
   const { owner, repo: repoName } = useParams();
@@ -14,15 +16,13 @@ export default function NewPullRequest() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/repos/${owner}/${repoName}/refs`)
-      .then((r) => r.json())
-      .then((data) => {
-        const branchNames = (data.refs || [])
-          .filter((r: { type: string }) => r.type === "branch")
-          .map((r: { name: string }) => r.name);
-        setBranches(branchNames);
-        if (data.defaultBranch) setTargetBranch(data.defaultBranch);
-      });
+    getRepoRefs(owner!, repoName!).then((data) => {
+      const branchNames = (data.refs || [])
+        .filter((r: { type: string }) => r.type === "branch")
+        .map((r: { name: string }) => r.name);
+      setBranches(branchNames);
+      if (data.defaultBranch) setTargetBranch(data.defaultBranch);
+    });
   }, [owner, repoName]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -30,18 +30,18 @@ export default function NewPullRequest() {
     setSubmitting(true);
     setError("");
 
-    const res = await fetch(`/api/repos/${owner}/${repoName}/pulls`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, body, sourceBranch, targetBranch }),
+    const result = await createPullRequest(owner!, repoName!, {
+      title,
+      body,
+      sourceBranch,
+      targetBranch,
     });
 
-    const data = await res.json();
-    if (res.ok) {
-      window.location.href = `/${owner}/${repoName}/pull/${data.pullRequest.number}`;
-    } else {
-      setError(data.error || "Failed to create pull request");
+    if (result.error) {
+      setError(result.error);
       setSubmitting(false);
+    } else {
+      window.location.href = `/${owner}/${repoName}/pull/${result.pullRequest!.number}`;
     }
   }
 

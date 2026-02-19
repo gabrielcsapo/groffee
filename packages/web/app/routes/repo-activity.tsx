@@ -1,4 +1,4 @@
-import { apiFetch } from "../lib/api";
+import { getRepoActivity } from "../lib/server/repos";
 import { ActivityHeatmap, ContributorList } from "../components/activity-chart";
 
 export default async function RepoActivity({
@@ -8,7 +8,7 @@ export default async function RepoActivity({
 }) {
   const { owner, repo: repoName } = params;
 
-  const data = await apiFetch(`/api/repos/${owner}/${repoName}/activity`);
+  const data = await getRepoActivity(owner, repoName);
 
   if (data.error) {
     return (
@@ -21,7 +21,9 @@ export default async function RepoActivity({
     );
   }
 
-  const { daily, contributors, totalCommits } = data;
+  const daily = data.daily!;
+  const contributors = data.contributors!;
+  const totalCommits = data.totalCommits!;
 
   return (
     <div className="max-w-4xl mx-auto mt-8">

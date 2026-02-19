@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "react-router";
+import { getRepo, updateRepo, deleteRepo, getRepoAuditLogs } from "../lib/server/repos";
+import { getCollaborators, addCollaborator, removeCollaborator } from "../lib/server/collaborators";
 
 export default function RepoSettings() {
   const { owner, repo: repoName } = useParams();
   const [repo, setRepo] = useState<{
-    description: string;
+    description: string | null;
     isPublic: boolean;
     defaultBranch: string;
   } | null>(null);
@@ -35,27 +37,19 @@ export default function RepoSettings() {
   >([]);
 
   useEffect(() => {
-    fetch(`/api/repos/${owner}/${repoName}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.repository) {
-          setRepo(data.repository);
-          setDescription(data.repository.description || "");
-          setIsPublic(data.repository.isPublic);
-        }
-      });
-    fetch(`/api/repos/${owner}/${repoName}/collaborators`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.collaborators) setCollaborators(data.collaborators);
-      })
-      .catch(() => {});
-    fetch(`/api/repos/${owner}/${repoName}/audit?limit=20`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.logs) setAuditLogs(data.logs);
-      })
-      .catch(() => {});
+    getRepo(owner!, repoName!).then((data) => {
+      if (data.repository) {
+        setRepo(data.repository);
+        setDescription(data.repository.description || "");
+        setIsPublic(data.repository.isPublic);
+      }
+    });
+    getCollaborators(owner!, repoName!).then((data) => {
+      if (data.collaborators) setCollaborators(data.collaborators);
+    }).catch(() => {});
+    getRepoAuditLogs(owner!, repoName!, { limit: 20 }).then((data) => {
+      if (data.logs) setAuditLogs(data.logs);
+    }).catch(() => {});
   }, [owner, repoName]);
 
   async function handleSave(e: React.FormEvent) {
@@ -64,18 +58,13 @@ export default function RepoSettings() {
     setMessage("");
     setError("");
 
-    const res = await fetch(`/api/repos/${owner}/${repoName}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description, isPublic }),
-    });
+    const result = await updateRepo(owner!, repoName!, { description, isPublic });
 
-    const data = await res.json();
-    if (res.ok) {
-      setMessage("Settings saved.");
-      setRepo(data.repository);
+    if (result.error) {
+      setError(result.error);
     } else {
-      setError(data.error || "Failed to save settings");
+      setMessage("Settings saved.");
+      if (result.repository) setRepo(result.repository);
     }
     setSaving(false);
   }
@@ -85,13 +74,12 @@ export default function RepoSettings() {
     setDeleting(true);
     setError("");
 
-    const res = await fetch(`/api/repos/${owner}/${repoName}`, { method: "DELETE" });
-    if (res.ok) {
-      window.location.href = `/${owner}`;
-    } else {
-      const data = await res.json();
-      setError(data.error || "Failed to delete repository");
+    const result = await deleteRepo(owner!, repoName!);
+    if (result.error) {
+      setError(result.error);
       setDeleting(false);
+    } else {
+      window.location.href = `/${owner}`;
     }
   }
 
@@ -198,11 +186,8 @@ export default function RepoSettings() {
                 </div>
                 <button
                   onClick={async () => {
-                    const res = await fetch(
-                      `/api/repos/${owner}/${repoName}/collaborators/${collab.id}`,
-                      { method: "DELETE" },
-                    );
-                    if (res.ok) {
+                    const result = await removeCollaborator(owner!, repoName!, collab.id);
+                    if (!result.error) {
                       setCollaborators(collaborators.filter((c) => c.id !== collab.id));
                     }
                   }}
@@ -223,19 +208,14 @@ export default function RepoSettings() {
             setError("");
             setMessage("");
 
-            const res = await fetch(`/api/repos/${owner}/${repoName}/collaborators`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username: newCollab.trim(), permission: newCollabPerm }),
-            });
+            const result = await addCollaborator(owner!, repoName!, newCollab.trim(), newCollabPerm);
 
-            const data = await res.json();
-            if (res.ok) {
-              setCollaborators([...collaborators, data.collaborator]);
+            if (result.error) {
+              setError(result.error);
+            } else {
+              setCollaborators([...collaborators, result.collaborator!]);
               setNewCollab("");
               setMessage("Collaborator added.");
-            } else {
-              setError(data.error || "Failed to add collaborator");
             }
             setAddingCollab(false);
           }}

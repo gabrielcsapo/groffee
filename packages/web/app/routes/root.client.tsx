@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigation, useRouteError } from "react-router";
 import { type Theme, getStoredTheme, applyTheme } from "../lib/theme";
+import { getSessionUser, logout } from "../lib/server/auth";
 
 export function GlobalNavigationLoadingBar() {
   const navigation = useNavigation();
@@ -85,10 +86,9 @@ export function UserNav() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.user) setUser(data.user);
+    getSessionUser()
+      .then((u) => {
+        if (u) setUser({ username: u.username });
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -232,7 +232,8 @@ export function UserNav() {
               <div className="border-t border-border py-1">
                 <button
                   onClick={async () => {
-                    await fetch("/api/auth/logout", { method: "POST" });
+                    const result = await logout();
+                    if (result.setCookie) document.cookie = result.setCookie;
                     window.location.href = "/";
                   }}
                   className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-text-primary hover:bg-surface-secondary"

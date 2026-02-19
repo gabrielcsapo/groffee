@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { apiFetch } from "../lib/api";
+import { getRepoTree, getRepoRefs } from "../lib/server/repos";
 import { CloneUrl } from "../components/clone-url";
 import { BranchSwitcher } from "../components/branch-switcher";
 
@@ -27,8 +27,8 @@ export default async function RepoTree({
   const splat = params["*"] || "";
 
   const [treeData, refsData] = await Promise.all([
-    apiFetch(`/api/repos/${owner}/${repoName}/tree/${splat}`),
-    apiFetch(`/api/repos/${owner}/${repoName}/refs`),
+    getRepoTree(owner, repoName, splat),
+    getRepoRefs(owner, repoName),
   ]);
 
   if (treeData.error) {
@@ -42,7 +42,7 @@ export default async function RepoTree({
     );
   }
 
-  const { entries, ref, path: treePath } = treeData;
+  const { entries, ref, path: treePath } = treeData as { entries: NonNullable<typeof treeData.entries>; ref: string; path: string };
   const pathParts = treePath ? treePath.split("/") : [];
   const branches = (refsData.refs || []).filter((r: { type: string }) => r.type === "branch");
   const clonePath = `/${owner}/${repoName}.git`;

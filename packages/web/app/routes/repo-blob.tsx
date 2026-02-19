@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { apiFetch } from "../lib/api";
+import { getRepoBlob } from "../lib/server/repos";
 import { highlightCode, getLangFromFilename } from "../lib/highlight";
 
 const IMAGE_EXTENSIONS = new Set([
@@ -33,7 +33,7 @@ export default async function RepoBlob({
   const { owner, repo: repoName } = params;
   const splat = params["*"] || "";
 
-  const blobData = await apiFetch(`/api/repos/${owner}/${repoName}/blob/${splat}`);
+  const blobData = await getRepoBlob(owner, repoName, splat);
 
   if (blobData.error) {
     return (
@@ -46,7 +46,7 @@ export default async function RepoBlob({
     );
   }
 
-  const { content, ref, path: filePath, isBinary, size } = blobData;
+  const { content, ref, path: filePath, isBinary, size } = blobData as { content: string | null; ref: string; path: string; isBinary?: boolean; size?: number };
   const pathParts = filePath.split("/");
   const fileName = pathParts[pathParts.length - 1];
   const parentPath = pathParts.slice(0, -1).join("/");

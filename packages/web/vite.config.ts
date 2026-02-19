@@ -35,19 +35,19 @@ export default defineConfig({
       entries: {
         client: "./react-router-vite/entry.browser.tsx",
         ssr: "./react-router-vite/entry.ssr.tsx",
-        rsc: "./react-router-vite/entry.rsc.single.tsx",
+        rsc: "./app/entry.rsc.ts",
       },
     }),
   ],
   environments: {
     rsc: {
       resolve: {
-        external: ["better-sqlite3"],
+        external: ["better-sqlite3", "isomorphic-git"],
       },
     },
     ssr: {
       resolve: {
-        external: ["better-sqlite3"],
+        external: ["better-sqlite3", "isomorphic-git"],
       },
     },
   },

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router";
 import { timeAgo } from "../lib/time";
+import { getPullRequests } from "../lib/server/pulls";
 
 interface PR {
   id: string;
@@ -35,8 +36,7 @@ export function PullsList({
       return;
     }
     setLoading(true);
-    fetch(`/api/repos/${owner}/${repo}/pulls?status=${status}`)
-      .then((r) => r.json())
+    getPullRequests(owner, repo, status)
       .then((data) => setPulls(data.pullRequests || []))
       .catch(() => setPulls([]))
       .finally(() => setLoading(false));

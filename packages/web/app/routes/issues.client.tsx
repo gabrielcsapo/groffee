@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router";
 import { timeAgo } from "../lib/time";
+import { getIssues } from "../lib/server/issues";
 
 interface Issue {
   id: string;
@@ -33,8 +34,7 @@ export function IssuesList({
       return;
     }
     setLoading(true);
-    fetch(`/api/repos/${owner}/${repo}/issues?status=${status}`)
-      .then((r) => r.json())
+    getIssues(owner, repo, status)
       .then((data) => setIssues(data.issues || []))
       .catch(() => setIssues([]))
       .finally(() => setLoading(false));

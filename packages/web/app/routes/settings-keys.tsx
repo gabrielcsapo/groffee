@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getSSHKeys, addSSHKey, deleteSSHKey } from "../lib/server/keys";
 
 interface SshKey {
   id: string;
@@ -32,16 +33,13 @@ export default function SettingsKeys() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetch("/api/user/ssh-keys")
-      .then((r) => {
-        if (r.status === 401) {
-          window.location.href = "/login";
-          return null;
-        }
-        return r.json();
-      })
+    getSSHKeys()
       .then((data) => {
-        if (data) setKeys(data.keys || []);
+        if (data.error === "Unauthorized") {
+          window.location.href = "/login";
+          return;
+        }
+        setKeys(data.keys || []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -53,20 +51,15 @@ export default function SettingsKeys() {
     setMessage("");
     setAdding(true);
 
-    const res = await fetch("/api/user/ssh-keys", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, publicKey }),
-    });
+    const result = await addSSHKey(title, publicKey);
 
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Failed to add key");
+    if (result.error) {
+      setError(result.error);
       setAdding(false);
       return;
     }
 
-    setKeys([...keys, data.key]);
+    setKeys([...keys, result.key!]);
     setTitle("");
     setPublicKey("");
     setMessage("SSH key added successfully.");
@@ -76,13 +69,12 @@ export default function SettingsKeys() {
   async function handleDelete(id: string) {
     setError("");
     setMessage("");
-    const res = await fetch(`/api/user/ssh-keys/${id}`, { method: "DELETE" });
-    if (res.ok) {
+    const result = await deleteSSHKey(id);
+    if (result.error) {
+      setError(result.error);
+    } else {
       setKeys(keys.filter((k) => k.id !== id));
       setMessage("SSH key deleted.");
-    } else {
-      const data = await res.json();
-      setError(data.error || "Failed to delete key");
     }
   }
 

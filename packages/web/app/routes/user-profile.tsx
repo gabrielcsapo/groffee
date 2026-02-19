@@ -1,10 +1,10 @@
 import { Link } from "react-router";
-import { apiFetch } from "../lib/api";
+import { getUserRepos } from "../lib/server/repos";
 import { timeAgo } from "../lib/time";
 
 export default async function UserProfile({ params }: { params: { owner: string } }) {
   const { owner } = params;
-  const data = await apiFetch(`/api/repos/${owner}`);
+  const data = await getUserRepos(owner);
 
   if (data.error) {
     return (

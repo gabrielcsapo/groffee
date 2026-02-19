@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { apiFetch } from "../lib/api";
+import { getRepoCommit } from "../lib/server/repos";
 import { highlightDiffLines, getLangFromFilename } from "../lib/highlight";
 
 export default async function RepoCommit({
@@ -9,7 +9,7 @@ export default async function RepoCommit({
 }) {
   const { owner, repo: repoName, sha } = params;
 
-  const data = await apiFetch(`/api/repos/${owner}/${repoName}/commit/${sha}`);
+  const data = await getRepoCommit(owner, repoName, sha);
 
   if (data.error) {
     return (
@@ -22,7 +22,8 @@ export default async function RepoCommit({
     );
   }
 
-  const { commit, diff } = data;
+  const commit = data.commit!;
+  const diff = data.diff;
 
   // Highlight all diff files in parallel
   type DiffFile = {

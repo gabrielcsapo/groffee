@@ -3,6 +3,8 @@
 import { useState, useEffect, createContext, useContext, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { timeAgo } from "../lib/time";
+import { getSessionUser } from "../lib/server/auth";
+import { updatePullRequest } from "../lib/server/pulls";
 
 interface PR {
   id: string;
@@ -96,10 +98,9 @@ export function PullDetailLayout({
   const [editTitle, setEditTitle] = useState("");
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.user) setUser(d.user);
+    getSessionUser()
+      .then((u) => {
+        if (u) setUser({ username: u.username });
       })
       .catch(() => {});
   }, []);
@@ -114,12 +115,10 @@ export function PullDetailLayout({
 
   async function saveTitle() {
     if (!pr || !editTitle.trim()) return;
-    const res = await fetch(`/api/repos/${owner}/${repo}/pulls/${prNumber}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: editTitle }),
+    const result = await updatePullRequest(owner, repo, Number(prNumber), {
+      title: editTitle,
     });
-    if (res.ok) {
+    if (!result.error) {
       setPr({
         ...pr,
         title: editTitle.trim(),

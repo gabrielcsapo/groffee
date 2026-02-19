@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { GroffeeLogo } from "../components/groffee-logo";
 import { timeAgo } from "../lib/time";
+import { getSessionUser } from "../lib/server/auth";
 
 interface Repo {
   id: string;
@@ -122,10 +123,9 @@ export function HomeView({ initialRepos }: { initialRepos: Repo[] }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.user) setUser(data.user);
+    getSessionUser()
+      .then((u) => {
+        if (u) setUser({ username: u.username });
       })
       .catch(() => {})
       .finally(() => setLoading(false));

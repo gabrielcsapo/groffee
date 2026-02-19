@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { GroffeeLogo } from "../components/groffee-logo";
+import { login } from "../lib/server/auth";
 
 export default function Login() {
   const [error, setError] = useState("");
@@ -12,21 +13,17 @@ export default function Login() {
     setError("");
 
     const form = new FormData(e.currentTarget);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: form.get("username"),
-        password: form.get("password"),
-      }),
-    });
+    const result = await login(
+      form.get("username") as string,
+      form.get("password") as string,
+    );
 
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Login failed");
+    if (result.error) {
+      setError(result.error);
       return;
     }
 
+    if (result.setCookie) document.cookie = result.setCookie;
     window.location.href = "/";
   }
 

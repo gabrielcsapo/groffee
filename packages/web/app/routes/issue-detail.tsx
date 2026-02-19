@@ -1,4 +1,4 @@
-import { apiFetch } from "../lib/api";
+import { getIssue } from "../lib/server/issues";
 import { IssueDetailView } from "./issue-detail.client";
 
 export default async function IssueDetail({
@@ -7,7 +7,7 @@ export default async function IssueDetail({
   params: { owner: string; repo: string; number: string };
 }) {
   const { owner, repo, number: issueNumber } = params;
-  const data = await apiFetch(`/api/repos/${owner}/${repo}/issues/${issueNumber}`);
+  const data = await getIssue(owner, repo, Number(issueNumber));
 
   return (
     <IssueDetailView

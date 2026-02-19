@@ -1,8 +1,8 @@
-import { apiFetch } from "../lib/api";
+import { getPublicRepos } from "../lib/server/repos";
 import { ExploreList } from "./explore.client";
 
 export default async function Explore() {
-  const data = await apiFetch("/api/repos?limit=30");
+  const data = await getPublicRepos({ limit: 30 });
 
   return <ExploreList initialRepos={data.repositories || []} />;
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useParams } from "react-router";
+import { createIssue } from "../lib/server/issues";
 
 export default function NewIssue() {
   const { owner, repo: repoName } = useParams();
@@ -15,18 +16,13 @@ export default function NewIssue() {
     setSubmitting(true);
     setError("");
 
-    const res = await fetch(`/api/repos/${owner}/${repoName}/issues`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, body }),
-    });
+    const result = await createIssue(owner!, repoName!, title, body);
 
-    const data = await res.json();
-    if (res.ok) {
-      window.location.href = `/${owner}/${repoName}/issue/${data.issue.number}`;
-    } else {
-      setError(data.error || "Failed to create issue");
+    if (result.error) {
+      setError(result.error);
       setSubmitting(false);
+    } else {
+      window.location.href = `/${owner}/${repoName}/issue/${result.issue!.number}`;
     }
   }
 

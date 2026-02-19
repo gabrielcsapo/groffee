@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { apiFetch } from "../lib/api";
+import { getRepo, getRepoTree, getRepoRefs, getRepoBlob } from "../lib/server/repos";
 import { CloneUrl } from "../components/clone-url";
 import { BranchSwitcher } from "../components/branch-switcher";
 import { renderMarkdown } from "../lib/markdown";
@@ -22,7 +22,7 @@ function formatRelativeDate(timestamp: number): string {
 export default async function Repo({ params }: { params: { owner: string; repo: string } }) {
   const { owner, repo: repoName } = params;
 
-  const repoData = await apiFetch(`/api/repos/${owner}/${repoName}`);
+  const repoData = await getRepo(owner, repoName);
 
   if (repoData.error) {
     return (
@@ -34,12 +34,12 @@ export default async function Repo({ params }: { params: { owner: string; repo: 
     );
   }
 
-  const repository = repoData.repository;
+  const repository = repoData.repository!;
   const defaultBranch = repository.defaultBranch;
 
   const [treeData, refsData] = await Promise.all([
-    apiFetch(`/api/repos/${owner}/${repoName}/tree/${encodeURIComponent(defaultBranch)}`),
-    apiFetch(`/api/repos/${owner}/${repoName}/refs`),
+    getRepoTree(owner, repoName, defaultBranch),
+    getRepoRefs(owner, repoName),
   ]);
 
   const ref = treeData.ref || defaultBranch;
@@ -56,9 +56,7 @@ export default async function Repo({ params }: { params: { owner: string; repo: 
   let readmeHtml: string | null = null;
   let readmeFileName: string | null = null;
   if (readmeEntry) {
-    const blobData = await apiFetch(
-      `/api/repos/${owner}/${repoName}/blob/${encodeURIComponent(ref)}/${readmeEntry.path}`,
-    );
+    const blobData = await getRepoBlob(owner, repoName, `${ref}/${readmeEntry.path}`);
     if (blobData.content) {
       readmeFileName = readmeEntry.name;
       const ext = readmeEntry.name.split(".").pop()?.toLowerCase();

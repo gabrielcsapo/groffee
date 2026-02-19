@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getTokens, createToken, revokeToken } from "../lib/server/tokens";
 
 interface Token {
   id: string;
@@ -44,16 +45,13 @@ export default function SettingsTokens() {
   const [newToken, setNewToken] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/user/tokens")
-      .then((r) => {
-        if (r.status === 401) {
-          window.location.href = "/login";
-          return null;
-        }
-        return r.json();
-      })
+    getTokens()
       .then((data) => {
-        if (data) setTokens(data.tokens || []);
+        if (data.error === "Unauthorized") {
+          window.location.href = "/login";
+          return;
+        }
+        setTokens(data.tokens || []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -72,27 +70,22 @@ export default function SettingsTokens() {
     setNewToken(null);
     setCreating(true);
 
-    let expiresAt: string | null = null;
+    let expiresAt: string | undefined = undefined;
     if (expiresIn !== "never") {
       const ms = parseInt(expiresIn, 10) * 24 * 60 * 60 * 1000;
       expiresAt = new Date(Date.now() + ms).toISOString();
     }
 
-    const res = await fetch("/api/user/tokens", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, scopes: selectedScopes, expiresAt }),
-    });
+    const result = await createToken(name, selectedScopes, expiresAt);
 
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Failed to create token");
+    if (result.error) {
+      setError(result.error);
       setCreating(false);
       return;
     }
 
-    setTokens([...tokens, data.token]);
-    setNewToken(data.plainToken);
+    setTokens([...tokens, result.token as unknown as Token]);
+    setNewToken(result.plainToken!);
     setName("");
     setSelectedScopes(["repo", "user"]);
     setExpiresIn("never");
@@ -104,13 +97,12 @@ export default function SettingsTokens() {
     setError("");
     setMessage("");
     setNewToken(null);
-    const res = await fetch(`/api/user/tokens/${id}`, { method: "DELETE" });
-    if (res.ok) {
+    const result = await revokeToken(id);
+    if (result.error) {
+      setError(result.error);
+    } else {
       setTokens(tokens.filter((t) => t.id !== id));
       setMessage("Token revoked.");
-    } else {
-      const data = await res.json();
-      setError(data.error || "Failed to revoke token");
     }
   }
 
