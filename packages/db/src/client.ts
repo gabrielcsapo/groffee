@@ -27,4 +27,19 @@ export const db = drizzle(sqlite, { schema });
 const MIGRATIONS_FOLDER = resolve(PROJECT_ROOT, "packages", "db", "migrations");
 migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
 
+// One-time backfill: hash any existing plaintext session tokens
+try {
+  const { createHash } = await import("node:crypto");
+  const rows = sqlite.prepare("SELECT id, token FROM sessions WHERE token IS NOT NULL AND token_hash IS NULL").all() as Array<{ id: string; token: string }>;
+  if (rows.length > 0) {
+    const stmt = sqlite.prepare("UPDATE sessions SET token_hash = ?, token = NULL WHERE id = ?");
+    for (const row of rows) {
+      const hash = createHash("sha256").update(row.token).digest("hex");
+      stmt.run(hash, row.id);
+    }
+  }
+} catch {
+  // Non-fatal: backfill may fail if schema hasn't migrated yet
+}
+
 export type DB = typeof db;

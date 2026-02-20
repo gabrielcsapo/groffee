@@ -52,12 +52,7 @@ pullRoutes.get("/:owner/:repo/pulls", optionalAuth, async (c) => {
   const authorIds = [...new Set(prList.map((p) => p.authorId))];
   const authors =
     authorIds.length > 0
-      ? await Promise.all(
-          authorIds.map(async (id) => {
-            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-            return u;
-          }),
-        )
+      ? await db.select().from(users).where(inArray(users.id, authorIds))
       : [];
   const authorMap = new Map(authors.filter(Boolean).map((u) => [u.id, u.username]));
 
@@ -110,12 +105,7 @@ pullRoutes.get("/:owner/:repo/pulls/:number", optionalAuth, async (c) => {
   const commentAuthorIds = [...new Set(commentList.map((c) => c.authorId))];
   const commentAuthors =
     commentAuthorIds.length > 0
-      ? await Promise.all(
-          commentAuthorIds.map(async (id) => {
-            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-            return u;
-          }),
-        )
+      ? await db.select().from(users).where(inArray(users.id, commentAuthorIds))
       : [];
   const commentAuthorMap = new Map(commentAuthors.filter(Boolean).map((u) => [u.id, u.username]));
 

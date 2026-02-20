@@ -6,7 +6,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   clearScreen: false,
   build: {
-    minify: false,
+    minify: true,
   },
   preview: {
     host: true,

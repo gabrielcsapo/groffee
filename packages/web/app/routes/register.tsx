@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { GroffeeLogo } from "../components/groffee-logo";
-import { register } from "../lib/server/auth";
+import { register, isFirstUser } from "../lib/server/auth";
 
 export default function Register() {
   const [error, setError] = useState("");
+  const [isSetup, setIsSetup] = useState(false);
+
+  useEffect(() => {
+    isFirstUser().then(setIsSetup).catch(() => {});
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -40,8 +45,19 @@ export default function Register() {
     <div className="max-w-sm mx-auto mt-16">
       <div className="text-center mb-6">
         <GroffeeLogo size={48} className="mx-auto text-text-primary mb-4" />
-        <h1 className="text-2xl font-semibold">Create your account</h1>
+        <h1 className="text-2xl font-semibold">{isSetup ? "Set up your instance" : "Create your account"}</h1>
+        {isSetup && (
+          <p className="text-text-secondary text-sm mt-1">This will be the administrator account</p>
+        )}
       </div>
+      {isSetup && (
+        <div className="mb-4 p-3 rounded-md bg-primary/10 border border-primary/30 text-sm flex items-start gap-2">
+          <svg className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <span className="text-text-primary">No users exist yet. This account will have <strong>admin privileges</strong> to manage users, view logs, and configure the instance.</span>
+        </div>
+      )}
       <div className="bg-surface border border-border rounded-lg p-6 shadow-sm">
         {error && (
           <div className="mb-4 p-3 rounded-md bg-danger-bg border border-danger/30 text-danger text-sm">
@@ -101,7 +117,7 @@ export default function Register() {
             />
           </div>
           <button type="submit" className="btn-primary w-full">
-            Create account
+            {isSetup ? "Create admin account" : "Create account"}
           </button>
         </form>
       </div>

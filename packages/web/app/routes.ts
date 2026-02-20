@@ -52,6 +52,22 @@ export const routes: unstable_RSCRouteConfigEntry[] = [
         lazy: () => import("./routes/settings-tokens"),
       },
       {
+        id: "admin",
+        path: "admin",
+        index: true,
+        lazy: () => import("./routes/admin"),
+      },
+      {
+        id: "admin-logs",
+        path: "admin/logs",
+        lazy: () => import("./routes/admin-logs"),
+      },
+      {
+        id: "admin-users",
+        path: "admin/users",
+        lazy: () => import("./routes/admin-users"),
+      },
+      {
         id: "user-profile",
         path: ":owner",
         lazy: () => import("./routes/user-profile"),

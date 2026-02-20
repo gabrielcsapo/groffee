@@ -1,9 +1,9 @@
 "use server";
 
 import { db, users, sessions } from "@groffee/db";
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import { hash, verify } from "@node-rs/argon2";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { getRequest } from "./request-context";
 import { logAudit, getClientIp } from "./audit";
 
@@ -11,6 +11,10 @@ const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 function generateSessionToken(): string {
   return randomBytes(32).toString("hex");
+}
+
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 function serializeCookie(
@@ -41,13 +45,15 @@ export async function login(
   if (!valid) return { error: "Invalid credentials" };
 
   const token = generateSessionToken();
+  const tokenHash = hashToken(token);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DURATION_MS);
 
   await db.insert(sessions).values({
     id: crypto.randomUUID(),
     userId: user.id,
-    token,
+    token: null,
+    tokenHash,
     expiresAt,
     createdAt: now,
   });
@@ -93,22 +99,29 @@ export async function register(
   const now = new Date();
   const id = crypto.randomUUID();
 
+  // First registered user becomes admin automatically
+  const [{ userCount }] = await db.select({ userCount: count() }).from(users);
+  const isFirstUser = userCount === 0;
+
   await db.insert(users).values({
     id,
     username,
     email,
     passwordHash,
+    isAdmin: isFirstUser,
     createdAt: now,
     updatedAt: now,
   });
 
   const token = generateSessionToken();
+  const tokenHash = hashToken(token);
   const expiresAt = new Date(now.getTime() + SESSION_DURATION_MS);
 
   await db.insert(sessions).values({
     id: crypto.randomUUID(),
     userId: id,
-    token,
+    token: null,
+    tokenHash,
     expiresAt,
     createdAt: now,
   });
@@ -145,7 +158,8 @@ export async function logout(): Promise<{ ok: boolean; setCookie?: string }> {
     const token = match ? decodeURIComponent(match[1]) : null;
 
     if (token) {
-      await db.delete(sessions).where(eq(sessions.token, token));
+      const tokenHash = hashToken(token);
+      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash));
     }
   }
 
@@ -157,6 +171,11 @@ export async function logout(): Promise<{ ok: boolean; setCookie?: string }> {
   });
 
   return { ok: true, setCookie: cookie };
+}
+
+export async function isFirstUser(): Promise<boolean> {
+  const [{ userCount }] = await db.select({ userCount: count() }).from(users);
+  return userCount === 0;
 }
 
 export { getSessionUser } from "./session";

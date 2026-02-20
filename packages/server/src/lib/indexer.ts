@@ -8,6 +8,7 @@ import {
   gitCommitFiles,
 } from "@groffee/db";
 import { eq, and, sql } from "drizzle-orm";
+import { invalidateActivityCache } from "./activity-cache.js";
 import {
   walkTree,
   readBlobForIndex,
@@ -296,6 +297,9 @@ export async function fullReindex(repoId: string, repoPath: string): Promise<voi
   } catch {
     // Empty repo
   }
+
+  // Invalidate activity cache after full reindex
+  await invalidateActivityCache(repoId).catch(() => {});
 }
 
 /**
@@ -322,4 +326,7 @@ export async function triggerIncrementalIndex(
       console.error(`Failed to index ref ${change.name} for repo ${repoId}:`, err);
     }
   }
+
+  // Invalidate activity cache after incremental index
+  await invalidateActivityCache(repoId).catch(() => {});
 }

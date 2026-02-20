@@ -14,7 +14,8 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "fmt": "pnpm -r fmt",
-    "seed": "pnpm --filter @groffee/server exec tsx src/seed.ts"
+    "seed": "pnpm --filter @groffee/server exec tsx src/seed.ts",
+    "make-admin": "pnpm --filter @groffee/server exec tsx src/make-admin.ts"
   },
   "repository": {
     "type": "git",

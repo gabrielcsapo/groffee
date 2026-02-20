@@ -26,15 +26,20 @@ export const sshKeys = sqliteTable("ssh_keys", {
 });
 
 // --- Sessions ---
-export const sessions = sqliteTable("sessions", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  token: text("token").notNull().unique(),
-  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token"),
+    tokenHash: text("token_hash"),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [index("sessions_token_hash_idx").on(table.tokenHash)],
+);
 
 // --- Repositories ---
 export const repositories = sqliteTable(
@@ -75,64 +80,79 @@ export const repoCollaborators = sqliteTable(
 );
 
 // --- Pull Requests ---
-export const pullRequests = sqliteTable("pull_requests", {
-  id: text("id").primaryKey(),
-  number: integer("number").notNull(),
-  repoId: text("repo_id")
-    .notNull()
-    .references(() => repositories.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  body: text("body"),
-  authorId: text("author_id")
-    .notNull()
-    .references(() => users.id),
-  sourceBranch: text("source_branch").notNull(),
-  targetBranch: text("target_branch").notNull(),
-  status: text("status", { enum: ["open", "closed", "merged"] })
-    .notNull()
-    .default("open"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-  mergedAt: integer("merged_at", { mode: "timestamp" }),
-  mergedById: text("merged_by_id").references(() => users.id),
-});
+export const pullRequests = sqliteTable(
+  "pull_requests",
+  {
+    id: text("id").primaryKey(),
+    number: integer("number").notNull(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body"),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id),
+    sourceBranch: text("source_branch").notNull(),
+    targetBranch: text("target_branch").notNull(),
+    status: text("status", { enum: ["open", "closed", "merged"] })
+      .notNull()
+      .default("open"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+    mergedAt: integer("merged_at", { mode: "timestamp" }),
+    mergedById: text("merged_by_id").references(() => users.id),
+  },
+  (table) => [index("prs_repo_status_idx").on(table.repoId, table.status)],
+);
 
 // --- Issues ---
-export const issues = sqliteTable("issues", {
-  id: text("id").primaryKey(),
-  number: integer("number").notNull(),
-  repoId: text("repo_id")
-    .notNull()
-    .references(() => repositories.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  body: text("body"),
-  authorId: text("author_id")
-    .notNull()
-    .references(() => users.id),
-  status: text("status", { enum: ["open", "closed"] })
-    .notNull()
-    .default("open"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-  closedAt: integer("closed_at", { mode: "timestamp" }),
-});
+export const issues = sqliteTable(
+  "issues",
+  {
+    id: text("id").primaryKey(),
+    number: integer("number").notNull(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body"),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id),
+    status: text("status", { enum: ["open", "closed"] })
+      .notNull()
+      .default("open"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+    closedAt: integer("closed_at", { mode: "timestamp" }),
+  },
+  (table) => [index("issues_repo_status_idx").on(table.repoId, table.status)],
+);
 
 // --- Comments (shared between PRs and Issues) ---
-export const comments = sqliteTable("comments", {
-  id: text("id").primaryKey(),
-  authorId: text("author_id")
-    .notNull()
-    .references(() => users.id),
-  body: text("body").notNull(),
-  pullRequestId: text("pull_request_id").references(() => pullRequests.id, {
-    onDelete: "cascade",
-  }),
-  issueId: text("issue_id").references(() => issues.id, {
-    onDelete: "cascade",
-  }),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
+export const comments = sqliteTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id),
+    body: text("body").notNull(),
+    pullRequestId: text("pull_request_id").references(() => pullRequests.id, {
+      onDelete: "cascade",
+    }),
+    issueId: text("issue_id").references(() => issues.id, {
+      onDelete: "cascade",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("comments_issue_idx").on(table.issueId),
+    index("comments_pr_idx").on(table.pullRequestId),
+  ],
+);
 
 // --- Edit History ---
 export const editHistory = sqliteTable("edit_history", {
@@ -188,7 +208,11 @@ export const gitCommits = sqliteTable(
     parentOids: text("parent_oids").notNull().default("[]"),
     treeOid: text("tree_oid").notNull(),
   },
-  (table) => [uniqueIndex("git_commits_repo_oid_idx").on(table.repoId, table.oid)],
+  (table) => [
+    uniqueIndex("git_commits_repo_oid_idx").on(table.repoId, table.oid),
+    index("git_commits_repo_author_ts_idx").on(table.repoId, table.authorTimestamp),
+    index("git_commits_repo_author_email_idx").on(table.repoId, table.authorEmail),
+  ],
 );
 
 // --- Git Commit Ancestry (which commits belong to which ref, with depth) ---
@@ -313,5 +337,55 @@ export const personalAccessTokens = sqliteTable(
   (table) => [
     index("pat_user_idx").on(table.userId),
     uniqueIndex("pat_hash_idx").on(table.tokenHash),
+  ],
+);
+
+// =====================================================
+// Repository Activity Cache (materialized view pattern)
+// =====================================================
+
+export const repoActivityCache = sqliteTable(
+  "repo_activity_cache",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    cacheKey: text("cache_key").notNull(),
+    data: text("data").notNull(),
+    authorFilter: text("author_filter"),
+    computedAt: integer("computed_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("repo_activity_cache_key_idx").on(table.repoId, table.cacheKey, table.authorFilter),
+    index("repo_activity_cache_repo_idx").on(table.repoId),
+  ],
+);
+
+// =====================================================
+// System Logs (structured logging)
+// =====================================================
+
+export const systemLogs = sqliteTable(
+  "system_logs",
+  {
+    id: text("id").primaryKey(),
+    level: text("level", { enum: ["debug", "info", "warn", "error"] }).notNull(),
+    message: text("message").notNull(),
+    metadata: text("metadata"),
+    requestId: text("request_id"),
+    userId: text("user_id"),
+    source: text("source"),
+    duration: integer("duration"),
+    method: text("method"),
+    path: text("path"),
+    statusCode: integer("status_code"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("system_logs_level_idx").on(table.level),
+    index("system_logs_created_idx").on(table.createdAt),
+    index("system_logs_request_idx").on(table.requestId),
+    index("system_logs_source_idx").on(table.source),
   ],
 );

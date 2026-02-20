@@ -13,7 +13,7 @@ import {
   pullRequests,
   issues,
 } from "@groffee/db";
-import { eq, and, like, desc, asc, sql } from "drizzle-orm";
+import { eq, and, like, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
 import {
   initBareRepo,
@@ -30,6 +30,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AppEnv } from "../types.js";
 import { logAudit, getClientIp } from "../lib/audit.js";
+import { getCachedActivity, setCachedActivity } from "../lib/activity-cache.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
@@ -82,12 +83,7 @@ repoRoutes.get("/", async (c) => {
   const ownerIds = [...new Set(repos.map((r) => r.ownerId))];
   const owners =
     ownerIds.length > 0
-      ? await Promise.all(
-          ownerIds.map(async (id) => {
-            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-            return u;
-          }),
-        )
+      ? await db.select().from(users).where(inArray(users.id, ownerIds))
       : [];
   const ownerMap = new Map(owners.filter(Boolean).map((u) => [u.id, u.username]));
 
@@ -849,6 +845,11 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
   const authorEmail = c.req.query("author");
+
+  // Check activity cache
+  const cached = await getCachedActivity(repo.id, "activity", authorEmail || null);
+  if (cached) return c.json(cached);
+
   const now = Math.floor(Date.now() / 1000);
   const oneYearAgo = now - 365 * 86400;
 
@@ -1092,7 +1093,7 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
     .map(([day, counts]) => ({ day, ...counts }))
     .sort((a, b) => a.day - b.day);
 
-  return c.json({
+  const activityResult = {
     daily,
     weekly: weeklyRows,
     contributors,
@@ -1102,7 +1103,12 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
     languages,
     contributorTimeline,
     defaultBranch: repo.defaultBranch,
-  });
+  };
+
+  // Cache the computed result
+  setCachedActivity(repo.id, "activity", authorEmail || null, activityResult).catch(() => {});
+
+  return c.json(activityResult);
 });
 
 // --- Activity drill-down: commits by day or author ---

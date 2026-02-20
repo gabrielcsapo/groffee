@@ -43,6 +43,13 @@
       "when": 1771286283450,
       "tag": "0005_nifty_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1771556675974,
+      "tag": "0006_shiny_jimmy_woo",
+      "breakpoints": true
     }
   ]
 }

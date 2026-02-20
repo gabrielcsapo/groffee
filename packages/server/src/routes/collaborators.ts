@@ -34,21 +34,13 @@ collaboratorRoutes.get("/:owner/:repo/collaborators", async (c) => {
       userId: repoCollaborators.userId,
       permission: repoCollaborators.permission,
       createdAt: repoCollaborators.createdAt,
+      username: users.username,
     })
     .from(repoCollaborators)
+    .leftJoin(users, eq(users.id, repoCollaborators.userId))
     .where(eq(repoCollaborators.repoId, repo.id));
 
-  // Attach usernames
-  const result = await Promise.all(
-    collabs.map(async (collab) => {
-      const [u] = await db
-        .select({ username: users.username })
-        .from(users)
-        .where(eq(users.id, collab.userId))
-        .limit(1);
-      return { ...collab, username: u?.username || "unknown" };
-    }),
-  );
+  const result = collabs.map((c) => ({ ...c, username: c.username || "unknown" }));
 
   return c.json({ collaborators: result });
 });

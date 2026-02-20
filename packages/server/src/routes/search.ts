@@ -35,22 +35,6 @@ function parseExt(c: { req: { query: (k: string) => string | undefined } }): str
   return ext.toLowerCase();
 }
 
-function extractLanguageCounts(rows: Array<{ file_path: string }>): Array<{ ext: string; count: number }> {
-  const extCounts: Record<string, number> = {};
-  for (const row of rows) {
-    const lastDot = row.file_path.lastIndexOf(".");
-    if (lastDot === -1) continue;
-    const ext = row.file_path.slice(lastDot + 1).toLowerCase();
-    if (ext) {
-      extCounts[ext] = (extCounts[ext] || 0) + 1;
-    }
-  }
-  return Object.entries(extCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([ext, count]) => ({ ext, count }));
-}
-
 // Code search within a repo
 searchRoutes.get("/:owner/:repo/search/code", optionalAuth, async (c) => {
   const currentUser = c.get("user") as { id: string } | undefined;
@@ -95,10 +79,13 @@ searchRoutes.get("/:owner/:repo/search/code/languages", optionalAuth, async (c) 
   if (!q?.trim()) return c.json({ error: "Query parameter 'q' is required" }, 400);
 
   try {
-    const rows = db.all(
-      sql`SELECT file_path FROM code_search WHERE repo_id = ${repo.id} AND code_search MATCH ${q.trim()} LIMIT 10000`,
-    ) as Array<{ file_path: string }>;
-    return c.json({ languages: extractLanguageCounts(rows) });
+    const langRows = db.all(
+      sql`SELECT ext, COUNT(*) as count FROM (
+        SELECT LOWER(REPLACE(file_path, RTRIM(file_path, REPLACE(file_path, '.', '')), '')) as ext
+        FROM code_search WHERE repo_id = ${repo.id} AND code_search MATCH ${q.trim()} LIMIT 5000
+      ) WHERE ext != '' GROUP BY ext ORDER BY count DESC LIMIT 20`,
+    ) as Array<{ ext: string; count: number }>;
+    return c.json({ languages: langRows });
   } catch {
     return c.json({ languages: [] });
   }
@@ -132,10 +119,13 @@ searchRoutes.get("/search/code/languages", optionalAuth, async (c) => {
   if (!q?.trim()) return c.json({ error: "Query parameter 'q' is required" }, 400);
 
   try {
-    const rows = db.all(
-      sql`SELECT cs.file_path FROM code_search cs JOIN repositories r ON r.id = cs.repo_id WHERE r.is_public = 1 AND code_search MATCH ${q.trim()} LIMIT 10000`,
-    ) as Array<{ file_path: string }>;
-    return c.json({ languages: extractLanguageCounts(rows) });
+    const langRows = db.all(
+      sql`SELECT ext, COUNT(*) as count FROM (
+        SELECT LOWER(REPLACE(cs.file_path, RTRIM(cs.file_path, REPLACE(cs.file_path, '.', '')), '')) as ext
+        FROM code_search cs JOIN repositories r ON r.id = cs.repo_id WHERE r.is_public = 1 AND code_search MATCH ${q.trim()} LIMIT 5000
+      ) WHERE ext != '' GROUP BY ext ORDER BY count DESC LIMIT 20`,
+    ) as Array<{ ext: string; count: number }>;
+    return c.json({ languages: langRows });
   } catch {
     return c.json({ languages: [] });
   }
