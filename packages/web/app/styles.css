@@ -175,19 +175,15 @@
     @apply bg-surface-secondary rounded animate-pulse-subtle;
   }
 
-  /* Card surface — hand-drawn style */
   .card {
-    @apply bg-surface;
-    border: 2px solid var(--color-border);
-    border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
-    box-shadow: 3px 4px 0 var(--color-border-muted);
+    @apply bg-surface rounded-lg;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   }
 
-  /* Status badges — sketchy pill shape */
   .badge {
-    @apply inline-flex items-center gap-1 text-xs px-2.5 py-0.5 font-medium;
-    border: 1.5px solid currentColor;
-    border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+    @apply inline-flex items-center gap-1 text-xs px-2.5 py-0.5 font-medium rounded-full;
+    border: 1px solid currentColor;
   }
 
   .badge-public {
@@ -212,70 +208,51 @@
     @apply bg-merged-bg text-merged;
   }
 
-  /* Button base styles — subtly irregular with press effect */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 text-sm font-medium
-           px-4 py-2 hover:no-underline
+           px-4 py-2 rounded-md hover:no-underline
            disabled:opacity-50 disabled:cursor-not-allowed bg-success text-white;
-    border: 2px solid var(--color-border-muted);
-    border-radius: 0.375rem;
-    box-shadow: 2px 3px 0 var(--color-border-muted);
-    transition: transform 0.15s, box-shadow 0.15s, filter 0.15s, color 0.15s;
+    border: 1px solid transparent;
+    transition: background-color 0.15s, filter 0.15s, color 0.15s;
   }
 
   .btn-primary:hover:not(:disabled) {
-    transform: translate(1px, 1px);
-    box-shadow: 1px 2px 0 var(--color-border-muted);
     filter: brightness(1.1);
   }
 
   .btn-primary:active:not(:disabled) {
-    transform: translate(2px, 3px);
-    box-shadow: 0 0 0 var(--color-border-muted);
     filter: brightness(0.95);
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 text-sm font-medium
-           px-4 py-2 hover:no-underline
+           px-4 py-2 rounded-md hover:no-underline
            disabled:opacity-50 disabled:cursor-not-allowed bg-surface text-text-primary;
-    border: 2px solid var(--color-border);
-    border-radius: 0.375rem;
-    box-shadow: 2px 3px 0 var(--color-border-muted);
-    transition: transform 0.15s, box-shadow 0.15s, background-color 0.15s, color 0.15s;
+    border: 1px solid var(--color-border);
+    transition: background-color 0.15s, color 0.15s;
   }
 
   .btn-secondary:hover:not(:disabled) {
     @apply bg-surface-secondary;
-    transform: translate(1px, 1px);
-    box-shadow: 1px 2px 0 var(--color-border-muted);
   }
 
   .btn-secondary:active:not(:disabled) {
     @apply bg-border-muted;
-    transform: translate(2px, 3px);
-    box-shadow: 0 0 0 var(--color-border-muted);
   }
 
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2 text-sm font-medium
-           px-4 py-2 hover:no-underline
+           px-4 py-2 rounded-md hover:no-underline
            disabled:opacity-50 disabled:cursor-not-allowed bg-danger text-white;
-    border: 2px solid var(--color-border-muted);
-    border-radius: 0.375rem;
-    box-shadow: 2px 3px 0 var(--color-border-muted);
-    transition: transform 0.15s, box-shadow 0.15s, filter 0.15s, color 0.15s;
+    border: 1px solid transparent;
+    transition: background-color 0.15s, filter 0.15s, color 0.15s;
   }
 
   .btn-danger:hover:not(:disabled) {
-    transform: translate(1px, 1px);
-    box-shadow: 1px 2px 0 var(--color-border-muted);
     filter: brightness(1.1);
   }
 
   .btn-danger:active:not(:disabled) {
-    transform: translate(2px, 3px);
-    box-shadow: 0 0 0 var(--color-border-muted);
     filter: brightness(0.95);
   }
 
