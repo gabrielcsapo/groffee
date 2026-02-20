@@ -270,9 +270,10 @@ export async function updatePullRequest(
 
   if (!pr) return { error: "Pull request not found" };
 
-  if (typeof updates.title === "string" || typeof updates.body === "string") {
+  // Only author or repo owner can edit title/body or change status
+  if (typeof updates.title === "string" || typeof updates.body === "string" || typeof updates.status === "string") {
     if (user.id !== pr.authorId && user.id !== result.owner.id) {
-      return { error: "Only the author or repo owner can edit this pull request" };
+      return { error: "Only the author or repo owner can modify this pull request" };
     }
   }
 

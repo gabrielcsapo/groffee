@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Link } from "react-router";
 import { timeAgo } from "../lib/time";
 import { getEditHistory } from "../lib/server/search";
 import { usePullDetailContext } from "./pull-detail.client";
@@ -216,7 +217,7 @@ export function PullConversationView() {
       <div className="border border-border rounded-lg mb-4">
         <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm font-medium text-text-primary flex items-center justify-between">
           <span className="flex items-center">
-            {pr.author}
+            <Link to={`/${pr.author}`} className="hover:underline">{pr.author}</Link>
             <EditedIndicator
               editCount={pr.editCount}
               lastEditedAt={pr.lastEditedAt}
@@ -277,7 +278,7 @@ export function PullConversationView() {
           <div className="border border-border rounded-lg mb-2">
             <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm flex items-center justify-between">
               <span className="flex items-center">
-                <strong className="text-text-primary">{comment.author}</strong>
+                <Link to={`/${comment.author}`} className="text-text-primary font-bold hover:underline">{comment.author}</Link>
                 <span className="text-text-secondary ml-1">
                   commented {timeAgo(comment.createdAt)}
                 </span>
@@ -339,7 +340,7 @@ export function PullConversationView() {
       ))}
 
       {/* Merge box */}
-      {pr.status === "open" && user && (
+      {pr.status === "open" && user && user.username === owner && (
         <div className="border border-success/30 rounded-lg p-4 mb-4 bg-success/5">
           <div className="flex items-center justify-between">
             <p className="text-sm text-text-primary font-medium">
@@ -355,7 +356,7 @@ export function PullConversationView() {
       {pr.status === "merged" && (
         <div className="border border-merged/30 rounded-lg p-4 mb-4 bg-merged-bg">
           <p className="text-sm text-merged font-medium">
-            This pull request was merged{pr.mergedBy ? ` by ${pr.mergedBy}` : ""}.
+            This pull request was merged{pr.mergedBy ? <> by <Link to={`/${pr.mergedBy}`} className="hover:underline">{pr.mergedBy}</Link></> : ""}.
           </p>
         </div>
       )}
@@ -372,7 +373,7 @@ export function PullConversationView() {
               className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
             />
             <div className="flex items-center justify-between">
-              {pr.status !== "merged" && (
+              {pr.status !== "merged" && (user.username === pr.author || user.username === owner) && (
                 <button
                   type="button"
                   onClick={toggleStatus}

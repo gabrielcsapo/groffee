@@ -1,17 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router";
 
 interface DayData {
   day: number;
-  count: number;
+  commits: number;
+  prs: number;
+  issues: number;
 }
 
 interface CommitData {
   oid: string;
   message: string;
   author: { name: string; email: string; timestamp: number };
+}
+
+interface PRData {
+  number: number;
+  title: string;
+  status: string;
+  createdAt: number;
+}
+
+interface IssueData {
+  number: number;
+  title: string;
+  status: string;
+  createdAt: number;
 }
 
 interface ActivityHeatmapProps {
@@ -47,19 +63,25 @@ function timeAgo(timestamp: number): string {
   return `${years}y ago`;
 }
 
-function CommitList({
+function ActivityDrillDown({
   commits,
+  pullRequests,
+  issues,
   owner,
   repo,
   label,
   onClose,
 }: {
   commits: CommitData[];
+  pullRequests: PRData[];
+  issues: IssueData[];
   owner: string;
   repo: string;
   label: string;
   onClose: () => void;
 }) {
+  const hasNothing = commits.length === 0 && pullRequests.length === 0 && issues.length === 0;
+
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-surface mt-4 animate-fade-in">
       <div className="px-4 py-3 border-b border-border bg-surface-secondary flex items-center justify-between">
@@ -71,68 +93,170 @@ function CommitList({
           Close
         </button>
       </div>
-      {commits.length === 0 ? (
-        <div className="p-6 text-center text-sm text-text-secondary">No commits found.</div>
+      {hasNothing ? (
+        <div className="p-6 text-center text-sm text-text-secondary">No activity found.</div>
       ) : (
-        <div className="divide-y divide-border">
-          {commits.map((commit) => (
-            <div key={commit.oid} className="px-4 py-2.5 flex items-start gap-3">
-              <Link
-                to={`/${owner}/${repo}/commit/${commit.oid}`}
-                className="text-xs font-mono text-text-link hover:underline shrink-0 mt-0.5"
-              >
-                {commit.oid.slice(0, 7)}
-              </Link>
-              <div className="flex-1 min-w-0">
-                <Link
-                  to={`/${owner}/${repo}/commit/${commit.oid}`}
-                  className="text-sm text-text-primary hover:text-text-link hover:underline block truncate"
-                >
-                  {commit.message.split("\n")[0]}
-                </Link>
-                <span className="text-xs text-text-secondary">
-                  {commit.author.name} &middot; {timeAgo(commit.author.timestamp)}
-                </span>
+        <div>
+          {/* Commits */}
+          {commits.length > 0 && (
+            <div>
+              <div className="px-4 py-2 text-xs font-medium text-text-secondary bg-surface-secondary/50 border-b border-border">
+                {commits.length} commit{commits.length !== 1 ? "s" : ""}
+              </div>
+              <div className="divide-y divide-border">
+                {commits.map((commit) => (
+                  <div key={commit.oid} className="px-4 py-2.5 flex items-start gap-3">
+                    <Link
+                      to={`/${owner}/${repo}/commit/${commit.oid}`}
+                      className="text-xs font-mono text-text-link hover:underline shrink-0 mt-0.5"
+                    >
+                      {commit.oid.slice(0, 7)}
+                    </Link>
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        to={`/${owner}/${repo}/commit/${commit.oid}`}
+                        className="text-sm text-text-primary hover:text-text-link hover:underline block truncate"
+                      >
+                        {commit.message.split("\n")[0]}
+                      </Link>
+                      <span className="text-xs text-text-secondary">
+                        {commit.author.name} &middot; {timeAgo(commit.author.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Pull Requests */}
+          {pullRequests.length > 0 && (
+            <div>
+              <div className="px-4 py-2 text-xs font-medium text-text-secondary bg-surface-secondary/50 border-b border-border">
+                {pullRequests.length} pull request{pullRequests.length !== 1 ? "s" : ""}
+              </div>
+              <div className="divide-y divide-border">
+                {pullRequests.map((pr) => (
+                  <div key={pr.number} className="px-4 py-2.5 flex items-start gap-3">
+                    <Link
+                      to={`/${owner}/${repo}/pulls/${pr.number}`}
+                      className="text-xs font-mono text-text-link hover:underline shrink-0 mt-0.5"
+                    >
+                      #{pr.number}
+                    </Link>
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        to={`/${owner}/${repo}/pulls/${pr.number}`}
+                        className="text-sm text-text-primary hover:text-text-link hover:underline block truncate"
+                      >
+                        {pr.title}
+                      </Link>
+                      <span className="text-xs text-text-secondary">
+                        {pr.status} &middot; {timeAgo(pr.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Issues */}
+          {issues.length > 0 && (
+            <div>
+              <div className="px-4 py-2 text-xs font-medium text-text-secondary bg-surface-secondary/50 border-b border-border">
+                {issues.length} issue{issues.length !== 1 ? "s" : ""}
+              </div>
+              <div className="divide-y divide-border">
+                {issues.map((issue) => (
+                  <div key={issue.number} className="px-4 py-2.5 flex items-start gap-3">
+                    <Link
+                      to={`/${owner}/${repo}/issues/${issue.number}`}
+                      className="text-xs font-mono text-text-link hover:underline shrink-0 mt-0.5"
+                    >
+                      #{issue.number}
+                    </Link>
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        to={`/${owner}/${repo}/issues/${issue.number}`}
+                        className="text-sm text-text-primary hover:text-text-link hover:underline block truncate"
+                      >
+                        {issue.title}
+                      </Link>
+                      <span className="text-xs text-text-secondary">
+                        {issue.status} &middot; {timeAgo(issue.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
+interface CellData {
+  date: Date;
+  total: number;
+  commits: number;
+  prs: number;
+  issues: number;
+  utcDays: number[];
+}
+
 export function ActivityHeatmap({ daily, owner, repo }: ActivityHeatmapProps) {
-  const [selectedDay, setSelectedDay] = useState<{ date: Date; timestamp: number } | null>(null);
+  const [selectedDay, setSelectedDay] = useState<{ date: Date; utcDays: number[] } | null>(null);
   const [commits, setCommits] = useState<CommitData[] | null>(null);
+  const [pullRequests, setPullRequests] = useState<PRData[] | null>(null);
+  const [issueList, setIssueList] = useState<IssueData[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  // Build a map of day timestamp -> count
-  const dayMap = new Map<string, number>();
+  // Build a map of local date key -> { total count, breakdown, originating UTC day timestamps }
+  // This tracks which UTC day buckets map to each local date so we can query the right range
+  const dayMap = new Map<string, { commits: number; prs: number; issues: number; utcDays: number[] }>();
   for (const d of daily) {
     const date = new Date(d.day * 1000);
     const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-    dayMap.set(key, (dayMap.get(key) || 0) + d.count);
+    const existing = dayMap.get(key) || { commits: 0, prs: 0, issues: 0, utcDays: [] };
+    existing.commits += d.commits;
+    existing.prs += d.prs;
+    existing.issues += d.issues;
+    existing.utcDays.push(d.day);
+    dayMap.set(key, existing);
   }
 
-  const max = Math.max(1, ...daily.map((d) => d.count));
+  const allTotals = Array.from(dayMap.values()).map((v) => v.commits + v.prs + v.issues);
+  const max = Math.max(1, ...allTotals);
 
   // Generate 53 weeks x 7 days grid, ending at today
-  const todayDay = today.getDay(); // 0=Sun
+  const todayDay = today.getDay();
   const endDate = new Date(today);
   const startDate = new Date(today);
   startDate.setDate(startDate.getDate() - (52 * 7 + todayDay));
 
-  const weeks: { date: Date; count: number }[][] = [];
+  const weeks: CellData[][] = [];
   const cursor = new Date(startDate);
 
-  let currentWeek: { date: Date; count: number }[] = [];
+  let currentWeek: CellData[] = [];
   while (cursor <= endDate) {
     const key = `${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`;
-    currentWeek.push({ date: new Date(cursor), count: dayMap.get(key) || 0 });
+    const entry = dayMap.get(key);
+    currentWeek.push({
+      date: new Date(cursor),
+      total: entry ? entry.commits + entry.prs + entry.issues : 0,
+      commits: entry?.commits || 0,
+      prs: entry?.prs || 0,
+      issues: entry?.issues || 0,
+      utcDays: entry?.utcDays || [],
+    });
     if (currentWeek.length === 7) {
       weeks.push(currentWeek);
       currentWeek = [];
@@ -165,47 +289,93 @@ export function ActivityHeatmap({ daily, owner, repo }: ActivityHeatmapProps) {
   const svgWidth = labelWidth + weeks.length * step;
   const svgHeight = headerHeight + 7 * step;
 
-  const totalCommits = daily.reduce((sum, d) => sum + d.count, 0);
+  const totalActivity = Array.from(dayMap.values()).reduce(
+    (sum, v) => sum + v.commits + v.prs + v.issues,
+    0,
+  );
 
-  async function handleDayClick(date: Date, count: number) {
-    if (count === 0) return;
+  async function handleDayClick(cell: CellData) {
+    if (cell.total === 0) return;
 
-    // Unix timestamp for start of day (UTC)
-    const dayTimestamp = Math.floor(
-      new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() / 1000,
-    );
+    // Use the UTC day timestamps from the server data to query
+    // This ensures the drill-down matches exactly what produced the green dot
+    const clickKey = cell.utcDays.sort().join(",");
+    const selectedKey = selectedDay?.utcDays.sort().join(",");
 
-    // If clicking the same day, toggle off
-    if (selectedDay && selectedDay.timestamp === dayTimestamp) {
+    if (selectedDay && selectedKey === clickKey) {
       setSelectedDay(null);
       setCommits(null);
+      setPullRequests(null);
+      setIssueList(null);
       return;
     }
 
-    setSelectedDay({ date, timestamp: dayTimestamp });
+    setSelectedDay({ date: cell.date, utcDays: cell.utcDays });
     setLoading(true);
     setCommits(null);
+    setPullRequests(null);
+    setIssueList(null);
 
     try {
-      const res = await fetch(
-        `/api/repos/${owner}/${repo}/activity/commits?day=${dayTimestamp}`,
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setCommits(data.commits);
+      // Query using the UTC day start that the server used for grouping
+      // If a local date spans two UTC days, query both
+      const allCommits: CommitData[] = [];
+      const allPRs: PRData[] = [];
+      const allIssues: IssueData[] = [];
+
+      for (const utcDay of cell.utcDays) {
+        const res = await fetch(
+          `/api/repos/${owner}/${repo}/activity/commits?day=${utcDay}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          allCommits.push(...(data.commits || []));
+          allPRs.push(...(data.pullRequests || []));
+          allIssues.push(...(data.issues || []));
+        }
       }
+
+      // Deduplicate commits by oid (in case of overlapping UTC days)
+      const seenOids = new Set<string>();
+      const uniqueCommits = allCommits.filter((c) => {
+        if (seenOids.has(c.oid)) return false;
+        seenOids.add(c.oid);
+        return true;
+      });
+
+      setCommits(uniqueCommits);
+      setPullRequests(allPRs);
+      setIssueList(allIssues);
     } catch {
       setCommits([]);
+      setPullRequests([]);
+      setIssueList([]);
     } finally {
       setLoading(false);
     }
+  }
+
+  function buildTooltip(cell: CellData): string {
+    const dateStr = cell.date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    if (cell.total === 0) return `No activity on ${dateStr}`;
+
+    const parts: string[] = [];
+    if (cell.commits > 0) parts.push(`${cell.commits} commit${cell.commits !== 1 ? "s" : ""}`);
+    if (cell.prs > 0) parts.push(`${cell.prs} PR${cell.prs !== 1 ? "s" : ""}`);
+    if (cell.issues > 0) parts.push(`${cell.issues} issue${cell.issues !== 1 ? "s" : ""}`);
+    return `${parts.join(", ")} on ${dateStr}`;
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm text-text-secondary">
-          {totalCommits} contribution{totalCommits !== 1 ? "s" : ""} in the last year
+          {totalActivity} contribution{totalActivity !== 1 ? "s" : ""} in the last year
         </span>
         <div className="flex items-center gap-1 text-xs text-text-secondary">
           <span>Less</span>
@@ -219,8 +389,12 @@ export function ActivityHeatmap({ daily, owner, repo }: ActivityHeatmapProps) {
           <span>More</span>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <svg width={svgWidth} height={svgHeight} className="block">
+      <div ref={containerRef} className="relative">
+        <svg
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+          className="block w-full h-auto"
+          onMouseLeave={() => setTooltip(null)}
+        >
           {/* Month labels */}
           {monthLabels.map((m) => (
             <text
@@ -249,54 +423,65 @@ export function ActivityHeatmap({ daily, owner, repo }: ActivityHeatmapProps) {
 
           {/* Cells */}
           {weeks.map((week, w) =>
-            week.map((day, d) => {
-              const dayTs = Math.floor(
-                new Date(day.date.getFullYear(), day.date.getMonth(), day.date.getDate()).getTime() / 1000,
-              );
-              const isSelected = selectedDay?.timestamp === dayTs;
+            week.map((cell, d) => {
+              const clickKey = cell.utcDays.sort().join(",");
+              const selectedKey = selectedDay?.utcDays.sort().join(",");
+              const isSelected = selectedDay != null && selectedKey === clickKey && clickKey !== "";
               return (
-                <g key={`${w}-${d}`}>
-                  <rect
-                    x={labelWidth + w * step}
-                    y={headerHeight + d * step}
-                    width={cellSize}
-                    height={cellSize}
-                    rx={2}
-                    fill={getColor(day.count, max)}
-                    stroke={isSelected ? "var(--color-text-primary)" : "none"}
-                    strokeWidth={isSelected ? 2 : 0}
-                    style={{ cursor: day.count > 0 ? "pointer" : "default" }}
-                    onClick={() => handleDayClick(day.date, day.count)}
-                  >
-                    <title>
-                      {day.count} commit{day.count !== 1 ? "s" : ""} on{" "}
-                      {day.date.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </title>
-                  </rect>
-                </g>
+                <rect
+                  key={`${w}-${d}`}
+                  x={labelWidth + w * step}
+                  y={headerHeight + d * step}
+                  width={cellSize}
+                  height={cellSize}
+                  rx={2}
+                  fill={getColor(cell.total, max)}
+                  stroke={isSelected ? "var(--color-text-primary)" : "none"}
+                  strokeWidth={isSelected ? 2 : 0}
+                  style={{ cursor: cell.total > 0 ? "pointer" : "default" }}
+                  onClick={() => handleDayClick(cell)}
+                  onMouseEnter={(e) => {
+                    const rect = containerRef.current?.getBoundingClientRect();
+                    if (!rect) return;
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    setTooltip({ text: buildTooltip(cell), x, y });
+                  }}
+                  onMouseLeave={() => setTooltip(null)}
+                />
               );
             }),
           )}
         </svg>
+        {tooltip && (
+          <div
+            className="absolute z-10 px-2.5 py-1.5 text-xs rounded-md bg-text-primary text-surface whitespace-nowrap pointer-events-none"
+            style={{
+              left: tooltip.x,
+              top: tooltip.y - 8,
+              transform: "translate(-50%, -100%)",
+            }}
+          >
+            {tooltip.text}
+          </div>
+        )}
       </div>
 
       {/* Drill-down for selected day */}
       {selectedDay && (
         loading ? (
           <div className="mt-4 p-6 text-center text-sm text-text-secondary border border-border rounded-lg bg-surface">
-            Loading commits...
+            Loading activity...
           </div>
         ) : commits ? (
-          <CommitList
+          <ActivityDrillDown
             commits={commits}
+            pullRequests={pullRequests || []}
+            issues={issueList || []}
             owner={owner}
             repo={repo}
-            label={`Commits on ${selectedDay.date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}`}
-            onClose={() => { setSelectedDay(null); setCommits(null); }}
+            label={`Activity on ${selectedDay.date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}`}
+            onClose={() => { setSelectedDay(null); setCommits(null); setPullRequests(null); setIssueList(null); }}
           />
         ) : null
       )}
@@ -315,116 +500,46 @@ interface ContributorListProps {
   contributors: ContributorData[];
   owner: string;
   repo: string;
+  defaultBranch: string;
 }
 
-export function ContributorList({ contributors, owner, repo }: ContributorListProps) {
+export function ContributorList({ contributors, owner, repo, defaultBranch }: ContributorListProps) {
   const maxCommits = Math.max(1, ...contributors.map((c) => c.commits));
-  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
-  const [commits, setCommits] = useState<CommitData[] | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function handleContributorClick(email: string) {
-    if (selectedEmail === email) {
-      setSelectedEmail(null);
-      setCommits(null);
-      return;
-    }
-
-    setSelectedEmail(email);
-    setLoading(true);
-    setCommits(null);
-
-    try {
-      const res = await fetch(
-        `/api/repos/${owner}/${repo}/activity/commits?author=${encodeURIComponent(email)}`,
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setCommits(data.commits);
-      }
-    } catch {
-      setCommits([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const selectedContributor = contributors.find((c) => c.email === selectedEmail);
 
   return (
-    <div>
-      <div className="flex flex-col gap-0">
-        {contributors.map((contributor, i) => {
-          const isSelected = selectedEmail === contributor.email;
-          return (
-            <button
-              key={contributor.email}
-              type="button"
-              onClick={() => handleContributorClick(contributor.email)}
-              className={`flex items-center gap-3 px-4 py-2.5 w-full text-left transition-colors hover:bg-surface-secondary ${
-                i > 0 ? "border-t border-border" : ""
-              } ${isSelected ? "bg-surface-secondary" : ""}`}
-            >
-              {/* Avatar placeholder */}
-              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
-                {contributor.name.charAt(0).toUpperCase()}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-text-primary truncate">
-                    {contributor.name}
-                  </span>
-                  <span className="text-xs text-text-secondary truncate">{contributor.email}</span>
-                </div>
-                {/* Bar */}
-                <div className="mt-1 h-1.5 rounded-full bg-surface-secondary overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-primary"
-                    style={{ width: `${(contributor.commits / maxCommits) * 100}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="text-right shrink-0">
-                <span className="text-sm font-medium text-text-primary">
-                  {contributor.commits}
-                </span>
-                <p className="text-xs text-text-secondary">{timeAgo(contributor.lastCommitAt)}</p>
-              </div>
-
-              {/* Expand indicator */}
-              <svg
-                className={`w-4 h-4 text-text-secondary shrink-0 transition-transform ${isSelected ? "rotate-90" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Drill-down for selected contributor */}
-      {selectedEmail && (
-        loading ? (
-          <div className="p-6 text-center text-sm text-text-secondary border-t border-border">
-            Loading commits...
+    <div className="flex flex-col gap-0">
+      {contributors.map((contributor, i) => (
+        <Link
+          key={contributor.email}
+          to={`/${owner}/${repo}/commits/${defaultBranch}?author=${encodeURIComponent(contributor.email)}`}
+          className={`flex items-center gap-3 px-4 py-2.5 w-full text-left transition-colors hover:bg-surface-secondary hover:no-underline ${
+            i > 0 ? "border-t border-border" : ""
+          }`}
+        >
+          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+            {contributor.name.charAt(0).toUpperCase()}
           </div>
-        ) : commits ? (
-          <div className="border-t border-border">
-            <CommitList
-              commits={commits}
-              owner={owner}
-              repo={repo}
-              label={`Recent commits by ${selectedContributor?.name || selectedEmail}`}
-              onClose={() => { setSelectedEmail(null); setCommits(null); }}
-            />
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-text-primary truncate">{contributor.name}</span>
+              <span className="text-xs text-text-secondary truncate">{contributor.email}</span>
+            </div>
+            <div className="mt-1 h-1.5 rounded-full bg-surface-secondary overflow-hidden">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${(contributor.commits / maxCommits) * 100}%` }} />
+            </div>
           </div>
-        ) : null
-      )}
+
+          <div className="text-right shrink-0">
+            <span className="text-sm font-medium text-text-primary">{contributor.commits}</span>
+            <p className="text-xs text-text-secondary">{timeAgo(contributor.lastCommitAt)}</p>
+          </div>
+
+          <svg className="w-4 h-4 text-text-secondary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      ))}
     </div>
   );
 }

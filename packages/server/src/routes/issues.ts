@@ -230,10 +230,10 @@ issueRoutes.patch("/:owner/:repo/issues/:number", requireAuth, async (c) => {
 
   const body = await c.req.json();
 
-  // Authorization: only author or repo owner can edit title/body
-  if (typeof body.title === "string" || typeof body.body === "string") {
+  // Authorization: only author or repo owner can edit title/body or change status
+  if (typeof body.title === "string" || typeof body.body === "string" || typeof body.status === "string") {
     if (user.id !== issue.authorId && user.id !== result.owner.id) {
-      return c.json({ error: "Only the author or repo owner can edit this issue" }, 403);
+      return c.json({ error: "Only the author or repo owner can modify this issue" }, 403);
     }
   }
 

@@ -224,9 +224,10 @@ export async function updateIssue(
 
   if (!issue) return { error: "Issue not found" };
 
-  if (typeof updates.title === "string" || typeof updates.body === "string") {
+  // Only author or repo owner can edit title/body or change status
+  if (typeof updates.title === "string" || typeof updates.body === "string" || typeof updates.status === "string") {
     if (user.id !== issue.authorId && user.id !== result.owner.id) {
-      return { error: "Only the author or repo owner can edit this issue" };
+      return { error: "Only the author or repo owner can modify this issue" };
     }
   }
 

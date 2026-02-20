@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Link, useNavigation, useRouteError } from "react-router";
+import { useState, useEffect, useRef } from "react";
+import { Link, useLocation, useNavigation, useNavigate, useRouteError } from "react-router";
 import { type Theme, getStoredTheme, applyTheme } from "../lib/theme";
 import { getSessionUser, logout } from "../lib/server/auth";
 
@@ -14,6 +14,209 @@ export function GlobalNavigationLoadingBar() {
     <div className="h-0.5 w-full bg-primary/20 overflow-hidden fixed top-0 left-0 z-50">
       <div className="animate-progress origin-[0%_50%] w-full h-full bg-primary" />
     </div>
+  );
+}
+
+export function HeaderSearch() {
+  const [open, setOpen] = useState(false);
+  const [searchScope, setSearchScope] = useState<"repo" | "global">("repo");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Detect if on a repo page: /:owner/:repo/...
+  const repoMatch = location.pathname.match(/^\/([^/]+)\/([^/]+)/);
+  const isRepoPage =
+    repoMatch &&
+    !["login", "register", "explore", "new", "search", "docs", "settings"].includes(repoMatch[1]);
+  const repoOwner = isRepoPage ? repoMatch![1] : null;
+  const repoName = isRepoPage ? repoMatch![2] : null;
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (
+        e.key === "/" &&
+        !["INPUT", "TEXTAREA", "SELECT"].includes(
+          (e.target as HTMLElement).tagName,
+        )
+      ) {
+        e.preventDefault();
+        setOpen(true);
+      }
+      if (e.key === "Escape" && open) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      setSearchScope("repo");
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  // Close on navigation
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const q = inputRef.current?.value.trim();
+    if (!q) return;
+
+    if (isRepoPage && searchScope === "repo") {
+      navigate(
+        `/${repoOwner}/${repoName}/search?q=${encodeURIComponent(q)}`,
+      );
+    } else {
+      navigate(`/search?q=${encodeURIComponent(q)}`);
+    }
+    setOpen(false);
+  }
+
+  return (
+    <>
+      {/* Trigger button */}
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 flex-1 max-w-sm px-3 py-1.5 text-sm text-white/40 bg-white/10 border border-white/20 rounded-md hover:border-white/30 transition-colors cursor-text"
+      >
+        <svg
+          className="w-4 h-4 flex-shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+        <span className="flex-1 text-left truncate">Type / to search</span>
+        <kbd className="text-[10px] text-white/30 border border-white/20 rounded px-1 py-0.5 leading-none">
+          /
+        </kbd>
+      </button>
+
+      {/* Spotlight modal */}
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          onClick={() => setOpen(false)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+          {/* Modal */}
+          <div
+            className="relative w-full max-w-lg mx-4 animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <form onSubmit={handleSubmit}>
+              <div className="bg-surface border border-border rounded-md shadow-2xl overflow-hidden ring-1 ring-black/5">
+                {/* Search input */}
+                <div className="p-5">
+                  <div className="flex items-center gap-3 bg-surface-secondary border border-border rounded-lg px-3 py-2.5">
+                    <svg
+                      className="w-5 h-5 text-text-secondary/50 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      placeholder={
+                        isRepoPage
+                          ? `Search in ${repoOwner}/${repoName}...`
+                          : "Search repositories, code, users..."
+                      }
+                      className="modal-input flex-1 bg-transparent border-none text-text-primary placeholder:text-text-secondary/50 text-base"
+                    />
+                    <kbd className="text-[10px] text-text-secondary/50 border border-border rounded px-1.5 py-0.5 leading-none">
+                      ESC
+                    </kbd>
+                  </div>
+                </div>
+
+                {/* Scope selector */}
+                <div className="px-5 pb-4 text-sm">
+                  {isRepoPage ? (
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setSearchScope("repo")}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors ${
+                          searchScope === "repo"
+                            ? "bg-primary/10 text-primary"
+                            : "text-text-secondary hover:bg-surface-secondary"
+                        }`}
+                      >
+                        <svg
+                          className="w-4 h-4 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                          />
+                        </svg>
+                        <span>{repoOwner}/{repoName}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSearchScope("global")}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors ${
+                          searchScope === "global"
+                            ? "bg-primary/10 text-primary"
+                            : "text-text-secondary hover:bg-surface-secondary"
+                        }`}
+                      >
+                        <svg
+                          className="w-4 h-4 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        <span>Search everywhere</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-text-secondary text-xs px-1">
+                      Press Enter to search across all repositories
+                    </p>
+                  )}
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

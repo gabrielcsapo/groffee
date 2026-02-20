@@ -43,7 +43,7 @@ export function PullsList({
   }, [owner, repo, status, initialPulls]);
 
   return (
-    <div className="max-w-4xl mx-auto mt-4">
+    <div className="max-w-6xl mx-auto mt-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-1 bg-surface border border-border rounded-md overflow-hidden">
           <button
@@ -149,7 +149,7 @@ export function PullsList({
                     {pr.title}
                   </Link>
                   <p className="text-xs text-text-secondary mt-0.5">
-                    #{pr.number} opened {timeAgo(pr.createdAt)} by {pr.author}
+                    #{pr.number} opened {timeAgo(pr.createdAt)} by <Link to={`/${pr.author}`} className="hover:underline hover:text-text-primary">{pr.author}</Link>
                     <span className="ml-2">
                       <code className="px-1 py-0.5 bg-surface-secondary rounded text-xs">
                         {pr.sourceBranch}

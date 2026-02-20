@@ -194,7 +194,7 @@ export function PullDetailLayout({
               {pr.status === "open" ? "Open" : pr.status === "merged" ? "Merged" : "Closed"}
             </span>
             <span className="text-sm text-text-secondary">
-              <strong>{pr.author}</strong> wants to merge
+              <Link to={`/${pr.author}`} className="font-semibold text-text-primary hover:underline">{pr.author}</Link> wants to merge
               <code className="mx-1 px-1.5 py-0.5 bg-surface-secondary rounded text-xs">
                 {pr.sourceBranch}
               </code>

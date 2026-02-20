@@ -10,6 +10,8 @@ import {
   gitBlobs,
   gitCommitFiles,
   auditLogs,
+  pullRequests,
+  issues,
 } from "@groffee/db";
 import { eq, and, like, desc, asc, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
@@ -645,9 +647,16 @@ repoRoutes.get("/:owner/:name/commits/:ref", optionalAuth, async (c) => {
 
   const ref = c.req.param("ref");
   const limit = parseInt(c.req.query("limit") || "30", 10);
+  const authorEmail = c.req.query("author");
 
   // Try indexed data first
   try {
+    const conditions = [
+      eq(gitCommitAncestry.repoId, repo.id),
+      eq(gitCommitAncestry.refName, ref),
+      ...(authorEmail ? [eq(gitCommits.authorEmail, authorEmail)] : []),
+    ];
+
     const commitList = await db
       .select({
         oid: gitCommits.oid,
@@ -668,9 +677,7 @@ repoRoutes.get("/:owner/:name/commits/:ref", optionalAuth, async (c) => {
           eq(gitCommits.oid, gitCommitAncestry.commitOid),
         ),
       )
-      .where(
-        and(eq(gitCommitAncestry.repoId, repo.id), eq(gitCommitAncestry.refName, ref)),
-      )
+      .where(and(...conditions))
       .orderBy(asc(gitCommitAncestry.depth))
       .limit(limit);
 
@@ -690,16 +697,16 @@ repoRoutes.get("/:owner/:name/commits/:ref", optionalAuth, async (c) => {
         },
         parents: JSON.parse(c.parentOids) as string[],
       }));
-      return c.json({ commits, ref });
+      return c.json({ commits, ref, defaultBranch: repo.defaultBranch });
     }
   } catch {
     // Index read failed, fall through to git
   }
 
-  // Fallback to git
+  // Fallback to git (no author filter available)
   try {
     const commits = await getCommitLog(repo.diskPath, ref, limit);
-    return c.json({ commits, ref });
+    return c.json({ commits, ref, defaultBranch: repo.defaultBranch });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to read commits";
     return c.json({ error: message }, 404);
@@ -841,36 +848,38 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
   const repo = await findRepo(c.req.param("owner"), c.req.param("name"), currentUser?.id);
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
+  const authorEmail = c.req.query("author");
   const now = Math.floor(Date.now() / 1000);
   const oneYearAgo = now - 365 * 86400;
 
-  // Daily commit counts for heatmap (last 365 days)
+  // Base conditions for commit queries (optionally filtered by author)
+  const conds = [
+    eq(gitCommits.repoId, repo.id),
+    sql`${gitCommits.authorTimestamp} >= ${oneYearAgo}`,
+    ...(authorEmail ? [eq(gitCommits.authorEmail, authorEmail)] : []),
+  ];
+
   const dailyRows = await db
     .select({
       day: sql<number>`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`,
       count: sql<number>`cast(count(*) as integer)`,
     })
     .from(gitCommits)
-    .where(
-      and(eq(gitCommits.repoId, repo.id), sql`${gitCommits.authorTimestamp} >= ${oneYearAgo}`),
-    )
+    .where(and(...conds))
     .groupBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`)
     .orderBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`);
 
-  // Weekly commit counts (last 52 weeks)
   const weeklyRows = await db
     .select({
       week: sql<number>`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
       count: sql<number>`cast(count(*) as integer)`,
     })
     .from(gitCommits)
-    .where(
-      and(eq(gitCommits.repoId, repo.id), sql`${gitCommits.authorTimestamp} >= ${oneYearAgo}`),
-    )
+    .where(and(...conds))
     .groupBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`)
     .orderBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`);
 
-  // Top contributors (all time)
+  // Contributors always show all (not filtered) so the dropdown works
   const contributors = await db
     .select({
       name: gitCommits.authorName,
@@ -884,17 +893,215 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
     .orderBy(sql`count(*) desc`)
     .limit(20);
 
-  // Total commit count
+  // Daily PR counts (not filtered by author — PRs don't have commit author)
+  const dailyPRRows = await db
+    .select({
+      day: sql<number>`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`,
+      count: sql<number>`cast(count(*) as integer)`,
+    })
+    .from(pullRequests)
+    .where(
+      and(eq(pullRequests.repoId, repo.id), sql`cast(${pullRequests.createdAt} as integer) >= ${oneYearAgo}`),
+    )
+    .groupBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`)
+    .orderBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`);
+
+  const dailyIssueRows = await db
+    .select({
+      day: sql<number>`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`,
+      count: sql<number>`cast(count(*) as integer)`,
+    })
+    .from(issues)
+    .where(
+      and(eq(issues.repoId, repo.id), sql`cast(${issues.createdAt} as integer) >= ${oneYearAgo}`),
+    )
+    .groupBy(sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`)
+    .orderBy(sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`);
+
   const [totalRow] = await db
     .select({ count: sql<number>`cast(count(*) as integer)` })
     .from(gitCommits)
     .where(eq(gitCommits.repoId, repo.id));
 
+  const punchcardRows = await db
+    .select({
+      day: sql<number>`cast(((${gitCommits.authorTimestamp} / 86400) + 4) % 7 as integer)`,
+      hour: sql<number>`cast((${gitCommits.authorTimestamp} % 86400) / 3600 as integer)`,
+      count: sql<number>`cast(count(*) as integer)`,
+    })
+    .from(gitCommits)
+    .where(and(...conds))
+    .groupBy(
+      sql`cast(((${gitCommits.authorTimestamp} / 86400) + 4) % 7 as integer)`,
+      sql`cast((${gitCommits.authorTimestamp} % 86400) / 3600 as integer)`,
+    );
+
+  const fileConds = [
+    eq(gitCommitFiles.repoId, repo.id),
+    sql`${gitCommits.authorTimestamp} >= ${oneYearAgo}`,
+    ...(authorEmail ? [eq(gitCommits.authorEmail, authorEmail)] : []),
+  ];
+  const fileChangeRows = await db
+    .select({
+      week: sql<number>`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
+      changeType: gitCommitFiles.changeType,
+      count: sql<number>`cast(count(*) as integer)`,
+    })
+    .from(gitCommitFiles)
+    .innerJoin(
+      gitCommits,
+      and(eq(gitCommitFiles.repoId, gitCommits.repoId), eq(gitCommitFiles.commitOid, gitCommits.oid)),
+    )
+    .where(and(...fileConds))
+    .groupBy(
+      sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
+      gitCommitFiles.changeType,
+    )
+    .orderBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`);
+
+  const fileFreqMap = new Map<number, { additions: number; modifications: number; deletions: number }>();
+  for (const r of fileChangeRows) {
+    const entry = fileFreqMap.get(r.week) || { additions: 0, modifications: 0, deletions: 0 };
+    if (r.changeType === "add") entry.additions += r.count;
+    else if (r.changeType === "modify") entry.modifications += r.count;
+    else if (r.changeType === "delete") entry.deletions += r.count;
+    else if (r.changeType === "rename") entry.modifications += r.count;
+    fileFreqMap.set(r.week, entry);
+  }
+  const fileFrequency = Array.from(fileFreqMap.entries())
+    .map(([week, counts]) => ({ week, ...counts }))
+    .sort((a, b) => a.week - b.week);
+
+  // Language breakdown (not per-author — it's a repo-wide stat)
+  const defaultRef = await db
+    .select({ commitOid: gitRefs.commitOid })
+    .from(gitRefs)
+    .where(and(eq(gitRefs.repoId, repo.id), eq(gitRefs.name, repo.defaultBranch)))
+    .limit(1);
+
+  let languages: { language: string; count: number; percentage: number }[] = [];
+  if (defaultRef.length > 0) {
+    const headCommit = await db
+      .select({ treeOid: gitCommits.treeOid })
+      .from(gitCommits)
+      .where(and(eq(gitCommits.repoId, repo.id), eq(gitCommits.oid, defaultRef[0].commitOid)))
+      .limit(1);
+
+    if (headCommit.length > 0) {
+      const langRows = await db
+        .select({
+          ext: sql<string>`lower(
+            case
+              when instr(${gitTreeEntries.entryName}, '.') > 0
+              then substr(${gitTreeEntries.entryName}, length(${gitTreeEntries.entryName}) - length(
+                substr(${gitTreeEntries.entryName}, instr(${gitTreeEntries.entryName}, '.'))
+              ) + 1)
+              else ''
+            end
+          )`,
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(gitTreeEntries)
+        .where(
+          and(
+            eq(gitTreeEntries.repoId, repo.id),
+            eq(gitTreeEntries.rootTreeOid, headCommit[0].treeOid),
+            eq(gitTreeEntries.entryType, "blob"),
+            sql`instr(${gitTreeEntries.entryName}, '.') > 0`,
+          ),
+        )
+        .groupBy(
+          sql`lower(
+            case
+              when instr(${gitTreeEntries.entryName}, '.') > 0
+              then substr(${gitTreeEntries.entryName}, length(${gitTreeEntries.entryName}) - length(
+                substr(${gitTreeEntries.entryName}, instr(${gitTreeEntries.entryName}, '.'))
+              ) + 1)
+              else ''
+            end
+          )`,
+        )
+        .orderBy(sql`count(*) desc`)
+        .limit(15);
+
+      const totalFiles = langRows.reduce((sum, r) => sum + r.count, 0);
+      languages = langRows
+        .filter((r) => r.ext && r.ext !== "")
+        .map((r) => ({
+          language: r.ext,
+          count: r.count,
+          percentage: totalFiles > 0 ? Math.round((r.count / totalFiles) * 1000) / 10 : 0,
+        }));
+    }
+  }
+
+  const timelineRows = await db
+    .select({
+      email: gitCommits.authorEmail,
+      name: gitCommits.authorName,
+      week: sql<number>`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
+      count: sql<number>`cast(count(*) as integer)`,
+    })
+    .from(gitCommits)
+    .where(and(...conds))
+    .groupBy(
+      gitCommits.authorEmail,
+      sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
+    );
+
+  const authorMap = new Map<string, { name: string; weeks: Map<number, number>; total: number }>();
+  for (const r of timelineRows) {
+    let entry = authorMap.get(r.email);
+    if (!entry) {
+      entry = { name: r.name, weeks: new Map(), total: 0 };
+      authorMap.set(r.email, entry);
+    }
+    entry.weeks.set(r.week, (entry.weeks.get(r.week) || 0) + r.count);
+    entry.total += r.count;
+  }
+  const contributorTimeline = Array.from(authorMap.entries())
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 10)
+    .map(([email, data]) => ({
+      email,
+      name: data.name,
+      weeks: Array.from(data.weeks.entries())
+        .map(([week, count]) => ({ week, count }))
+        .sort((a, b) => a.week - b.week),
+    }));
+
+  // Merge all daily activity
+  const activityMap = new Map<number, { commits: number; prs: number; issues: number }>();
+  for (const r of dailyRows) {
+    const entry = activityMap.get(r.day) || { commits: 0, prs: 0, issues: 0 };
+    entry.commits += r.count;
+    activityMap.set(r.day, entry);
+  }
+  for (const r of dailyPRRows) {
+    const entry = activityMap.get(r.day) || { commits: 0, prs: 0, issues: 0 };
+    entry.prs += r.count;
+    activityMap.set(r.day, entry);
+  }
+  for (const r of dailyIssueRows) {
+    const entry = activityMap.get(r.day) || { commits: 0, prs: 0, issues: 0 };
+    entry.issues += r.count;
+    activityMap.set(r.day, entry);
+  }
+
+  const daily = Array.from(activityMap.entries())
+    .map(([day, counts]) => ({ day, ...counts }))
+    .sort((a, b) => a.day - b.day);
+
   return c.json({
-    daily: dailyRows,
+    daily,
     weekly: weeklyRows,
     contributors,
     totalCommits: totalRow?.count || 0,
+    punchcard: punchcardRows,
+    fileFrequency,
+    languages,
+    contributorTimeline,
+    defaultBranch: repo.defaultBranch,
   });
 });
 
@@ -905,24 +1112,30 @@ repoRoutes.get("/:owner/:name/activity/commits", optionalAuth, async (c) => {
   const repo = await findRepo(c.req.param("owner"), c.req.param("name"), currentUser?.id);
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
-  const day = c.req.query("day"); // unix timestamp of day start
+  const day = c.req.query("day"); // unix timestamp of UTC day start
   const authorEmail = c.req.query("author");
   const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 100);
 
-  const conditions = [eq(gitCommits.repoId, repo.id)];
+  const commitConditions = [eq(gitCommits.repoId, repo.id)];
+  const prConditions = [eq(pullRequests.repoId, repo.id)];
+  const issueConditions = [eq(issues.repoId, repo.id)];
 
   if (day) {
     const dayStart = parseInt(day, 10);
     const dayEnd = dayStart + 86400;
-    conditions.push(sql`${gitCommits.authorTimestamp} >= ${dayStart}`);
-    conditions.push(sql`${gitCommits.authorTimestamp} < ${dayEnd}`);
+    commitConditions.push(sql`${gitCommits.authorTimestamp} >= ${dayStart}`);
+    commitConditions.push(sql`${gitCommits.authorTimestamp} < ${dayEnd}`);
+    prConditions.push(sql`cast(${pullRequests.createdAt} as integer) >= ${dayStart}`);
+    prConditions.push(sql`cast(${pullRequests.createdAt} as integer) < ${dayEnd}`);
+    issueConditions.push(sql`cast(${issues.createdAt} as integer) >= ${dayStart}`);
+    issueConditions.push(sql`cast(${issues.createdAt} as integer) < ${dayEnd}`);
   }
 
   if (authorEmail) {
-    conditions.push(eq(gitCommits.authorEmail, authorEmail));
+    commitConditions.push(eq(gitCommits.authorEmail, authorEmail));
   }
 
-  const rows = await db
+  const commitRows = await db
     .select({
       oid: gitCommits.oid,
       message: gitCommits.message,
@@ -931,15 +1144,57 @@ repoRoutes.get("/:owner/:name/activity/commits", optionalAuth, async (c) => {
       authorTimestamp: gitCommits.authorTimestamp,
     })
     .from(gitCommits)
-    .where(and(...conditions))
+    .where(and(...commitConditions))
     .orderBy(sql`${gitCommits.authorTimestamp} desc`)
     .limit(limit);
 
+  // Only fetch PRs/issues for day drill-down (not author drill-down)
+  let prRows: { number: number; title: string; status: string; createdAt: Date }[] = [];
+  let issueRows: { number: number; title: string; status: string; createdAt: Date }[] = [];
+
+  if (day) {
+    prRows = await db
+      .select({
+        number: pullRequests.number,
+        title: pullRequests.title,
+        status: pullRequests.status,
+        createdAt: pullRequests.createdAt,
+      })
+      .from(pullRequests)
+      .where(and(...prConditions))
+      .orderBy(sql`${pullRequests.createdAt} desc`)
+      .limit(limit);
+
+    issueRows = await db
+      .select({
+        number: issues.number,
+        title: issues.title,
+        status: issues.status,
+        createdAt: issues.createdAt,
+      })
+      .from(issues)
+      .where(and(...issueConditions))
+      .orderBy(sql`${issues.createdAt} desc`)
+      .limit(limit);
+  }
+
   return c.json({
-    commits: rows.map((r) => ({
+    commits: commitRows.map((r) => ({
       oid: r.oid,
       message: r.message,
       author: { name: r.authorName, email: r.authorEmail, timestamp: r.authorTimestamp },
+    })),
+    pullRequests: prRows.map((r) => ({
+      number: r.number,
+      title: r.title,
+      status: r.status,
+      createdAt: Math.floor(new Date(r.createdAt).getTime() / 1000),
+    })),
+    issues: issueRows.map((r) => ({
+      number: r.number,
+      title: r.title,
+      status: r.status,
+      createdAt: Math.floor(new Date(r.createdAt).getTime() / 1000),
     })),
   });
 });

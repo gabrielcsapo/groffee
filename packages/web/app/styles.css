@@ -112,6 +112,17 @@
   font-weight: var(--shiki-dark-font-weight) !important;
 }
 
+/* Search result <mark> highlight within syntax-colored code */
+.shiki-line mark {
+  background-color: rgba(255, 196, 0, 0.3);
+  color: inherit;
+  border-radius: 2px;
+  padding: 1px 0;
+}
+.dark .shiki-line mark {
+  background-color: rgba(255, 196, 0, 0.25);
+}
+
 @utility vt-name {
   view-transition-name: var(--vt-name);
 }
@@ -150,6 +161,11 @@
   select:focus-visible,
   textarea:focus-visible {
     @apply outline-none ring-2 ring-primary/40 border-primary;
+  }
+
+  /* Strip focus ring from inputs inside modals */
+  .modal-input:focus-visible {
+    @apply ring-0 border-transparent outline-none;
   }
 }
 

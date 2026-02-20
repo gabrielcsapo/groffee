@@ -3,16 +3,15 @@
 import { useState, useCallback, useEffect } from "react";
 import { Link, useSearchParams } from "react-router";
 import {
-  searchIssues,
-  searchPullRequests,
-  searchCode,
-  searchCodeLanguages,
-  searchRepos,
+  searchRepoCode,
+  searchRepoCodeLanguages,
+  searchRepoIssues,
+  searchRepoPullRequests,
 } from "../lib/server/search";
 import { extToLang } from "../lib/highlight";
 import { timeAgo } from "../lib/time";
 
-type SearchType = "code" | "repositories" | "issues" | "pulls";
+type SearchType = "code" | "issues" | "pulls";
 type SortOption = "relevance" | "newest" | "oldest";
 
 const PAGE_SIZE = 20;
@@ -28,19 +27,7 @@ interface CodeResult {
   blob_oid: string;
   snippet: string;
   highlightedSnippet?: string | null;
-  repo_id?: string;
-  repo_name?: string;
-  repo_owner?: string;
   lastModified?: number | null;
-}
-
-interface RepoResult {
-  id: string;
-  name: string;
-  description: string | null;
-  isPublic: boolean;
-  owner: string;
-  updatedAt: string;
 }
 
 interface IssueResult {
@@ -50,8 +37,6 @@ interface IssueResult {
   status: string;
   titleSnippet: string;
   bodySnippet: string;
-  repoName: string;
-  repoOwner: string;
   createdAt: string | null;
 }
 
@@ -64,21 +49,17 @@ interface PRResult {
   bodySnippet: string;
   sourceBranch: string;
   targetBranch: string;
-  repoName: string;
-  repoOwner: string;
   createdAt: string | null;
 }
 
 interface AllResults {
   code: CodeResult[];
-  repositories: RepoResult[];
   issues: IssueResult[];
   pulls: PRResult[];
 }
 
 interface AllCounts {
   code: number | null;
-  repositories: number | null;
   issues: number | null;
   pulls: number | null;
 }
@@ -110,20 +91,6 @@ const TABS: { key: SearchType; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
-    key: "repositories",
-    label: "Repositories",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-        />
-      </svg>
-    ),
-  },
-  {
     key: "issues",
     label: "Issues",
     icon: (
@@ -149,7 +116,7 @@ const TABS: { key: SearchType; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-export function SearchView() {
+export function RepoSearchView({ owner, repo }: { owner: string; repo: string }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
   const initialType = (searchParams.get("type") as SearchType) || "code";
@@ -164,29 +131,24 @@ export function SearchView() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<AllResults>({
     code: [],
-    repositories: [],
     issues: [],
     pulls: [],
   });
   const [counts, setCounts] = useState<AllCounts>({
     code: null,
-    repositories: null,
     issues: null,
     pulls: null,
   });
   const [searched, setSearched] = useState(false);
   const [langCounts, setLangCounts] = useState<LangCount[]>([]);
   const [selectedLang, setSelectedLang] = useState<string | null>(initialExt);
-  const [helpOpen, setHelpOpen] = useState(false);
 
-  // Fetch language facets (non-blocking, fire-and-forget)
   function fetchLanguages(q: string) {
-    searchCodeLanguages(q)
+    searchRepoCodeLanguages(owner, repo, q)
       .then((data) => setLangCounts(data.languages || []))
       .catch(() => setLangCounts([]));
   }
 
-  // Search all types in parallel
   const performSearchAll = useCallback(
     async (q: string, activeType: SearchType, p: number, ext: string | null, s: SortOption = "relevance") => {
       if (!q.trim()) return;
@@ -195,46 +157,40 @@ export function SearchView() {
 
       const offset = (p - 1) * PAGE_SIZE;
 
-      // Fetch language facets alongside
       fetchLanguages(q);
 
       try {
-        const [codeRes, repoRes, issueRes, prRes] = await Promise.allSettled([
-          searchCode(q, PAGE_SIZE, activeType === "code" ? offset : 0, ext, s),
-          searchRepos(q, PAGE_SIZE, activeType === "repositories" ? offset : 0, s),
-          searchIssues(q, PAGE_SIZE, activeType === "issues" ? offset : 0, s),
-          searchPullRequests(q, PAGE_SIZE, activeType === "pulls" ? offset : 0, s),
+        const [codeRes, issueRes, prRes] = await Promise.allSettled([
+          searchRepoCode(owner, repo, q, PAGE_SIZE, activeType === "code" ? offset : 0, ext, s),
+          searchRepoIssues(owner, repo, q, PAGE_SIZE, activeType === "issues" ? offset : 0, s),
+          searchRepoPullRequests(owner, repo, q, PAGE_SIZE, activeType === "pulls" ? offset : 0, s),
         ]);
 
         const codeVal = codeRes.status === "fulfilled" ? codeRes.value : null;
-        const repoVal = repoRes.status === "fulfilled" ? repoRes.value : null;
         const issueVal = issueRes.status === "fulfilled" ? issueRes.value : null;
         const prVal = prRes.status === "fulfilled" ? prRes.value : null;
 
         setResults({
           code: (codeVal?.results as CodeResult[]) || [],
-          repositories: (repoVal?.repositories as RepoResult[]) || [],
           issues: (issueVal?.results as IssueResult[]) || [],
           pulls: (prVal?.results as PRResult[]) || [],
         });
 
         setCounts({
           code: codeVal?.total ?? 0,
-          repositories: repoVal?.total ?? 0,
           issues: issueVal?.total ?? 0,
           pulls: prVal?.total ?? 0,
         });
       } catch {
-        setResults({ code: [], repositories: [], issues: [], pulls: [] });
-        setCounts({ code: 0, repositories: 0, issues: 0, pulls: 0 });
+        setResults({ code: [], issues: [], pulls: [] });
+        setCounts({ code: 0, issues: 0, pulls: 0 });
       } finally {
         setLoading(false);
       }
     },
-    [],
+    [owner, repo],
   );
 
-  // Load a single tab's page
   const performSearchTab = useCallback(
     async (q: string, type: SearchType, p: number, ext: string | null, s: SortOption = "relevance") => {
       if (!q.trim()) return;
@@ -245,31 +201,19 @@ export function SearchView() {
       try {
         switch (type) {
           case "code": {
-            const data = await searchCode(q, PAGE_SIZE, offset, ext, s);
+            const data = await searchRepoCode(owner, repo, q, PAGE_SIZE, offset, ext, s);
             setResults((prev) => ({ ...prev, code: (data.results as CodeResult[]) || [] }));
             setCounts((prev) => ({ ...prev, code: data.total ?? prev.code }));
             break;
           }
-          case "repositories": {
-            const data = await searchRepos(q, PAGE_SIZE, offset, s);
-            setResults((prev) => ({
-              ...prev,
-              repositories: (data.repositories as RepoResult[]) || [],
-            }));
-            setCounts((prev) => ({ ...prev, repositories: data.total ?? prev.repositories }));
-            break;
-          }
           case "issues": {
-            const data = await searchIssues(q, PAGE_SIZE, offset, s);
-            setResults((prev) => ({
-              ...prev,
-              issues: (data.results as IssueResult[]) || [],
-            }));
+            const data = await searchRepoIssues(owner, repo, q, PAGE_SIZE, offset, s);
+            setResults((prev) => ({ ...prev, issues: (data.results as IssueResult[]) || [] }));
             setCounts((prev) => ({ ...prev, issues: data.total ?? prev.issues }));
             break;
           }
           case "pulls": {
-            const data = await searchPullRequests(q, PAGE_SIZE, offset, s);
+            const data = await searchRepoPullRequests(owner, repo, q, PAGE_SIZE, offset, s);
             setResults((prev) => ({ ...prev, pulls: (data.results as PRResult[]) || [] }));
             setCounts((prev) => ({ ...prev, pulls: data.total ?? prev.pulls }));
             break;
@@ -281,7 +225,7 @@ export function SearchView() {
         setLoading(false);
       }
     },
-    [],
+    [owner, repo],
   );
 
   useEffect(() => {
@@ -350,7 +294,7 @@ export function SearchView() {
     if (trimmed && searched) {
       updateParams(trimmed, "code", 1, ext, sort);
       setLoading(true);
-      searchCode(trimmed, PAGE_SIZE, 0, ext, sort)
+      searchRepoCode(owner, repo, trimmed, PAGE_SIZE, 0, ext, sort)
         .then((data) => {
           setResults((prev) => ({ ...prev, code: (data.results as CodeResult[]) || [] }));
           setCounts((prev) => ({ ...prev, code: data.total ?? prev.code }));
@@ -368,12 +312,11 @@ export function SearchView() {
   const rangeEnd = Math.min(page * PAGE_SIZE, activeTotal);
 
   return (
-    <div className="max-w-5xl mx-auto mt-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-text-primary mb-2">Search</h1>
-        <p className="text-sm text-text-secondary">
-          Search code, repositories, issues, and pull requests across Groffee.
-        </p>
+    <div className="mt-4">
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold text-text-primary">
+          Search in {owner}/{repo}
+        </h2>
       </div>
 
       <form onSubmit={handleSubmit} className="mb-6">
@@ -396,37 +339,43 @@ export function SearchView() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search..."
+              placeholder={`Search code, issues, PRs in ${repo}...`}
               className="w-full pl-10 pr-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              autoFocus
             />
           </div>
           <button type="submit" className="btn-secondary">
             Search
           </button>
-          <button
-            type="button"
-            onClick={() => setHelpOpen(true)}
-            className="px-2.5 py-2 border border-border rounded-md bg-surface text-text-secondary hover:text-text-primary hover:bg-surface-secondary transition-colors"
-            title="Search syntax help"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </button>
         </div>
       </form>
 
       {!searched ? (
-        <EmptyPrompt />
+        <div className="border border-border rounded-lg p-12 text-center bg-surface">
+          <svg
+            className="w-12 h-12 mx-auto text-text-secondary mb-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <h3 className="text-sm font-medium text-text-primary mb-1">
+            Search in {owner}/{repo}
+          </h3>
+          <p className="text-xs text-text-secondary">
+            Search code, issues, and pull requests in this repository.
+          </p>
+        </div>
       ) : (
         <div className="flex gap-6">
-          {/* Sidebar with type counts */}
-          <nav className="w-56 shrink-0">
+          {/* Sidebar */}
+          <nav className="w-52 shrink-0">
             <div className="border border-border rounded-lg overflow-hidden bg-surface">
               {TABS.map((tab, i) => {
                 const count = counts[tab.key];
@@ -466,7 +415,7 @@ export function SearchView() {
               })}
             </div>
 
-            {/* Language filter (Code tab only) */}
+            {/* Language filter */}
             {activeTab === "code" && langCounts.length > 0 && (
               <div className="mt-4 border border-border rounded-lg overflow-hidden bg-surface">
                 <div className="px-3 py-2 bg-surface-secondary border-b border-border">
@@ -478,12 +427,7 @@ export function SearchView() {
                     onClick={() => handleLangFilter(null)}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-link hover:bg-surface-secondary border-b border-border"
                   >
-                    <svg
-                      className="w-3 h-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -524,7 +468,7 @@ export function SearchView() {
             )}
           </nav>
 
-          {/* Main results area */}
+          {/* Results */}
           <div className="flex-1 min-w-0">
             {/* Sort bar */}
             <div className="flex items-center justify-between mb-3">
@@ -555,13 +499,11 @@ export function SearchView() {
             {loading ? (
               <LoadingSkeleton />
             ) : activeTab === "code" ? (
-              <CodeResults results={results.code} />
-            ) : activeTab === "repositories" ? (
-              <RepoResults results={results.repositories} />
+              <CodeResults results={results.code} owner={owner} repo={repo} />
             ) : activeTab === "issues" ? (
-              <IssueResults results={results.issues} />
+              <IssueResults results={results.issues} owner={owner} repo={repo} />
             ) : (
-              <PRResults results={results.pulls} />
+              <PRResults results={results.pulls} owner={owner} repo={repo} />
             )}
 
             {/* Pagination */}
@@ -599,138 +541,11 @@ export function SearchView() {
           </div>
         </div>
       )}
-
-      {helpOpen && <SearchHelpModal onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }
 
-/* ─── Helper components ─── */
-
-function SearchHelpModal({ onClose }: { onClose: () => void }) {
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
-
-  return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          className="bg-surface border border-border rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto animate-fade-in"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <h2 className="text-lg font-semibold text-text-primary">Search Syntax</h2>
-            <button
-              onClick={onClose}
-              className="text-text-secondary hover:text-text-primary p-1"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          <div className="px-5 py-4 space-y-3 text-sm">
-            <p className="text-text-secondary text-xs">
-              Groffee uses SQLite FTS5 for full-text search. The following syntax is supported
-              across code, issues, and pull request searches.
-            </p>
-
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-text-secondary border-b border-border">
-                  <th className="pb-2 pr-4 font-medium">Syntax</th>
-                  <th className="pb-2 pr-4 font-medium">Description</th>
-                  <th className="pb-2 font-medium">Example</th>
-                </tr>
-              </thead>
-              <tbody className="text-text-primary">
-                <HelpRow
-                  syntax={'"exact phrase"'}
-                  description="Match an exact sequence of words"
-                  example={'"hello world"'}
-                />
-                <HelpRow
-                  syntax="word1 word2"
-                  description="Implicit AND &mdash; both must appear"
-                  example="react router"
-                />
-                <HelpRow
-                  syntax="word1 OR word2"
-                  description="Match either word"
-                  example="useState OR useReducer"
-                />
-                <HelpRow
-                  syntax="NOT word"
-                  description="Exclude documents containing word"
-                  example="router NOT express"
-                />
-                <HelpRow
-                  syntax="prefix*"
-                  description="Match words starting with a prefix"
-                  example="func*"
-                />
-                <HelpRow
-                  syntax="(a OR b) AND c"
-                  description="Group expressions with parentheses"
-                  example='(error OR warn) AND "log"'
-                />
-              </tbody>
-            </table>
-
-            <div className="border-t border-border pt-3">
-              <h3 className="text-xs font-semibold text-text-primary mb-1">Language Filtering</h3>
-              <p className="text-text-secondary text-xs">
-                When viewing code results, use the Languages sidebar to filter by programming
-                language. Click a language to narrow results to files with that extension.
-              </p>
-            </div>
-
-            <div className="border-t border-border pt-3">
-              <p className="text-xs text-text-secondary">
-                Search uses Porter stemming &mdash; words are stemmed automatically (e.g.,
-                &quot;running&quot; matches &quot;run&quot;). See the{" "}
-                <a href="/docs#search" className="text-text-link hover:underline">
-                  API documentation
-                </a>{" "}
-                for more details.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function HelpRow({
-  syntax,
-  description,
-  example,
-}: {
-  syntax: string;
-  description: string;
-  example: string;
-}) {
-  return (
-    <tr className="border-b border-border last:border-0">
-      <td className="py-2 pr-4 font-mono whitespace-nowrap">{syntax}</td>
-      <td className="py-2 pr-4 text-text-secondary" dangerouslySetInnerHTML={{ __html: description }} />
-      <td className="py-2 font-mono text-text-secondary">{example}</td>
-    </tr>
-  );
-}
+/* ─── Result components ─── */
 
 function LoadingSkeleton() {
   return (
@@ -749,53 +564,15 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyPrompt() {
-  return (
-    <div className="border border-border rounded-lg p-12 text-center bg-surface">
-      <svg
-        className="w-12 h-12 mx-auto text-text-secondary mb-3"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-        />
-      </svg>
-      <h3 className="text-sm font-medium text-text-primary mb-1">Search across Groffee</h3>
-      <p className="text-xs text-text-secondary">
-        Enter a search term to find code, repositories, issues, and pull requests.
-      </p>
-    </div>
-  );
-}
-
-function NoResults({ type }: { type: string }) {
-  return (
-    <div className="border border-border rounded-lg p-12 text-center bg-surface">
-      <svg
-        className="w-12 h-12 mx-auto text-text-secondary mb-3"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-        />
-      </svg>
-      <h3 className="text-sm font-medium text-text-primary mb-1">No {type} found</h3>
-      <p className="text-xs text-text-secondary">Try a different search term.</p>
-    </div>
-  );
-}
-
-function CodeResults({ results }: { results: CodeResult[] }) {
+function CodeResults({
+  results,
+  owner,
+  repo,
+}: {
+  results: CodeResult[];
+  owner: string;
+  repo: string;
+}) {
   if (results.length === 0) return <NoResults type="code results" />;
 
   return (
@@ -819,17 +596,12 @@ function CodeResults({ results }: { results: CodeResult[] }) {
                 d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
               />
             </svg>
-            {result.repo_owner && result.repo_name ? (
-              <Link
-                to={`/${result.repo_owner}/${result.repo_name}`}
-                className="text-xs text-text-secondary hover:text-text-link"
-              >
-                {result.repo_owner}/{result.repo_name}
-              </Link>
-            ) : null}
-            <span className="text-sm font-medium font-mono text-text-link">
+            <Link
+              to={`/${owner}/${repo}/blob/HEAD/${result.file_path}`}
+              className="text-sm font-medium font-mono text-text-link hover:underline"
+            >
               {result.file_path}
-            </span>
+            </Link>
           </div>
           <pre
             className={`text-xs bg-surface-secondary rounded p-2 overflow-x-auto font-mono ${result.highlightedSnippet ? "shiki-line" : "text-text-secondary"}`}
@@ -848,53 +620,15 @@ function CodeResults({ results }: { results: CodeResult[] }) {
   );
 }
 
-function RepoResults({ results }: { results: RepoResult[] }) {
-  if (results.length === 0) return <NoResults type="repositories" />;
-
-  return (
-    <div className="border border-border rounded-lg overflow-hidden bg-surface">
-      {results.map((repo, i) => (
-        <div
-          key={repo.id}
-          className={`px-4 py-4 ${i < results.length - 1 ? "border-b border-border" : ""} hover:bg-surface-secondary transition-colors`}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <svg
-              className="w-4 h-4 text-text-secondary shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-              />
-            </svg>
-            <Link
-              to={`/${repo.owner}/${repo.name}`}
-              className="text-base font-semibold text-text-link hover:underline"
-            >
-              {repo.owner}
-              <span className="text-text-secondary font-normal">/</span>
-              {repo.name}
-            </Link>
-            {repo.isPublic && <span className="badge badge-public">Public</span>}
-          </div>
-          {repo.description && (
-            <p className="text-sm text-text-secondary mb-2 ml-6">{repo.description}</p>
-          )}
-          <div className="flex items-center gap-4 text-xs text-text-secondary ml-6">
-            <span>Updated {timeAgo(repo.updatedAt)}</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function IssueResults({ results }: { results: IssueResult[] }) {
+function IssueResults({
+  results,
+  owner,
+  repo,
+}: {
+  results: IssueResult[];
+  owner: string;
+  repo: string;
+}) {
   if (results.length === 0) return <NoResults type="issues" />;
 
   return (
@@ -919,7 +653,7 @@ function IssueResults({ results }: { results: IssueResult[] }) {
               )}
             </svg>
             <Link
-              to={`/${issue.repoOwner}/${issue.repoName}/issue/${issue.number}`}
+              to={`/${owner}/${repo}/issue/${issue.number}`}
               className="text-sm font-semibold text-text-link hover:underline"
             >
               {issue.title}
@@ -927,13 +661,7 @@ function IssueResults({ results }: { results: IssueResult[] }) {
             <span className="text-xs text-text-secondary">#{issue.number}</span>
           </div>
           <div className="ml-6 text-xs text-text-secondary mb-1">
-            <Link
-              to={`/${issue.repoOwner}/${issue.repoName}`}
-              className="hover:text-text-link"
-            >
-              {issue.repoOwner}/{issue.repoName}
-            </Link>
-            {issue.createdAt && <span className="ml-2">opened {timeAgo(issue.createdAt)}</span>}
+            {issue.createdAt && <span>opened {timeAgo(issue.createdAt)}</span>}
           </div>
           {issue.bodySnippet && (
             <p
@@ -947,7 +675,15 @@ function IssueResults({ results }: { results: IssueResult[] }) {
   );
 }
 
-function PRResults({ results }: { results: PRResult[] }) {
+function PRResults({
+  results,
+  owner,
+  repo,
+}: {
+  results: PRResult[];
+  owner: string;
+  repo: string;
+}) {
   if (results.length === 0) return <NoResults type="pull requests" />;
 
   return (
@@ -972,7 +708,7 @@ function PRResults({ results }: { results: PRResult[] }) {
               />
             </svg>
             <Link
-              to={`/${pr.repoOwner}/${pr.repoName}/pull/${pr.number}`}
+              to={`/${owner}/${repo}/pull/${pr.number}`}
               className="text-sm font-semibold text-text-link hover:underline"
             >
               {pr.title}
@@ -980,13 +716,7 @@ function PRResults({ results }: { results: PRResult[] }) {
             <span className="text-xs text-text-secondary">#{pr.number}</span>
           </div>
           <div className="ml-6 text-xs text-text-secondary mb-1">
-            <Link
-              to={`/${pr.repoOwner}/${pr.repoName}`}
-              className="hover:text-text-link"
-            >
-              {pr.repoOwner}/{pr.repoName}
-            </Link>
-            <span className="ml-2">
+            <span>
               {pr.sourceBranch} &rarr; {pr.targetBranch}
             </span>
             {pr.createdAt && <span className="ml-2">opened {timeAgo(pr.createdAt)}</span>}
@@ -999,6 +729,28 @@ function PRResults({ results }: { results: PRResult[] }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function NoResults({ type }: { type: string }) {
+  return (
+    <div className="border border-border rounded-lg p-12 text-center bg-surface">
+      <svg
+        className="w-12 h-12 mx-auto text-text-secondary mb-3"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        />
+      </svg>
+      <h3 className="text-sm font-medium text-text-primary mb-1">No {type} found</h3>
+      <p className="text-xs text-text-secondary">Try a different search term.</p>
     </div>
   );
 }

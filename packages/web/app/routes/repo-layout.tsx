@@ -19,7 +19,7 @@ export default async function RepoLayout({ params }: { params: { owner: string; 
 
   return (
     <>
-      <div className="max-w-5xl mx-auto mt-8 mb-0">
+      <div className="max-w-6xl mx-auto mt-8 mb-0">
         {/* Repo header */}
         {repository && (
           <div className="mb-4">
@@ -61,6 +61,7 @@ export default async function RepoLayout({ params }: { params: { owner: string; 
           repo={repo}
           openIssueCount={openIssueCount}
           openPrCount={openPrCount}
+          isOwner={repository?.isOwner ?? false}
         />
       </div>
       <Outlet />

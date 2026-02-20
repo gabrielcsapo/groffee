@@ -3,6 +3,7 @@ import { Link, Outlet } from "react-router";
 import {
   DumpError,
   GlobalNavigationLoadingBar,
+  HeaderSearch,
   UserNav,
 } from "./routes/root.client";
 import { GroffeeLogo } from "./components/groffee-logo";
@@ -35,34 +36,29 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <title>Groffee</title>
       </head>
       <body className="flex flex-col min-h-screen">
-        <header className="bg-header-bg shadow-md sticky top-0 z-30">
-          <nav className="max-w-[1280px] mx-auto px-6 h-16 flex items-center gap-6">
+        <header className="bg-header-bg sticky top-0 z-30 pb-px shadow-sm">
+          <nav className="max-w-[1280px] mx-auto px-4 h-16 flex items-center gap-4">
             <Link
               to="/"
-              className="text-white font-semibold text-lg hover:no-underline flex items-center gap-2 shrink-0"
+              className="text-white hover:no-underline flex items-center shrink-0 hover:opacity-80 transition-opacity"
             >
               <GroffeeLogo size={32} className="text-white" />
-              Groffee
             </Link>
-            <Link
-              to="/explore"
-              className="text-white/70 text-sm hover:text-white hover:no-underline"
-            >
-              Explore
-            </Link>
-            <Link
-              to="/search"
-              className="text-white/70 text-sm hover:text-white hover:no-underline"
-            >
-              Search
-            </Link>
-            <Link
-              to="/docs"
-              className="text-white/70 text-sm hover:text-white hover:no-underline"
-            >
-              API Docs
-            </Link>
-            <div className="flex-1" />
+            <HeaderSearch />
+            <div className="flex items-center gap-1">
+              <Link
+                to="/explore"
+                className="text-white/70 text-xs font-medium hover:text-white hover:no-underline px-2 py-1.5 rounded-md hover:bg-white/10 transition-colors"
+              >
+                Explore
+              </Link>
+              <Link
+                to="/docs"
+                className="text-white/70 text-xs font-medium hover:text-white hover:no-underline px-2 py-1.5 rounded-md hover:bg-white/10 transition-colors"
+              >
+                API
+              </Link>
+            </div>
             <UserNav />
           </nav>
         </header>

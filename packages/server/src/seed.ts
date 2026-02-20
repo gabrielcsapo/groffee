@@ -42,16 +42,31 @@ function pick<T>(arr: T[]): T {
 }
 
 /** git helper — runs git in a bare repo */
-function git(repoPath: string, args: string[], input?: string): string {
+function git(
+  repoPath: string,
+  args: string[],
+  input?: string,
+  author?: { name: string; email: string },
+): string {
+  const a = author || { name: "Seed", email: "seed@groffee.local" };
   const env = {
     ...process.env,
-    GIT_AUTHOR_NAME: "Seed",
-    GIT_AUTHOR_EMAIL: "seed@groffee.local",
-    GIT_COMMITTER_NAME: "Seed",
-    GIT_COMMITTER_EMAIL: "seed@groffee.local",
+    GIT_AUTHOR_NAME: a.name,
+    GIT_AUTHOR_EMAIL: a.email,
+    GIT_COMMITTER_NAME: a.name,
+    GIT_COMMITTER_EMAIL: a.email,
   };
   return execFileSync("git", args, { cwd: repoPath, env, input }).toString().trim();
 }
+
+/** Authors to rotate through for realistic commit history */
+const GIT_AUTHORS = [
+  { name: "Alice Anderson", email: "alice@example.com" },
+  { name: "Bob Baker", email: "bob@example.com" },
+  { name: "Charlie Chen", email: "charlie@example.com" },
+  { name: "Diana Davis", email: "diana@example.com" },
+  { name: "Eve Evans", email: "eve@example.com" },
+];
 
 /** Create a blob from content */
 function makeBlob(repoPath: string, content: string): string {
@@ -71,12 +86,13 @@ function makeCommit(
   treeHash: string,
   message: string,
   parents: string[] = [],
+  author?: { name: string; email: string },
 ): string {
   const args = ["commit-tree", treeHash, "-m", message];
   for (const p of parents) {
     args.push("-p", p);
   }
-  return git(repoPath, args);
+  return git(repoPath, args, undefined, author);
 }
 
 /** Update a ref */
@@ -664,11 +680,13 @@ async function main() {
           treeHash = makeTree(diskPath, existingEntries);
         }
 
+        const author = GIT_AUTHORS[i % GIT_AUTHORS.length];
         const commit = makeCommit(
           diskPath,
           treeHash,
           commitMessages[i],
           parentHash ? [parentHash] : [],
+          author,
         );
         parentHash = commit;
       }
@@ -744,7 +762,8 @@ async function main() {
           commitMsg = `feat: ${branch} changes`;
         }
 
-        const branchCommit = makeCommit(diskPath, branchTree, commitMsg, [parentHash!]);
+        const branchAuthor = GIT_AUTHORS[r.branches.indexOf(branch) % GIT_AUTHORS.length];
+        const branchCommit = makeCommit(diskPath, branchTree, commitMsg, [parentHash!], branchAuthor);
         updateRef(diskPath, `refs/heads/${branch}`, branchCommit);
       }
     }

@@ -41,7 +41,7 @@ export function IssuesList({
   }, [owner, repo, status, initialIssues]);
 
   return (
-    <div className="max-w-4xl mx-auto mt-4">
+    <div className="max-w-6xl mx-auto mt-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-1 bg-surface border border-border rounded-md overflow-hidden">
           <button
@@ -103,7 +103,7 @@ export function IssuesList({
                     {issue.title}
                   </Link>
                   <p className="text-xs text-text-secondary mt-0.5">
-                    #{issue.number} opened {timeAgo(issue.createdAt)} by {issue.author}
+                    #{issue.number} opened {timeAgo(issue.createdAt)} by <Link to={`/${issue.author}`} className="hover:underline hover:text-text-primary">{issue.author}</Link>
                   </p>
                 </div>
               </div>

@@ -173,6 +173,123 @@ interface DiffHunk {
 }
 
 /**
+ * Highlights an FTS5 search snippet while preserving <mark> tags.
+ * Returns highlighted HTML string or null if language isn't supported.
+ */
+export async function highlightSearchSnippet(
+  snippet: string,
+  filePath: string,
+): Promise<string | null> {
+  const filename = filePath.split("/").pop() || filePath;
+  const lang = getLangFromFilename(filename);
+  if (!lang) return null;
+
+  // Strip <mark>/<\/mark> tags, recording their text positions
+  const marks: { start: number; end: number }[] = [];
+  let cleanText = "";
+  let remaining = snippet;
+
+  while (remaining.length > 0) {
+    const markStart = remaining.indexOf("<mark>");
+    if (markStart === -1) {
+      cleanText += remaining;
+      break;
+    }
+    cleanText += remaining.slice(0, markStart);
+    remaining = remaining.slice(markStart + 6);
+
+    const markEnd = remaining.indexOf("</mark>");
+    if (markEnd === -1) {
+      cleanText += remaining;
+      break;
+    }
+    const textStart = cleanText.length;
+    cleanText += remaining.slice(0, markEnd);
+    marks.push({ start: textStart, end: cleanText.length });
+    remaining = remaining.slice(markEnd + 7);
+  }
+
+  if (cleanText.trim().length === 0) return null;
+
+  const lines = await doHighlight(cleanText, lang);
+  if (!lines) return null;
+
+  const highlightedHtml = lines.join("\n");
+  return insertMarksIntoHtml(highlightedHtml, marks);
+}
+
+/**
+ * Inserts <mark> tags at correct text positions within Shiki-highlighted HTML.
+ * Skips over HTML tags and handles entities as single characters.
+ */
+function insertMarksIntoHtml(
+  html: string,
+  marks: { start: number; end: number }[],
+): string {
+  if (marks.length === 0) return html;
+
+  const sorted = [...marks].sort((a, b) => a.start - b.start);
+  let result = "";
+  let textPos = 0;
+  let markIdx = 0;
+  let inMark = false;
+  let i = 0;
+
+  while (i < html.length) {
+    // Open mark at current text position
+    if (!inMark && markIdx < sorted.length && textPos === sorted[markIdx].start) {
+      result += "<mark>";
+      inMark = true;
+    }
+    // Close mark at current text position
+    if (inMark && markIdx < sorted.length && textPos === sorted[markIdx].end) {
+      result += "</mark>";
+      inMark = false;
+      markIdx++;
+      if (markIdx < sorted.length && textPos === sorted[markIdx].start) {
+        result += "<mark>";
+        inMark = true;
+      }
+    }
+
+    if (html[i] === "<") {
+      // HTML tag — copy verbatim, no text position advance
+      const tagEnd = html.indexOf(">", i);
+      if (tagEnd === -1) {
+        result += html.slice(i);
+        break;
+      }
+      result += html.slice(i, tagEnd + 1);
+      i = tagEnd + 1;
+    } else if (html[i] === "&") {
+      // HTML entity — counts as 1 text character
+      const semi = html.indexOf(";", i);
+      if (semi !== -1 && semi - i < 10) {
+        result += html.slice(i, semi + 1);
+        i = semi + 1;
+      } else {
+        result += html[i];
+        i++;
+      }
+      textPos++;
+    } else {
+      result += html[i];
+      i++;
+      textPos++;
+    }
+  }
+
+  // Close any trailing marks
+  if (!inMark && markIdx < sorted.length && textPos === sorted[markIdx].start) {
+    result += "<mark>";
+    inMark = true;
+  }
+  if (inMark) result += "</mark>";
+
+  return result;
+}
+
+/**
  * Highlights diff hunks and returns a Map of "hunkIdx-lineIdx" → highlighted HTML.
  * Reconstructs new-side and old-side code for accurate cross-line tokenization.
  */

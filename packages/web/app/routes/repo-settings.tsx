@@ -4,9 +4,12 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router";
 import { getRepo, updateRepo, deleteRepo, getRepoAuditLogs } from "../lib/server/repos";
 import { getCollaborators, addCollaborator, removeCollaborator } from "../lib/server/collaborators";
+import { getSessionUser } from "../lib/server/auth";
 
 export default function RepoSettings() {
   const { owner, repo: repoName } = useParams();
+  const [user, setUser] = useState<{ username: string } | null>(null);
+  const [loading, setLoading] = useState(true);
   const [repo, setRepo] = useState<{
     description: string | null;
     isPublic: boolean;
@@ -37,20 +40,25 @@ export default function RepoSettings() {
   >([]);
 
   useEffect(() => {
-    getRepo(owner!, repoName!).then((data) => {
-      if (data.repository) {
-        setRepo(data.repository);
-        setDescription(data.repository.description || "");
-        setIsPublic(data.repository.isPublic);
+    Promise.all([
+      getSessionUser(),
+      getRepo(owner!, repoName!),
+      getCollaborators(owner!, repoName!).catch(() => ({ collaborators: undefined })),
+      getRepoAuditLogs(owner!, repoName!, { limit: 20 }).catch(() => ({ logs: undefined })),
+    ]).then(([sessionUser, repoData, collabData, auditData]) => {
+      if (sessionUser) setUser({ username: sessionUser.username });
+      if (repoData.repository) {
+        setRepo(repoData.repository);
+        setDescription(repoData.repository.description || "");
+        setIsPublic(repoData.repository.isPublic);
       }
+      if (collabData.collaborators) setCollaborators(collabData.collaborators);
+      if (auditData.logs) setAuditLogs(auditData.logs);
+      setLoading(false);
     });
-    getCollaborators(owner!, repoName!).then((data) => {
-      if (data.collaborators) setCollaborators(data.collaborators);
-    }).catch(() => {});
-    getRepoAuditLogs(owner!, repoName!, { limit: 20 }).then((data) => {
-      if (data.logs) setAuditLogs(data.logs);
-    }).catch(() => {});
   }, [owner, repoName]);
+
+  const isOwner = user?.username === owner;
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -83,9 +91,9 @@ export default function RepoSettings() {
     }
   }
 
-  if (!repo) {
+  if (loading || !repo) {
     return (
-      <div className="max-w-2xl mx-auto mt-4">
+      <div className="max-w-6xl mx-auto mt-4">
         <div className="bg-surface border border-border rounded-lg p-6 mb-6">
           <div className="skeleton w-24 h-6 mb-4" />
           <div className="flex flex-col gap-4">
@@ -98,8 +106,19 @@ export default function RepoSettings() {
     );
   }
 
+  if (!isOwner) {
+    return (
+      <div className="max-w-6xl mx-auto mt-4">
+        <div className="bg-surface border border-border rounded-lg p-6">
+          <h1 className="text-xl font-semibold text-text-primary">Access denied</h1>
+          <p className="text-sm text-text-secondary mt-2">Only the repository owner can access settings.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto mt-4">
+    <div className="max-w-6xl mx-auto mt-4">
       {message && (
         <div className="mb-4 p-3 rounded-md bg-diff-add-bg border border-success/30 text-success text-sm">
           {message}

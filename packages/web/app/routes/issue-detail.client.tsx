@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Link } from "react-router";
 import { timeAgo } from "../lib/time";
 import { getEditHistory } from "../lib/server/search";
 import { getSessionUser } from "../lib/server/auth";
@@ -293,7 +294,7 @@ export function IssueDetailView({
             {issue.status === "open" ? "Open" : "Closed"}
           </span>
           <span className="text-sm text-text-secondary">
-            <strong>{issue.author}</strong> opened this issue {timeAgo(issue.createdAt)}
+            <Link to={`/${issue.author}`} className="font-semibold text-text-primary hover:underline">{issue.author}</Link> opened this issue {timeAgo(issue.createdAt)}
           </span>
         </div>
       </div>
@@ -302,7 +303,7 @@ export function IssueDetailView({
       <div className="border border-border rounded-lg mb-4">
         <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm font-medium text-text-primary flex items-center justify-between">
           <span className="flex items-center">
-            {issue.author}
+            <Link to={`/${issue.author}`} className="hover:underline">{issue.author}</Link>
             <EditedIndicator
               editCount={issue.editCount}
               lastEditedAt={issue.lastEditedAt}
@@ -367,7 +368,7 @@ export function IssueDetailView({
           <div className="border border-border rounded-lg mb-2">
             <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm flex items-center justify-between">
               <span className="flex items-center">
-                <strong className="text-text-primary">{comment.author}</strong>
+                <Link to={`/${comment.author}`} className="text-text-primary font-bold hover:underline">{comment.author}</Link>
                 <span className="text-text-secondary ml-1">
                   commented {timeAgo(comment.createdAt)}
                 </span>
@@ -440,17 +441,19 @@ export function IssueDetailView({
               className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
             />
             <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={toggleStatus}
-                className={`btn-sm rounded-md border font-medium ${
-                  issue.status === "open"
-                    ? "border-danger/30 text-danger hover:bg-danger/5"
-                    : "border-success/30 text-success hover:bg-success/5"
-                }`}
-              >
-                {issue.status === "open" ? "Close issue" : "Reopen issue"}
-              </button>
+              {(user.username === issue.author || user.username === owner) && (
+                <button
+                  type="button"
+                  onClick={toggleStatus}
+                  className={`btn-sm rounded-md border font-medium ${
+                    issue.status === "open"
+                      ? "border-danger/30 text-danger hover:bg-danger/5"
+                      : "border-success/30 text-success hover:bg-success/5"
+                  }`}
+                >
+                  {issue.status === "open" ? "Close issue" : "Reopen issue"}
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={submitting || !newComment.trim()}
