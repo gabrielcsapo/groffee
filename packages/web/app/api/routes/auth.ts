@@ -1,12 +1,20 @@
 import { Hono } from "hono";
 import { setCookie, getCookie } from "hono/cookie";
 import { db, users } from "@groffee/db";
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { createSession, validateSession, deleteSession } from "../lib/session.js";
 import { logAudit, getClientIp } from "../lib/audit.js";
 
 export const authRoutes = new Hono();
+
+function isSecureRequest(c: { req: { raw: Request } }): boolean {
+  const req = c.req.raw;
+  return (
+    req.headers.get("x-forwarded-proto") === "https" ||
+    new URL(req.url).protocol === "https:"
+  );
+}
 
 authRoutes.post("/register", async (c) => {
   const { username, email, password } = await c.req.json();
@@ -32,6 +40,10 @@ authRoutes.post("/register", async (c) => {
     return c.json({ error: "Email already registered" }, 409);
   }
 
+  // First registered user becomes admin automatically
+  const [{ userCount }] = await db.select({ userCount: count() }).from(users);
+  const isFirstUser = userCount === 0;
+
   const passwordHash = await hashPassword(password);
   const now = new Date();
 
@@ -41,6 +53,7 @@ authRoutes.post("/register", async (c) => {
     username,
     email,
     passwordHash,
+    isAdmin: isFirstUser,
     createdAt: now,
     updatedAt: now,
   });
@@ -52,7 +65,7 @@ authRoutes.post("/register", async (c) => {
     sameSite: "Lax",
     path: "/",
     expires: session.expiresAt,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureRequest(c),
   });
 
   logAudit({
@@ -94,7 +107,7 @@ authRoutes.post("/login", async (c) => {
     sameSite: "Lax",
     path: "/",
     expires: session.expiresAt,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureRequest(c),
   });
 
   logAudit({

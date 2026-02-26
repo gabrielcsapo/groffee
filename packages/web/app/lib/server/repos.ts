@@ -27,23 +27,12 @@ import {
   getDiff,
 } from "@groffee/git";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
 import { getRequest } from "./request-context";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "..",
-  "..",
-  "..",
-  "..",
-);
 const DATA_DIR =
-  process.env.DATA_DIR || path.resolve(PROJECT_ROOT, "data", "repositories");
+  process.env.DATA_DIR || path.resolve(process.cwd(), "data", "repositories");
 
 // --- Helpers ---
 

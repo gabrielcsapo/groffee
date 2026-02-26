@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link } from "react-flight-router/client";
 import { getRepoCommit } from "../lib/server/repos";
 import { highlightDiffLines, getLangFromFilename } from "../lib/highlight";
 

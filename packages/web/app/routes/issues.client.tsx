@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-flight-router/client";
 import { timeAgo } from "../lib/time";
 import { getIssues } from "../lib/server/issues";
 
@@ -45,13 +45,13 @@ export function IssuesList({
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-1 bg-surface border border-border rounded-md overflow-hidden">
           <button
-            onClick={() => setSearchParams({ status: "open" })}
+            onClick={() => setSearchParams(new URLSearchParams({ status: "open" }))}
             className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "open" ? "bg-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
           >
             Open
           </button>
           <button
-            onClick={() => setSearchParams({ status: "closed" })}
+            onClick={() => setSearchParams(new URLSearchParams({ status: "closed" }))}
             className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "closed" ? "bg-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
           >
             Closed

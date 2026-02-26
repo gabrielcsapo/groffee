@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link } from "react-flight-router/client";
 import { getRepoBlob } from "../lib/server/repos";
 import { highlightCode, getLangFromFilename } from "../lib/highlight";
 
@@ -28,10 +28,10 @@ function formatBytes(bytes: number): string {
 export default async function RepoBlob({
   params,
 }: {
-  params: { owner: string; repo: string; "*": string };
+  params: Record<string, string>;
 }) {
   const { owner, repo: repoName } = params;
-  const splat = params["*"] || "";
+  const splat = params.splat || "";
 
   const blobData = await getRepoBlob(owner, repoName, splat);
 

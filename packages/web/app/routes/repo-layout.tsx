@@ -1,4 +1,4 @@
-import { Link, Outlet } from "react-router";
+import { Link, Outlet } from "react-flight-router/client";
 import { getRepo } from "../lib/server/repos";
 import { getIssues } from "../lib/server/issues";
 import { getPullRequests } from "../lib/server/pulls";

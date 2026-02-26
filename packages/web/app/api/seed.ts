@@ -12,17 +12,14 @@
  */
 import { execFileSync } from "node:child_process";
 import { mkdir } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { hash } from "@node-rs/argon2";
 import { db, users, repositories, issues, pullRequests, comments } from "@groffee/db";
 import { eq } from "drizzle-orm";
 import { initBareRepo } from "@groffee/git";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = resolve(__dirname, "..", "..", "..");
-const DATA_DIR = resolve(PROJECT_ROOT, "data");
+const DATA_DIR = resolve(process.cwd(), "data");
 const REPOS_DIR = resolve(DATA_DIR, "repositories");
 
 // ---------------------------------------------------------------------------

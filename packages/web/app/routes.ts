@@ -1,161 +1,163 @@
-import type { unstable_RSCRouteConfigEntry } from "react-router";
+import type { RouteConfig } from "react-flight-router/router";
 
-export const routes: unstable_RSCRouteConfigEntry[] = [
+export const routes: RouteConfig[] = [
   {
     id: "root",
     path: "",
-    lazy: () => import("./root"),
+    component: () => import("./root"),
+    notFound: () => import("./routes/not-found"),
+    error: () => import("./routes/error"),
     children: [
       {
         id: "home",
         index: true,
-        lazy: () => import("./routes/home"),
+        component: () => import("./routes/home"),
       },
       {
         id: "login",
         path: "login",
-        lazy: () => import("./routes/login"),
+        component: () => import("./routes/login"),
       },
       {
         id: "register",
         path: "register",
-        lazy: () => import("./routes/register"),
+        component: () => import("./routes/register"),
       },
       {
         id: "explore",
         path: "explore",
-        lazy: () => import("./routes/explore"),
+        component: () => import("./routes/explore"),
       },
       {
         id: "new-repo",
         path: "new",
-        lazy: () => import("./routes/new-repo"),
+        component: () => import("./routes/new-repo"),
       },
       {
         id: "search",
         path: "search",
-        lazy: () => import("./routes/search"),
+        component: () => import("./routes/search"),
       },
       {
         id: "docs",
         path: "docs",
-        lazy: () => import("./routes/docs"),
+        component: () => import("./routes/docs"),
       },
       {
         id: "settings-keys",
         path: "settings/keys",
-        lazy: () => import("./routes/settings-keys"),
+        component: () => import("./routes/settings-keys"),
       },
       {
         id: "settings-tokens",
         path: "settings/tokens",
-        lazy: () => import("./routes/settings-tokens"),
+        component: () => import("./routes/settings-tokens"),
       },
       {
         id: "admin",
         path: "admin",
         index: true,
-        lazy: () => import("./routes/admin"),
+        component: () => import("./routes/admin"),
       },
       {
         id: "admin-logs",
         path: "admin/logs",
-        lazy: () => import("./routes/admin-logs"),
+        component: () => import("./routes/admin-logs"),
       },
       {
         id: "admin-users",
         path: "admin/users",
-        lazy: () => import("./routes/admin-users"),
+        component: () => import("./routes/admin-users"),
       },
       {
         id: "user-profile",
         path: ":owner",
-        lazy: () => import("./routes/user-profile"),
+        component: () => import("./routes/user-profile"),
       },
       {
         id: "repo-layout",
         path: ":owner/:repo",
-        lazy: () => import("./routes/repo-layout"),
+        component: () => import("./routes/repo-layout"),
         children: [
           {
             id: "repo",
             index: true,
-            lazy: () => import("./routes/repo"),
+            component: () => import("./routes/repo"),
           },
           {
             id: "repo-tree",
-            path: "tree/*",
-            lazy: () => import("./routes/repo-tree"),
+            path: "tree/:splat*",
+            component: () => import("./routes/repo-tree"),
           },
           {
             id: "repo-blob",
-            path: "blob/*",
-            lazy: () => import("./routes/repo-blob"),
+            path: "blob/:splat*",
+            component: () => import("./routes/repo-blob"),
           },
           {
             id: "repo-commits",
             path: "commits/:ref",
-            lazy: () => import("./routes/repo-commits"),
+            component: () => import("./routes/repo-commits"),
           },
           {
             id: "repo-commit",
             path: "commit/:sha",
-            lazy: () => import("./routes/repo-commit"),
+            component: () => import("./routes/repo-commit"),
           },
           {
             id: "repo-search",
             path: "search",
-            lazy: () => import("./routes/repo-search"),
+            component: () => import("./routes/repo-search"),
           },
           {
             id: "repo-activity",
             path: "activity",
-            lazy: () => import("./routes/repo-activity"),
+            component: () => import("./routes/repo-activity"),
           },
           {
             id: "repo-settings",
             path: "settings",
-            lazy: () => import("./routes/repo-settings"),
+            component: () => import("./routes/repo-settings"),
           },
           {
             id: "issues",
             path: "issues",
-            lazy: () => import("./routes/issues"),
+            component: () => import("./routes/issues"),
           },
           {
             id: "issue-new",
             path: "issues/new",
-            lazy: () => import("./routes/issue-new"),
+            component: () => import("./routes/issue-new"),
           },
           {
             id: "issue-detail",
             path: "issue/:number",
-            lazy: () => import("./routes/issue-detail"),
+            component: () => import("./routes/issue-detail"),
           },
           {
             id: "pulls",
             path: "pulls",
-            lazy: () => import("./routes/pulls"),
+            component: () => import("./routes/pulls"),
           },
           {
             id: "pull-new",
             path: "pulls/new",
-            lazy: () => import("./routes/pull-new"),
+            component: () => import("./routes/pull-new"),
           },
           {
             id: "pull-detail",
             path: "pull/:number",
-            lazy: () => import("./routes/pull-detail"),
+            component: () => import("./routes/pull-detail"),
             children: [
               {
                 id: "pull-conversation",
                 index: true,
-                lazy: () => import("./routes/pull-conversation"),
+                component: () => import("./routes/pull-conversation"),
               },
               {
                 id: "pull-files",
                 path: "files-changed",
-                lazy: () => import("./routes/pull-files"),
+                component: () => import("./routes/pull-files"),
               },
             ],
           },

@@ -32,5 +32,20 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Test
-        run: pnpm test
+      - name: Install Playwright
+        run: pnpm --filter @groffee/web exec playwright install --with-deps chromium
+
+      - name: Start production server
+        run: pnpm --filter @groffee/web start &
+        env:
+          PORT: "3000"
+
+      - name: Wait for server
+        run: npx wait-on http://localhost:3000 --timeout 30000
+
+      - name: Run e2e tests
+        run: pnpm --filter @groffee/web test:e2e:prod
+
+      - name: Stop server
+        if: always()
+        run: kill %1 || true

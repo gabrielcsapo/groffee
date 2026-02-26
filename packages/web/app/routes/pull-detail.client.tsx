@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, createContext, useContext, type ReactNode } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation } from "react-flight-router/client";
 import { timeAgo } from "../lib/time";
 import { getSessionUser } from "../lib/server/auth";
 import { updatePullRequest } from "../lib/server/pulls";

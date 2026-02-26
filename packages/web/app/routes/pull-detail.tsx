@@ -1,4 +1,4 @@
-import { Outlet } from "react-router";
+import { Outlet } from "react-flight-router/client";
 import { getPullRequest } from "../lib/server/pulls";
 import { PullDetailLayout } from "./pull-detail.client";
 

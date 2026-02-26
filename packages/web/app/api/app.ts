@@ -4,7 +4,6 @@ import { db } from "@groffee/db";
 import { sql } from "drizzle-orm";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { authRoutes } from "./routes/auth.js";
 import { repoRoutes } from "./routes/repos.js";
 import { issueRoutes } from "./routes/issues.js";
@@ -19,9 +18,7 @@ import { requestLogger } from "./middleware/request-logger.js";
 
 const startTime = Date.now();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
-const DATA_DIR = process.env.DATA_DIR || path.resolve(PROJECT_ROOT, "..", "..", "data", "repositories");
+const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data", "repositories");
 
 export const app = new Hono();
 

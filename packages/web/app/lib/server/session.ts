@@ -14,22 +14,34 @@ function hashToken(token: string): string {
 
 export async function getSessionUser() {
   const req = getRequest();
-  if (!req) return null;
+  if (!req) { console.log("[session] no request"); return null; }
 
   const cookieHeader = req.headers.get("Cookie") || "";
   const token = parseCookie(cookieHeader, "session");
-  if (!token) return null;
+  if (!token) { console.log("[session] no token in cookie"); return null; }
 
   const tokenHash = hashToken(token);
+  console.log("[session] looking up hash:", tokenHash.slice(0, 8) + "...");
+
   const [session] = await db
     .select()
     .from(sessions)
-    .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())))
+    .where(
+      and(
+        eq(sessions.tokenHash, tokenHash),
+        gt(sessions.expiresAt, new Date()),
+      ),
+    )
     .limit(1);
 
-  if (!session) return null;
+  if (!session) { console.log("[session] no session found for hash"); return null; }
 
-  const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, session.userId))
+    .limit(1);
 
+  console.log("[session] found user:", user?.username ?? "null");
   return user ?? null;
 }

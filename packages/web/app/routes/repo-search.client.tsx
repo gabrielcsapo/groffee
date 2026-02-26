@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-flight-router/client";
 import {
   searchRepoCode,
   searchRepoCodeLanguages,
@@ -239,7 +239,7 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
     if (p > 1) params.page = String(p);
     if (ext && type === "code") params.ext = ext;
     if (s !== "relevance") params.sort = s;
-    setSearchParams(params);
+    setSearchParams(new URLSearchParams(params));
   }
 
   function handleSubmit(e: React.FormEvent) {

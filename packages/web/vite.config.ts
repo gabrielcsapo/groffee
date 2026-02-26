@@ -1,57 +1,28 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import rsc from "@vitejs/plugin-rsc";
+import { flightRouter } from "react-flight-router/dev";
 import { defineConfig } from "vite";
+import { requestStorage } from "./app/lib/server/request-context";
+import { apiMiddleware } from "./app/api/vite-plugin";
 
 export default defineConfig({
   clearScreen: false,
-  build: {
-    minify: true,
-  },
-  preview: {
-    host: true,
-    port: 3000,
-    proxy: {
-      "/api": "http://localhost:3001",
-      "^/[^/]+/[^/]+\\.git": {
-        target: "http://localhost:3001",
-      },
-    },
-  },
   server: {
     host: true,
     port: 3000,
-    proxy: {
-      "/api": "http://localhost:3001",
-      "^/[^/]+/[^/]+\\.git": {
-        target: "http://localhost:3001",
-      },
-    },
   },
   plugins: [
     tailwindcss(),
     react(),
-    rsc({
-      entries: {
-        client: "./react-router-vite/entry.browser.tsx",
-        ssr: "./react-router-vite/entry.ssr.tsx",
-        rsc: "./app/entry.rsc.ts",
+    apiMiddleware(),
+    flightRouter({
+      routesFile: "./app/routes.ts",
+      onRequest: (request) => {
+        requestStorage.enterWith(request);
       },
     }),
   ],
-  environments: {
-    rsc: {
-      resolve: {
-        external: ["better-sqlite3", "isomorphic-git"],
-      },
-    },
-    ssr: {
-      resolve: {
-        external: ["better-sqlite3", "isomorphic-git"],
-      },
-    },
+  ssr: {
+    external: ["better-sqlite3", "isomorphic-git", "isomorphic-dompurify"],
   },
-  optimizeDeps: {
-    include: ["react-router", "react-router/internal/react-server-client"],
-  },
-}) as any;
+});

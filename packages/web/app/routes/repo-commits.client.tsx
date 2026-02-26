@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router";
+import { Link, useSearchParams, useRouter } from "react-flight-router/client";
 import { getRepoCommits } from "../lib/server/repos";
 
 interface Commit {
@@ -47,7 +47,7 @@ export function CommitsList({
   initialAuthorFilter?: string;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const { navigate } = useRouter();
   const authorFilter = searchParams.get("author") || "";
   const [commits, setCommits] = useState<Commit[]>(initialCommits);
   const [loading, setLoading] = useState(false);
@@ -189,7 +189,7 @@ export function CommitsList({
               <button
                 type="button"
                 onClick={() => {
-                  setSearchParams({});
+                  setSearchParams(new URLSearchParams());
                   setAuthorDropdownOpen(false);
                 }}
                 className="ml-1 text-text-secondary hover:text-text-primary p-1 rounded hover:bg-surface-secondary"
@@ -217,7 +217,7 @@ export function CommitsList({
                     <button
                       type="button"
                       onClick={() => {
-                        setSearchParams({});
+                        setSearchParams(new URLSearchParams());
                         setAuthorDropdownOpen(false);
                         setAuthorSearch("");
                       }}
@@ -239,7 +239,7 @@ export function CommitsList({
                         key={a.email}
                         type="button"
                         onClick={() => {
-                          setSearchParams({ author: a.email });
+                          setSearchParams(new URLSearchParams({ author: a.email }));
                           setAuthorDropdownOpen(false);
                           setAuthorSearch("");
                         }}

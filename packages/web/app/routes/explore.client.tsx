@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-flight-router/client";
 import { timeAgo } from "../lib/time";
 import { searchRepos } from "../lib/server/search";
 
@@ -48,9 +48,9 @@ export function ExploreList({ initialRepos }: { initialRepos: Repo[] }) {
     e.preventDefault();
     const trimmed = query.trim();
     if (trimmed) {
-      setSearchParams({ q: trimmed });
+      setSearchParams(new URLSearchParams({ q: trimmed }));
     } else {
-      setSearchParams({});
+      setSearchParams(new URLSearchParams());
     }
     fetchRepos(trimmed);
   }

@@ -1,14 +1,13 @@
 import "./styles.css";
-import { Link, Outlet } from "react-router";
+import { Link, Outlet, ScrollRestoration } from "react-flight-router/client";
 import {
-  DumpError,
   GlobalNavigationLoadingBar,
   HeaderSearch,
   UserNav,
 } from "./routes/root.client";
 import { GroffeeLogo } from "./components/groffee-logo";
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export default function Root() {
   return (
     <html lang="en">
       <head>
@@ -36,6 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <title>Groffee</title>
       </head>
       <body className="flex flex-col min-h-screen">
+        <ScrollRestoration />
         <header className="bg-header-bg sticky top-0 z-30 pb-px shadow-sm">
           <nav className="max-w-[1280px] mx-auto px-4 h-16 flex items-center gap-4">
             <Link
@@ -64,7 +64,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </header>
         <GlobalNavigationLoadingBar />
         <main className="flex-1 max-w-[1280px] w-full mx-auto px-6 py-6">
-          {children}
+          <Outlet />
         </main>
         <footer className="border-t border-border mt-auto">
           <div className="max-w-[1280px] mx-auto px-6 py-6 flex items-center justify-between text-xs text-text-secondary">
@@ -89,12 +89,4 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </body>
     </html>
   );
-}
-
-export default function Component() {
-  return <Outlet />;
-}
-
-export function ErrorBoundary() {
-  return <DumpError />;
 }

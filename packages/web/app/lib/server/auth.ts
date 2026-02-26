@@ -49,14 +49,19 @@ export async function login(
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DURATION_MS);
 
+  const sessionId = crypto.randomUUID();
   await db.insert(sessions).values({
-    id: crypto.randomUUID(),
+    id: sessionId,
     userId: user.id,
     token: null,
     tokenHash,
     expiresAt,
     createdAt: now,
   });
+
+  const [check] = await db.select({ hash: sessions.tokenHash }).from(sessions).where(eq(sessions.id, sessionId)).limit(1);
+  console.log("[login] inserted session hash:", tokenHash.slice(0, 8) + "..., verify:", check ? "found" : "MISSING");
+  console.log("[login] cookie will be HttpOnly:", true, "token starts with:", token.slice(0, 8) + "...");
 
   const req = getRequest();
   logAudit({
@@ -67,12 +72,16 @@ export async function login(
     ipAddress: req ? getClientIp(req) : "unknown",
   }).catch(console.error);
 
+  const isSecure = req
+    ? req.headers.get("x-forwarded-proto") === "https" || new URL(req.url).protocol === "https:"
+    : false;
+
   const cookie = serializeCookie("session", token, {
     httpOnly: true,
     sameSite: "Lax",
     path: "/",
     expires: expiresAt,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
   });
 
   return {
@@ -136,12 +145,16 @@ export async function register(
     ipAddress: req ? getClientIp(req) : "unknown",
   }).catch(console.error);
 
+  const isSecure = req
+    ? req.headers.get("x-forwarded-proto") === "https" || new URL(req.url).protocol === "https:"
+    : false;
+
   const cookie = serializeCookie("session", token, {
     httpOnly: true,
     sameSite: "Lax",
     path: "/",
     expires: expiresAt,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
   });
 
   return {
@@ -178,4 +191,8 @@ export async function isFirstUser(): Promise<boolean> {
   return userCount === 0;
 }
 
-export { getSessionUser } from "./session";
+import { getSessionUser as _getSessionUser } from "./session";
+
+export async function getSessionUser() {
+  return _getSessionUser();
+}

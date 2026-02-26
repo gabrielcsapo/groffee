@@ -27,14 +27,11 @@ import {
 } from "@groffee/git";
 import { getDiff } from "@groffee/git";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { AppEnv } from "../types.js";
 import { logAudit, getClientIp } from "../lib/audit.js";
 import { getCachedActivity, setCachedActivity } from "../lib/activity-cache.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
-const DATA_DIR = process.env.DATA_DIR || path.resolve(PROJECT_ROOT, "data", "repositories");
+const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data", "repositories");
 
 export const repoRoutes = new Hono<AppEnv>();
 

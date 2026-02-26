@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link } from "react-flight-router/client";
 
 interface DayData {
   day: number;

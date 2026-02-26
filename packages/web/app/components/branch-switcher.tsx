@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useRouter } from "react-flight-router/client";
 
 export function BranchSwitcher({
   branches,
@@ -14,7 +14,7 @@ export function BranchSwitcher({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
+  const { navigate } = useRouter();
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

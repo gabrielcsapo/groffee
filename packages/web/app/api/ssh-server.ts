@@ -12,11 +12,8 @@ import { canPush, canRead } from "./lib/permissions.js";
 import { snapshotRefs } from "@groffee/git";
 import { triggerIncrementalIndex } from "./lib/indexer.js";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(__dirname, "..", "..", "..");
-const DATA_DIR = process.env.DATA_DIR || path.resolve(PROJECT_ROOT, "data");
+const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
 const SSH_HOST_KEY_PATH = path.resolve(DATA_DIR, "ssh_host_ed25519_key");
 const SSH_PORT = parseInt(process.env.SSH_PORT || "2222", 10);
 

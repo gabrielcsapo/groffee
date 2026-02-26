@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link } from "react-flight-router/client";
 import { getRepoTree, getRepoRefs } from "../lib/server/repos";
 import { CloneUrl } from "../components/clone-url";
 import { BranchSwitcher } from "../components/branch-switcher";
@@ -21,10 +21,10 @@ function formatRelativeDate(timestamp: number): string {
 export default async function RepoTree({
   params,
 }: {
-  params: { owner: string; repo: string; "*": string };
+  params: Record<string, string>;
 }) {
   const { owner, repo: repoName } = params;
-  const splat = params["*"] || "";
+  const splat = params.splat || "";
 
   const [treeData, refsData] = await Promise.all([
     getRepoTree(owner, repoName, splat),

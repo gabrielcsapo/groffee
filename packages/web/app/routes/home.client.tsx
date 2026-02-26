@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Link } from "react-router";
+import { Link } from "react-flight-router/client";
 import { GroffeeLogo } from "../components/groffee-logo";
 import { timeAgo } from "../lib/time";
 import { getSessionUser } from "../lib/server/auth";

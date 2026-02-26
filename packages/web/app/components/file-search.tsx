@@ -8,7 +8,7 @@ import {
   createContext,
   useContext,
 } from "react";
-import { useNavigate } from "react-router";
+import { useRouter } from "react-flight-router/client";
 import { getRepoFilePaths } from "../lib/server/repos";
 
 /**
@@ -115,7 +115,7 @@ export function FileSearchProvider({
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
+  const { navigate } = useRouter();
 
   // Load file paths when modal opens
   useEffect(() => {

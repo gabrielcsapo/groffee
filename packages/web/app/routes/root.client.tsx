@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Link, useLocation, useNavigation, useNavigate, useRouteError } from "react-router";
+import { Link, useLocation, useNavigation, useRouter } from "react-flight-router/client";
 import { type Theme, getStoredTheme, applyTheme } from "../lib/theme";
-import { getSessionUser, logout } from "../lib/server/auth";
+import { getSessionUser } from "../lib/server/auth";
 
 export function GlobalNavigationLoadingBar() {
   const navigation = useNavigation();
@@ -21,7 +21,7 @@ export function HeaderSearch() {
   const [open, setOpen] = useState(false);
   const [searchScope, setSearchScope] = useState<"repo" | "global">("repo");
   const inputRef = useRef<HTMLInputElement>(null);
-  const navigate = useNavigate();
+  const { navigate } = useRouter();
   const location = useLocation();
 
   // Detect if on a repo page: /:owner/:repo/...
@@ -459,8 +459,7 @@ export function UserNav() {
               <div className="border-t border-border py-1">
                 <button
                   onClick={async () => {
-                    const result = await logout();
-                    if (result.setCookie) document.cookie = result.setCookie;
+                    await fetch("/api/auth/logout", { method: "POST" });
                     window.location.href = "/";
                   }}
                   className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-text-primary hover:bg-surface-secondary"
@@ -489,27 +488,3 @@ export function UserNav() {
   );
 }
 
-export function DumpError() {
-  const error = useRouteError();
-  const message = error instanceof Error ? error.message : "An unexpected error occurred";
-  const stack = error instanceof Error ? error.stack : undefined;
-
-  return (
-    <div className="max-w-2xl mx-auto mt-16">
-      <div className="bg-surface border border-danger/30 rounded-lg p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-danger mb-2">Something went wrong</h1>
-        <p className="text-text-secondary mb-4">{message}</p>
-        {stack && (
-          <pre className="text-xs bg-surface-secondary p-4 rounded-md overflow-x-auto text-text-secondary border border-border">
-            {stack}
-          </pre>
-        )}
-        <div className="mt-4">
-          <Link to="/" className="btn-secondary btn-sm">
-            Go home
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}

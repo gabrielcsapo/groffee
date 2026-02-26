@@ -1,6 +1,6 @@
 "use client";
 
-import { Link, useLocation } from "react-router";
+import { Link, useLocation } from "react-flight-router/client";
 
 interface RepoNavProps {
   owner: string;
