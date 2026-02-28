@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-export function CloneUrl({ path }: { path: string }) {
+export function CloneUrl({ path, inline }: { path: string; inline?: boolean }) {
   const [origin, setOrigin] = useState("");
   const [protocol, setProtocol] = useState<"https" | "ssh">("https");
 
@@ -15,6 +15,10 @@ export function CloneUrl({ path }: { path: string }) {
   const sshUrl = `ssh://git@${hostname}:2222${path}`;
 
   const url = protocol === "https" ? httpsUrl : sshUrl;
+
+  if (inline) {
+    return <span>{url}</span>;
+  }
 
   return (
     <div className="flex items-center">

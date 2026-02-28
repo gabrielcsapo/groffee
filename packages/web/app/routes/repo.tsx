@@ -14,6 +14,7 @@ import {
   FileSearchButton,
 } from "../components/file-search";
 import { renderMarkdown } from "../lib/markdown";
+import { getSessionUser } from "../lib/server/auth";
 
 function formatRelativeDate(timestamp: number): string {
   const seconds = Math.floor(Date.now() / 1000 - timestamp);
@@ -54,11 +55,12 @@ export default async function Repo({
   const repository = repoData.repository!;
   const defaultBranch = repository.defaultBranch;
 
-  const [treeData, refsData, commitsData, langData] = await Promise.all([
+  const [treeData, refsData, commitsData, langData, sessionUser] = await Promise.all([
     getRepoTree(owner, repoName, defaultBranch),
     getRepoRefs(owner, repoName),
     getRepoCommits(owner, repoName, defaultBranch, { limit: 1 }),
     getRepoLanguages(owner, repoName),
+    getSessionUser(),
   ]);
 
   const ref = treeData.ref || defaultBranch;
@@ -70,6 +72,7 @@ export default async function Repo({
     (r: { type: string }) => r.type === "tag",
   );
   const clonePath = `/${owner}/${repoName}.git`;
+  const isOwner = sessionUser?.username === owner;
   const latestCommit = commitsData.commits?.[0] || null;
   const languages = langData.languages || [];
 
@@ -164,6 +167,7 @@ export default async function Repo({
           {/* File tree */}
           {entries.length > 0 ? (
             <div className="border border-border rounded-lg overflow-hidden bg-surface">
+
               {/* Last commit header */}
               {latestCommit && (
                 <div className="flex items-center justify-between px-4 py-2.5 bg-surface-secondary border-b border-border text-sm">
@@ -304,8 +308,74 @@ export default async function Repo({
                 </tbody>
               </table>
             </div>
+          ) : isOwner ? (
+            <div className="space-y-4">
+              {/* Quick setup */}
+              <div className="border border-border rounded-lg overflow-hidden bg-surface">
+                <div className="flex items-center gap-2 px-4 py-3 bg-surface-secondary border-b border-border">
+                  <svg
+                    className="w-5 h-5 text-text-secondary"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                  <span className="text-sm font-semibold text-text-primary">
+                    Quick setup
+                  </span>
+                  <span className="text-xs text-text-secondary">
+                    — get started by cloning or pushing to this repository
+                  </span>
+                </div>
+                <div className="px-4 py-3">
+                  <CloneUrl path={clonePath} />
+                </div>
+              </div>
+
+              {/* Create new repo on command line */}
+              <div className="border border-border rounded-lg overflow-hidden bg-surface">
+                <div className="px-4 py-3 border-b border-border">
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    Create a new repository on the command line
+                  </h3>
+                </div>
+                <div className="px-4 py-3">
+                  <pre className="text-sm font-mono text-text-primary bg-surface-secondary rounded-md p-4 overflow-x-auto leading-relaxed">
+{`echo "# ${repoName}" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin `}<CloneUrl path={clonePath} inline />{`
+git push -u origin main`}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Push existing repo */}
+              <div className="border border-border rounded-lg overflow-hidden bg-surface">
+                <div className="px-4 py-3 border-b border-border">
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    Push an existing repository from the command line
+                  </h3>
+                </div>
+                <div className="px-4 py-3">
+                  <pre className="text-sm font-mono text-text-primary bg-surface-secondary rounded-md p-4 overflow-x-auto leading-relaxed">
+{`git remote add origin `}<CloneUrl path={clonePath} inline />{`
+git branch -M main
+git push -u origin main`}
+                  </pre>
+                </div>
+              </div>
+            </div>
           ) : (
-            <div className="border border-border rounded-lg p-10 text-center bg-surface">
+            <div className="border border-border rounded-lg p-12 text-center bg-surface">
               <svg
                 className="w-12 h-12 mx-auto text-text-secondary mb-4"
                 fill="none"
@@ -322,13 +392,9 @@ export default async function Repo({
               <h3 className="text-base font-semibold text-text-primary mb-1">
                 This repository is empty
               </h3>
-              <p className="text-sm text-text-secondary mb-4">
-                Push some code to get started:
+              <p className="text-sm text-text-secondary">
+                The owner hasn't pushed any code yet.
               </p>
-              <pre className="text-left bg-surface-secondary p-4 rounded-md border border-border text-sm overflow-x-auto font-mono text-text-primary">
-                git remote add origin <CloneUrl path={clonePath} />
-                {"\n"}git push -u origin main
-              </pre>
             </div>
           )}
 
