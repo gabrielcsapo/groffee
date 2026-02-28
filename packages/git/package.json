@@ -12,10 +12,10 @@
     "fmt": "oxfmt --write ."
   },
   "dependencies": {
-    "isomorphic-git": "^1.37.1"
+    "isomorphic-git": "^1.37.2"
   },
   "devDependencies": {
-    "@types/node": "^25.2.3",
+    "@types/node": "^25.3.3",
     "typescript": "^5.9.3"
   }
 }
