@@ -47,36 +47,39 @@ export function ActivityDashboard({
   const [chartData, setChartData] = useState<ActivityData>(initialData);
   const [loading, setLoading] = useState(false);
 
-  const handleAuthorChange = useCallback(async (email: string) => {
-    setSelectedAuthor(email);
+  const handleAuthorChange = useCallback(
+    async (email: string) => {
+      setSelectedAuthor(email);
 
-    if (!email) {
-      setChartData(initialData);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/repos/${owner}/${repo}/activity?author=${encodeURIComponent(email)}`,
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setChartData({
-          daily: data.daily,
-          weekly: data.weekly,
-          punchcard: data.punchcard,
-          fileFrequency: data.fileFrequency,
-          languages: data.languages,
-          contributorTimeline: data.contributorTimeline,
-        });
+      if (!email) {
+        setChartData(initialData);
+        return;
       }
-    } catch {
-      // Keep current data on error
-    } finally {
-      setLoading(false);
-    }
-  }, [owner, repo, initialData]);
+
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/repos/${owner}/${repo}/activity?author=${encodeURIComponent(email)}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setChartData({
+            daily: data.daily,
+            weekly: data.weekly,
+            punchcard: data.punchcard,
+            fileFrequency: data.fileFrequency,
+            languages: data.languages,
+            contributorTimeline: data.contributorTimeline,
+          });
+        }
+      } catch {
+        // Keep current data on error
+      } finally {
+        setLoading(false);
+      }
+    },
+    [owner, repo, initialData],
+  );
 
   const selectedContributor = contributors.find((c) => c.email === selectedAuthor);
 
@@ -173,7 +176,12 @@ export function ActivityDashboard({
             </span>
           </div>
           {contributors.length > 0 ? (
-            <ContributorList contributors={contributors} owner={owner} repo={repo} defaultBranch={defaultBranch} />
+            <ContributorList
+              contributors={contributors}
+              owner={owner}
+              repo={repo}
+              defaultBranch={defaultBranch}
+            />
           ) : (
             <div className="p-8 text-center">
               <p className="text-sm text-text-secondary">No commit data available yet.</p>

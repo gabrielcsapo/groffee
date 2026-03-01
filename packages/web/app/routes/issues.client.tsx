@@ -103,7 +103,13 @@ export function IssuesList({
                     {issue.title}
                   </Link>
                   <p className="text-xs text-text-secondary mt-0.5">
-                    #{issue.number} opened {timeAgo(issue.createdAt)} by <Link to={`/${issue.author}`} className="hover:underline hover:text-text-primary">{issue.author}</Link>
+                    #{issue.number} opened {timeAgo(issue.createdAt)} by{" "}
+                    <Link
+                      to={`/${issue.author}`}
+                      className="hover:underline hover:text-text-primary"
+                    >
+                      {issue.author}
+                    </Link>
                   </p>
                 </div>
               </div>

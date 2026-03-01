@@ -10,10 +10,7 @@ export const authRoutes = new Hono();
 
 function isSecureRequest(c: { req: { raw: Request } }): boolean {
   const req = c.req.raw;
-  return (
-    req.headers.get("x-forwarded-proto") === "https" ||
-    new URL(req.url).protocol === "https:"
-  );
+  return req.headers.get("x-forwarded-proto") === "https" || new URL(req.url).protocol === "https:";
 }
 
 authRoutes.post("/register", async (c) => {

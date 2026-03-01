@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint .",
     "fmt": "oxfmt --write .",
-    "seed": "tsx app/api/seed.ts"
+    "seed": "tsx app/api/seed.ts",
+    "test:lfs": "bash scripts/test-lfs.sh",
+    "test:e2e": "playwright test",
+    "make-admin": "tsx app/api/make-admin.ts"
   },
   "dependencies": {
     "@groffee/db": "workspace:*",

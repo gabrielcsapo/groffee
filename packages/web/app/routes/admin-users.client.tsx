@@ -43,9 +43,7 @@ export default function AdminUsersClient() {
     setToggling(userId);
     try {
       await toggleUserAdmin(userId, isAdmin);
-      setUserList((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, isAdmin } : u)),
-      );
+      setUserList((prev) => prev.map((u) => (u.id === userId ? { ...u, isAdmin } : u)));
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to update user");
     } finally {
@@ -58,7 +56,9 @@ export default function AdminUsersClient() {
       <div className="text-center py-20">
         <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
         <p className="text-text-secondary">Admin access required.</p>
-        <Link to="/" className="text-primary mt-4 inline-block">Go home</Link>
+        <Link to="/" className="text-primary mt-4 inline-block">
+          Go home
+        </Link>
       </div>
     );
   }
@@ -83,17 +83,24 @@ export default function AdminUsersClient() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-text-secondary">Loading...</td>
+                <td colSpan={5} className="px-4 py-8 text-center text-text-secondary">
+                  Loading...
+                </td>
               </tr>
             ) : userList.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-text-secondary">No users found</td>
+                <td colSpan={5} className="px-4 py-8 text-center text-text-secondary">
+                  No users found
+                </td>
               </tr>
             ) : (
               userList.map((user) => (
                 <tr key={user.id} className="border-t border-border hover:bg-surface-secondary/50">
                   <td className="px-4 py-2.5">
-                    <Link to={`/${user.username}`} className="font-medium text-primary hover:underline">
+                    <Link
+                      to={`/${user.username}`}
+                      className="font-medium text-primary hover:underline"
+                    >
                       {user.username}
                     </Link>
                   </td>

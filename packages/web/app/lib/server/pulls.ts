@@ -138,7 +138,8 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
       e.commentId,
       {
         editCount: e.editCount,
-        lastEditedAt: e.lastEditedAt instanceof Date ? e.lastEditedAt.toISOString() : e.lastEditedAt ?? null,
+        lastEditedAt:
+          e.lastEditedAt instanceof Date ? e.lastEditedAt.toISOString() : (e.lastEditedAt ?? null),
       },
     ]),
   );
@@ -167,9 +168,12 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
       author: author?.username || "unknown",
       mergedBy,
       editCount: prEditInfo?.editCount || 0,
-      lastEditedAt: prEditInfo?.lastEditedAt instanceof Date
-        ? prEditInfo.lastEditedAt.toISOString()
-        : typeof prEditInfo?.lastEditedAt === "string" ? prEditInfo.lastEditedAt : null,
+      lastEditedAt:
+        prEditInfo?.lastEditedAt instanceof Date
+          ? prEditInfo.lastEditedAt.toISOString()
+          : typeof prEditInfo?.lastEditedAt === "string"
+            ? prEditInfo.lastEditedAt
+            : null,
     },
     diff,
     comments: commentsWithAuthors,
@@ -243,7 +247,12 @@ export async function createPullRequest(
     action: "pr.create",
     targetType: "pull_request",
     targetId: id,
-    metadata: { title: data.title, sourceBranch: data.sourceBranch, targetBranch: target, repoName },
+    metadata: {
+      title: data.title,
+      sourceBranch: data.sourceBranch,
+      targetBranch: target,
+      repoName,
+    },
     ipAddress: req ? getClientIp(req) : "unknown",
   }).catch(console.error);
 
@@ -271,7 +280,11 @@ export async function updatePullRequest(
   if (!pr) return { error: "Pull request not found" };
 
   // Only author or repo owner can edit title/body or change status
-  if (typeof updates.title === "string" || typeof updates.body === "string" || typeof updates.status === "string") {
+  if (
+    typeof updates.title === "string" ||
+    typeof updates.body === "string" ||
+    typeof updates.status === "string"
+  ) {
     if (user.id !== pr.authorId && user.id !== result.owner.id) {
       return { error: "Only the author or repo owner can modify this pull request" };
     }
@@ -333,11 +346,7 @@ export async function updatePullRequest(
     ipAddress: req ? getClientIp(req) : "unknown",
   }).catch(console.error);
 
-  const [updated] = await db
-    .select()
-    .from(pullRequests)
-    .where(eq(pullRequests.id, pr.id))
-    .limit(1);
+  const [updated] = await db.select().from(pullRequests).where(eq(pullRequests.id, pr.id)).limit(1);
   return { pullRequest: updated };
 }
 
@@ -481,7 +490,9 @@ export async function createPRComment(
     updatedAt: now,
   });
 
-  return { comment: { id, body: body.trim(), author: user.username, createdAt: now.toISOString() } };
+  return {
+    comment: { id, body: body.trim(), author: user.username, createdAt: now.toISOString() },
+  };
 }
 
 export async function updatePRComment(
@@ -531,7 +542,8 @@ export async function updatePRComment(
       id: comment.id,
       body: trimmedBody,
       author: author?.username || "unknown",
-      createdAt: comment.createdAt instanceof Date ? comment.createdAt.toISOString() : comment.createdAt,
+      createdAt:
+        comment.createdAt instanceof Date ? comment.createdAt.toISOString() : comment.createdAt,
       updatedAt: new Date().toISOString(),
     },
   };

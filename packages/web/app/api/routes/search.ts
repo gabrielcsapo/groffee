@@ -38,11 +38,7 @@ function parseExt(c: { req: { query: (k: string) => string | undefined } }): str
 // Code search within a repo
 searchRoutes.get("/:owner/:repo/search/code", optionalAuth, async (c) => {
   const currentUser = c.get("user") as { id: string } | undefined;
-  const repo = await findRepoForSearch(
-    c.req.param("owner"),
-    c.req.param("repo"),
-    currentUser?.id,
-  );
+  const repo = await findRepoForSearch(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
   const q = c.req.query("q");
@@ -68,11 +64,7 @@ searchRoutes.get("/:owner/:repo/search/code", optionalAuth, async (c) => {
 // Language facets within a repo
 searchRoutes.get("/:owner/:repo/search/code/languages", optionalAuth, async (c) => {
   const currentUser = c.get("user") as { id: string } | undefined;
-  const repo = await findRepoForSearch(
-    c.req.param("owner"),
-    c.req.param("repo"),
-    currentUser?.id,
-  );
+  const repo = await findRepoForSearch(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
   const q = c.req.query("q");
@@ -134,11 +126,7 @@ searchRoutes.get("/search/code/languages", optionalAuth, async (c) => {
 // Issue search within a repo
 searchRoutes.get("/:owner/:repo/search/issues", optionalAuth, async (c) => {
   const currentUser = c.get("user") as { id: string } | undefined;
-  const repo = await findRepoForSearch(
-    c.req.param("owner"),
-    c.req.param("repo"),
-    currentUser?.id,
-  );
+  const repo = await findRepoForSearch(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
   const q = c.req.query("q");
@@ -162,11 +150,7 @@ searchRoutes.get("/:owner/:repo/search/issues", optionalAuth, async (c) => {
 // PR search within a repo
 searchRoutes.get("/:owner/:repo/search/pulls", optionalAuth, async (c) => {
   const currentUser = c.get("user") as { id: string } | undefined;
-  const repo = await findRepoForSearch(
-    c.req.param("owner"),
-    c.req.param("repo"),
-    currentUser?.id,
-  );
+  const repo = await findRepoForSearch(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
   const q = c.req.query("q");

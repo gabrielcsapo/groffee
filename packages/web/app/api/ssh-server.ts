@@ -30,9 +30,10 @@ function getOrCreateHostKey(): Buffer {
   return readFileSync(SSH_HOST_KEY_PATH);
 }
 
-async function findUserByPublicKey(
-  clientKey: { algo: string; data: Buffer },
-): Promise<{ userId: string; username: string } | null> {
+async function findUserByPublicKey(clientKey: {
+  algo: string;
+  data: Buffer;
+}): Promise<{ userId: string; username: string } | null> {
   const allKeys = await db
     .select({
       userId: sshKeys.userId,

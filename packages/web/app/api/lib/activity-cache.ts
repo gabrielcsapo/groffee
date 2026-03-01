@@ -46,7 +46,11 @@ export async function setCachedActivity(
       computedAt: now,
     })
     .onConflictDoUpdate({
-      target: [repoActivityCache.repoId, repoActivityCache.cacheKey, repoActivityCache.authorFilter],
+      target: [
+        repoActivityCache.repoId,
+        repoActivityCache.cacheKey,
+        repoActivityCache.authorFilter,
+      ],
       set: {
         data: JSON.stringify(data),
         computedAt: now,

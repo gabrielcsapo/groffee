@@ -149,7 +149,10 @@ export function PullsList({
                     {pr.title}
                   </Link>
                   <p className="text-xs text-text-secondary mt-0.5">
-                    #{pr.number} opened {timeAgo(pr.createdAt)} by <Link to={`/${pr.author}`} className="hover:underline hover:text-text-primary">{pr.author}</Link>
+                    #{pr.number} opened {timeAgo(pr.createdAt)} by{" "}
+                    <Link to={`/${pr.author}`} className="hover:underline hover:text-text-primary">
+                      {pr.author}
+                    </Link>
                     <span className="ml-2">
                       <code className="px-1 py-0.5 bg-surface-secondary rounded text-xs">
                         {pr.sourceBranch}

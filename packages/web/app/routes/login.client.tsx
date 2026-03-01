@@ -49,10 +49,7 @@ export default function LoginClient() {
         )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label
-              htmlFor="username"
-              className="block text-sm font-medium mb-1"
-            >
+            <label htmlFor="username" className="block text-sm font-medium mb-1">
               Username
             </label>
             <input
@@ -64,10 +61,7 @@ export default function LoginClient() {
             />
           </div>
           <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium mb-1"
-            >
+            <label htmlFor="password" className="block text-sm font-medium mb-1">
               Password
             </label>
             <input

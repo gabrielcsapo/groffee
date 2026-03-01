@@ -6,8 +6,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 // global, enterWith() in server.ts sets one instance while getRequest() in
 // server actions reads from a different one.
 const GLOBAL_KEY = "__groffee_request_storage__";
-export const requestStorage: AsyncLocalStorage<Request> =
-  ((globalThis as any)[GLOBAL_KEY] ??= new AsyncLocalStorage<Request>());
+export const requestStorage: AsyncLocalStorage<Request> = ((globalThis as any)[GLOBAL_KEY] ??=
+  new AsyncLocalStorage<Request>());
 
 export function getRequest(): Request | undefined {
   return requestStorage.getStore();

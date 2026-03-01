@@ -228,7 +228,11 @@ export const gitCommitAncestry = sqliteTable(
     depth: integer("depth").notNull(),
   },
   (table) => [
-    uniqueIndex("git_ancestry_repo_ref_commit_idx").on(table.repoId, table.refName, table.commitOid),
+    uniqueIndex("git_ancestry_repo_ref_commit_idx").on(
+      table.repoId,
+      table.refName,
+      table.commitOid,
+    ),
     index("git_ancestry_repo_ref_depth_idx").on(table.repoId, table.refName, table.depth),
   ],
 );
@@ -250,7 +254,11 @@ export const gitTreeEntries = sqliteTable(
     entrySize: integer("entry_size"),
   },
   (table) => [
-    uniqueIndex("git_tree_entry_tree_path_idx").on(table.repoId, table.rootTreeOid, table.entryPath),
+    uniqueIndex("git_tree_entry_tree_path_idx").on(
+      table.repoId,
+      table.rootTreeOid,
+      table.entryPath,
+    ),
     index("git_tree_entry_listing_idx").on(table.repoId, table.rootTreeOid, table.parentPath),
   ],
 );
@@ -285,7 +293,11 @@ export const gitCommitFiles = sqliteTable(
     changeType: text("change_type", { enum: ["add", "modify", "delete", "rename"] }).notNull(),
   },
   (table) => [
-    uniqueIndex("git_commit_files_repo_commit_path_idx").on(table.repoId, table.commitOid, table.filePath),
+    uniqueIndex("git_commit_files_repo_commit_path_idx").on(
+      table.repoId,
+      table.commitOid,
+      table.filePath,
+    ),
     index("git_commit_files_repo_path_idx").on(table.repoId, table.filePath),
   ],
 );
@@ -387,5 +399,26 @@ export const systemLogs = sqliteTable(
     index("system_logs_created_idx").on(table.createdAt),
     index("system_logs_request_idx").on(table.requestId),
     index("system_logs_source_idx").on(table.source),
+  ],
+);
+
+// =====================================================
+// LFS Objects
+// =====================================================
+
+export const lfsObjects = sqliteTable(
+  "lfs_objects",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    oid: text("oid").notNull(),
+    size: integer("size").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("lfs_objects_repo_oid_idx").on(table.repoId, table.oid),
+    index("lfs_objects_repo_idx").on(table.repoId),
   ],
 );

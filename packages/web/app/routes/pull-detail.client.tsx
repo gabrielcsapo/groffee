@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, createContext, useContext, type ReactNode } from "react";
-import { Link, useLocation } from "react-flight-router/client";
+import { useState, useEffect } from "react";
+import { Link } from "react-flight-router/client";
 import { timeAgo } from "../lib/time";
 import { getSessionUser } from "../lib/server/auth";
 import { updatePullRequest } from "../lib/server/pulls";
+import { PullConversationView } from "./pull-conversation.client";
+import { PullFilesView } from "./pull-files.client";
 
 interface PR {
   id: string;
@@ -47,7 +49,7 @@ interface DiffFile {
   }>;
 }
 
-export interface PullDetailContextValue {
+export interface PullDetailData {
   owner: string;
   repo: string;
   prNumber: string;
@@ -59,14 +61,6 @@ export interface PullDetailContextValue {
   user: { username: string } | null;
 }
 
-const PullDetailContext = createContext<PullDetailContextValue | null>(null);
-
-export function usePullDetailContext() {
-  const ctx = useContext(PullDetailContext);
-  if (!ctx) throw new Error("usePullDetailContext must be used within PullDetailLayout");
-  return ctx;
-}
-
 export function PullDetailLayout({
   owner,
   repo,
@@ -74,7 +68,7 @@ export function PullDetailLayout({
   initialPR,
   initialDiff,
   initialComments,
-  children,
+  tab,
 }: {
   owner: string;
   repo: string;
@@ -82,10 +76,9 @@ export function PullDetailLayout({
   initialPR: PR | null;
   initialDiff: DiffFile[] | null;
   initialComments: Comment[];
-  children: ReactNode;
+  tab: "conversation" | "files";
 }) {
-  const location = useLocation();
-  const isFilesTab = location.pathname.endsWith("/files-changed");
+  const isFilesTab = tab === "files";
   const basePath = `/${owner}/${repo}/pull/${prNumber}`;
 
   const [pr, setPr] = useState<PR | null>(initialPR);
@@ -143,96 +136,104 @@ export function PullDetailLayout({
     pr.status === "open" ? "badge-open" : pr.status === "merged" ? "badge-merged" : "badge-closed";
 
   return (
-    <PullDetailContext.Provider
-      value={{ owner, repo, prNumber, pr, setPr, diff, commentsList, setCommentsList, user }}
-    >
-      <div className="max-w-5xl mx-auto mt-4">
-        {/* Header */}
-        <div className="mb-6">
-          {editing ? (
-            <div className="mb-4 flex items-center gap-2">
-              <input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="flex-1 px-3 py-2 border border-border rounded-md bg-surface text-lg font-semibold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveTitle();
-                  if (e.key === "Escape") setEditing(false);
-                }}
-              />
-              <button
-                onClick={saveTitle}
-                disabled={!editTitle.trim()}
-                className="btn-primary btn-sm"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => setEditing(false)}
-                className="btn-sm rounded-md border border-border text-text-secondary hover:text-text-primary font-medium"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <h1 className="text-2xl font-semibold text-text-primary mb-2">
-              {pr.title} <span className="text-text-secondary font-normal">#{pr.number}</span>
-              {canEditPR && (
-                <button
-                  onClick={startEditTitle}
-                  className="ml-2 text-sm font-normal text-text-secondary hover:text-text-primary"
-                  title="Edit title"
-                >
-                  Edit
-                </button>
-              )}
-            </h1>
-          )}
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className={`badge ${statusBadge}`}>
-              {pr.status === "open" ? "Open" : pr.status === "merged" ? "Merged" : "Closed"}
-            </span>
-            <span className="text-sm text-text-secondary">
-              <Link to={`/${pr.author}`} className="font-semibold text-text-primary hover:underline">{pr.author}</Link> wants to merge
-              <code className="mx-1 px-1.5 py-0.5 bg-surface-secondary rounded text-xs">
-                {pr.sourceBranch}
-              </code>
-              into
-              <code className="mx-1 px-1.5 py-0.5 bg-surface-secondary rounded text-xs">
-                {pr.targetBranch}
-              </code>
-            </span>
-            {pr.editCount && pr.editCount > 0 && (
-              <span
-                className="text-xs text-text-secondary"
-                title={`Edited ${pr.editCount} time${pr.editCount > 1 ? "s" : ""}${pr.lastEditedAt ? ` - last ${timeAgo(pr.lastEditedAt)}` : ""}`}
-              >
-                (edited)
-              </span>
-            )}
+    <div className="max-w-5xl mx-auto mt-4">
+      {/* Header */}
+      <div className="mb-6">
+        {editing ? (
+          <div className="mb-4 flex items-center gap-2">
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="flex-1 px-3 py-2 border border-border rounded-md bg-surface text-lg font-semibold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveTitle();
+                if (e.key === "Escape") setEditing(false);
+              }}
+            />
+            <button onClick={saveTitle} disabled={!editTitle.trim()} className="btn-primary btn-sm">
+              Save
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="btn-sm rounded-md border border-border text-text-secondary hover:text-text-primary font-medium"
+            >
+              Cancel
+            </button>
           </div>
+        ) : (
+          <h1 className="text-2xl font-semibold text-text-primary mb-2">
+            {pr.title} <span className="text-text-secondary font-normal">#{pr.number}</span>
+            {canEditPR && (
+              <button
+                onClick={startEditTitle}
+                className="ml-2 text-sm font-normal text-text-secondary hover:text-text-primary"
+                title="Edit title"
+              >
+                Edit
+              </button>
+            )}
+          </h1>
+        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className={`badge ${statusBadge}`}>
+            {pr.status === "open" ? "Open" : pr.status === "merged" ? "Merged" : "Closed"}
+          </span>
+          <span className="text-sm text-text-secondary">
+            <Link to={`/${pr.author}`} className="font-semibold text-text-primary hover:underline">
+              {pr.author}
+            </Link>{" "}
+            wants to merge
+            <code className="mx-1 px-1.5 py-0.5 bg-surface-secondary rounded text-xs">
+              {pr.sourceBranch}
+            </code>
+            into
+            <code className="mx-1 px-1.5 py-0.5 bg-surface-secondary rounded text-xs">
+              {pr.targetBranch}
+            </code>
+          </span>
+          {pr.editCount && pr.editCount > 0 && (
+            <span
+              className="text-xs text-text-secondary"
+              title={`Edited ${pr.editCount} time${pr.editCount > 1 ? "s" : ""}${pr.lastEditedAt ? ` - last ${timeAgo(pr.lastEditedAt)}` : ""}`}
+            >
+              (edited)
+            </span>
+          )}
         </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 border-b border-border mb-6">
-          <Link
-            to={basePath}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${!isFilesTab ? "border-primary text-text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}
-          >
-            Conversation
-          </Link>
-          <Link
-            to={`${basePath}/files-changed`}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${isFilesTab ? "border-primary text-text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}
-          >
-            Files changed {diff ? `(${diff.length})` : ""}
-          </Link>
-        </div>
-
-        {/* Child route content */}
-        {children}
       </div>
-    </PullDetailContext.Provider>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border mb-6">
+        <Link
+          to={basePath}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${!isFilesTab ? "border-primary text-text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}
+        >
+          Conversation
+        </Link>
+        <Link
+          to={`${basePath}/files-changed`}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${isFilesTab ? "border-primary text-text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}
+        >
+          Files changed {diff ? `(${diff.length})` : ""}
+        </Link>
+      </div>
+
+      {/* Tab content */}
+      {isFilesTab ? (
+        <PullFilesView diff={diff} />
+      ) : (
+        <PullConversationView
+          owner={owner}
+          repo={repo}
+          prNumber={prNumber}
+          pr={pr}
+          setPr={setPr}
+          commentsList={commentsList}
+          setCommentsList={setCommentsList}
+          user={user}
+        />
+      )}
+    </div>
   );
 }

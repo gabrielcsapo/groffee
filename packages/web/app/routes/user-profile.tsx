@@ -2,8 +2,8 @@ import { Link } from "react-flight-router/client";
 import { getUserRepos } from "../lib/server/repos";
 import { timeAgo } from "../lib/time";
 
-export default async function UserProfile({ params }: { params: { owner: string } }) {
-  const { owner } = params;
+export default async function UserProfile({ params }: { params?: Record<string, string> }) {
+  const owner = params!.owner;
   const data = await getUserRepos(owner);
 
   if (data.error) {

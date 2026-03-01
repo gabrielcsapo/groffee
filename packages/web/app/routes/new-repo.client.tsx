@@ -99,10 +99,7 @@ export default function NewRepoClient() {
           </fieldset>
 
           <div className="border-t border-border pt-4">
-            <button
-              type="submit"
-              className="btn-primary"
-            >
+            <button type="submit" className="btn-primary">
               Create repository
             </button>
           </div>

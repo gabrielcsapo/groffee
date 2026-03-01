@@ -1,12 +1,8 @@
 import { getRepoActivity } from "../lib/server/repos";
 import { ActivityDashboard } from "../components/activity-dashboard";
 
-export default async function RepoActivity({
-  params,
-}: {
-  params: { owner: string; repo: string };
-}) {
-  const { owner, repo: repoName } = params;
+export default async function RepoActivity({ params }: { params?: Record<string, string> }) {
+  const { owner, repo: repoName } = params as { owner: string; repo: string };
 
   const data = await getRepoActivity(owner, repoName);
 

@@ -44,11 +44,7 @@ export async function getTokens() {
   return { tokens: serializedTokens };
 }
 
-export async function createToken(
-  name: string,
-  scopes?: string[],
-  expiresAt?: string,
-) {
+export async function createToken(name: string, scopes?: string[], expiresAt?: string) {
   const user = await getSessionUser();
   if (!user) return { error: "Unauthorized" };
 

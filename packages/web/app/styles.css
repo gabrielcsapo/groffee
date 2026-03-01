@@ -213,7 +213,10 @@
            px-4 py-2 rounded-md hover:no-underline
            disabled:opacity-50 disabled:cursor-not-allowed bg-success text-white;
     border: 1px solid transparent;
-    transition: background-color 0.15s, filter 0.15s, color 0.15s;
+    transition:
+      background-color 0.15s,
+      filter 0.15s,
+      color 0.15s;
   }
 
   .btn-primary:hover:not(:disabled) {
@@ -229,7 +232,9 @@
            px-4 py-2 rounded-md hover:no-underline
            disabled:opacity-50 disabled:cursor-not-allowed bg-surface text-text-primary;
     border: 1px solid var(--color-border);
-    transition: background-color 0.15s, color 0.15s;
+    transition:
+      background-color 0.15s,
+      color 0.15s;
   }
 
   .btn-secondary:hover:not(:disabled) {
@@ -245,7 +250,10 @@
            px-4 py-2 rounded-md hover:no-underline
            disabled:opacity-50 disabled:cursor-not-allowed bg-danger text-white;
     border: 1px solid transparent;
-    transition: background-color 0.15s, filter 0.15s, color 0.15s;
+    transition:
+      background-color 0.15s,
+      filter 0.15s,
+      color 0.15s;
   }
 
   .btn-danger:hover:not(:disabled) {

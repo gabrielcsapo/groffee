@@ -9,6 +9,7 @@ import { repoRoutes } from "./routes/repos.js";
 import { issueRoutes } from "./routes/issues.js";
 import { pullRoutes } from "./routes/pulls.js";
 import { gitProtocolRoutes } from "./routes/git-protocol.js";
+import { gitLfsRoutes } from "./routes/git-lfs.js";
 import { sshKeyRoutes } from "./routes/ssh-keys.js";
 import { collaboratorRoutes } from "./routes/collaborators.js";
 import { searchRoutes } from "./routes/search.js";
@@ -41,17 +42,20 @@ app.get("/api/health", async (c) => {
   const memUsage = process.memoryUsage();
   const healthy = dbOk && dataExists;
 
-  return c.json({
-    status: healthy ? "ok" : "degraded",
-    uptime: uptimeMs,
-    database: dbOk ? "connected" : "error",
-    dataDirectory: dataExists ? "exists" : "missing",
-    memory: {
-      rss: Math.round(memUsage.rss / 1024 / 1024),
-      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+  return c.json(
+    {
+      status: healthy ? "ok" : "degraded",
+      uptime: uptimeMs,
+      database: dbOk ? "connected" : "error",
+      dataDirectory: dataExists ? "exists" : "missing",
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+      },
     },
-  }, healthy ? 200 : 503);
+    healthy ? 200 : 503,
+  );
 });
 
 // REST API routes
@@ -64,6 +68,9 @@ app.route("/api/user/tokens", tokenRoutes);
 app.route("/api/repos", collaboratorRoutes);
 app.route("/api/repos", searchRoutes);
 app.route("/api", searchRoutes);
+
+// Git LFS routes (must be before git protocol routes)
+app.route("/", gitLfsRoutes);
 
 // Smart HTTP Git Protocol routes
 // Git clients expect URLs like: /:owner/:repo.git/info/refs

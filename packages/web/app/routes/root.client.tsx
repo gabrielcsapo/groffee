@@ -36,9 +36,7 @@ export function HeaderSearch() {
     function onKeyDown(e: KeyboardEvent) {
       if (
         e.key === "/" &&
-        !["INPUT", "TEXTAREA", "SELECT"].includes(
-          (e.target as HTMLElement).tagName,
-        )
+        !["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement).tagName)
       ) {
         e.preventDefault();
         setOpen(true);
@@ -69,9 +67,7 @@ export function HeaderSearch() {
     if (!q) return;
 
     if (isRepoPage && searchScope === "repo") {
-      navigate(
-        `/${repoOwner}/${repoName}/search?q=${encodeURIComponent(q)}`,
-      );
+      navigate(`/${repoOwner}/${repoName}/search?q=${encodeURIComponent(q)}`);
     } else {
       navigate(`/search?q=${encodeURIComponent(q)}`);
     }
@@ -178,7 +174,9 @@ export function HeaderSearch() {
                             d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
                           />
                         </svg>
-                        <span>{repoOwner}/{repoName}</span>
+                        <span>
+                          {repoOwner}/{repoName}
+                        </span>
                       </button>
                       <button
                         type="button"
@@ -239,8 +237,7 @@ export function ThemeToggle() {
   }, []);
 
   function cycle() {
-    const next: Theme =
-      theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+    const next: Theme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
     setThemeState(next);
     applyTheme(next);
   }
@@ -487,4 +484,3 @@ export function UserNav() {
     </div>
   );
 }
-

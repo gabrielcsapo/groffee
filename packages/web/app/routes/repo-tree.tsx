@@ -18,13 +18,9 @@ function formatRelativeDate(timestamp: number): string {
   return `${years} year${years !== 1 ? "s" : ""} ago`;
 }
 
-export default async function RepoTree({
-  params,
-}: {
-  params: Record<string, string>;
-}) {
-  const { owner, repo: repoName } = params;
-  const splat = params.splat || "";
+export default async function RepoTree({ params }: { params?: Record<string, string> }) {
+  const { owner, repo: repoName } = params as { owner: string; repo: string };
+  const splat = params!.splat || "";
 
   const [treeData, refsData] = await Promise.all([
     getRepoTree(owner, repoName, splat),
@@ -42,7 +38,17 @@ export default async function RepoTree({
     );
   }
 
-  const { entries, ref, path: treePath } = treeData as { entries: NonNullable<typeof treeData.entries>; ref: string; path: string };
+  const {
+    entries,
+    ref,
+    path: treePath,
+    hasLfs,
+  } = treeData as {
+    entries: NonNullable<typeof treeData.entries>;
+    ref: string;
+    path: string;
+    hasLfs?: boolean;
+  };
   const pathParts = treePath ? treePath.split("/") : [];
   const branches = (refsData.refs || []).filter((r: { type: string }) => r.type === "branch");
   const clonePath = `/${owner}/${repoName}.git`;
@@ -79,7 +85,7 @@ export default async function RepoTree({
             </span>
           )}
         </div>
-        <CloneUrl path={clonePath} />
+        <CloneUrl path={clonePath} hasLfs={hasLfs} />
       </div>
 
       {/* Breadcrumbs (when navigating into subdirectories) */}
@@ -152,6 +158,7 @@ export default async function RepoTree({
                   path: string;
                   type: string;
                   oid: string;
+                  isLfs?: boolean;
                   lastCommit: { oid: string; message: string; timestamp: number } | null;
                 },
                 i: number,
@@ -189,6 +196,11 @@ export default async function RepoTree({
                         </svg>
                       )}
                       {entry.name}
+                      {entry.isLfs && (
+                        <span className="px-1 py-0.5 text-[10px] font-medium rounded bg-blue-500/10 text-blue-600">
+                          LFS
+                        </span>
+                      )}
                     </Link>
                   </td>
                   <td className="py-2 px-4 truncate max-w-xs">

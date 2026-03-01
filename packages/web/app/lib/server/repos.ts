@@ -13,6 +13,7 @@ import {
   auditLogs,
   pullRequests,
   issues,
+  lfsObjects,
 } from "@groffee/db";
 import { eq, and, like, desc, asc, sql } from "drizzle-orm";
 import {
@@ -29,31 +30,21 @@ import {
 import path from "node:path";
 import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
+import { parseLfsPointer } from "../lfs";
 import { getRequest } from "./request-context";
 
-const DATA_DIR =
-  process.env.DATA_DIR || path.resolve(process.cwd(), "data", "repositories");
+const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data", "repositories");
 
 // --- Helpers ---
 
-async function findRepo(
-  ownerName: string,
-  repoName: string,
-  currentUserId?: string,
-) {
-  const [owner] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, ownerName))
-    .limit(1);
+async function findRepo(ownerName: string, repoName: string, currentUserId?: string) {
+  const [owner] = await db.select().from(users).where(eq(users.username, ownerName)).limit(1);
   if (!owner) return null;
 
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(
-      and(eq(repositories.ownerId, owner.id), eq(repositories.name, repoName)),
-    )
+    .where(and(eq(repositories.ownerId, owner.id), eq(repositories.name, repoName)))
     .limit(1);
 
   if (!repo) return null;
@@ -100,9 +91,7 @@ async function resolveRefAndPath(
 
 // --- Read Functions ---
 
-export async function getPublicRepos(
-  opts: { limit?: number; offset?: number; q?: string } = {},
-) {
+export async function getPublicRepos(opts: { limit?: number; offset?: number; q?: string } = {}) {
   const limit = Math.min(opts.limit || 30, 100);
   const offset = opts.offset || 0;
   const q = opts.q?.trim();
@@ -133,25 +122,17 @@ export async function getPublicRepos(
     ownerIds.length > 0
       ? await Promise.all(
           ownerIds.map(async (id) => {
-            const [u] = await db
-              .select()
-              .from(users)
-              .where(eq(users.id, id))
-              .limit(1);
+            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
             return u;
           }),
         )
       : [];
-  const ownerMap = new Map(
-    owners.filter(Boolean).map((u) => [u.id, u.username]),
-  );
+  const ownerMap = new Map(owners.filter(Boolean).map((u) => [u.id, u.username]));
 
   const result = repos.map((r) => ({
     ...r,
-    updatedAt:
-      r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
-    createdAt:
-      r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+    updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
+    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
     owner: ownerMap.get(r.ownerId) || "unknown",
   }));
 
@@ -164,56 +145,36 @@ export async function getPublicRepos(
 }
 
 export async function getUserRepos(ownerName: string) {
-  const [owner] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, ownerName))
-    .limit(1);
+  const [owner] = await db.select().from(users).where(eq(users.username, ownerName)).limit(1);
   if (!owner) return { error: "User not found" };
 
   const currentUser = await getSessionUser();
   const isOwner = currentUser?.id === owner.id;
 
   const repos = isOwner
-    ? await db
-        .select()
-        .from(repositories)
-        .where(eq(repositories.ownerId, owner.id))
+    ? await db.select().from(repositories).where(eq(repositories.ownerId, owner.id))
     : await db
         .select()
         .from(repositories)
-        .where(
-          and(
-            eq(repositories.ownerId, owner.id),
-            eq(repositories.isPublic, true),
-          ),
-        );
+        .where(and(eq(repositories.ownerId, owner.id), eq(repositories.isPublic, true)));
 
   const serialized = repos.map((r) => ({
     ...r,
-    createdAt:
-      r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
-    updatedAt:
-      r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
+    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+    updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
   }));
 
   return { repositories: serialized };
 }
 
 export async function getRepo(ownerName: string, repoName: string) {
-  const [owner] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, ownerName))
-    .limit(1);
+  const [owner] = await db.select().from(users).where(eq(users.username, ownerName)).limit(1);
   if (!owner) return { error: "User not found" };
 
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(
-      and(eq(repositories.ownerId, owner.id), eq(repositories.name, repoName)),
-    )
+    .where(and(eq(repositories.ownerId, owner.id), eq(repositories.name, repoName)))
     .limit(1);
 
   if (!repo) return { error: "Repository not found" };
@@ -234,14 +195,8 @@ export async function getRepo(ownerName: string, repoName: string) {
       defaultBranch,
       owner: ownerName,
       isOwner,
-      createdAt:
-        repo.createdAt instanceof Date
-          ? repo.createdAt.toISOString()
-          : repo.createdAt,
-      updatedAt:
-        repo.updatedAt instanceof Date
-          ? repo.updatedAt.toISOString()
-          : repo.updatedAt,
+      createdAt: repo.createdAt instanceof Date ? repo.createdAt.toISOString() : repo.createdAt,
+      updatedAt: repo.updatedAt instanceof Date ? repo.updatedAt.toISOString() : repo.updatedAt,
     },
   };
 }
@@ -279,11 +234,7 @@ export async function getRepoRefs(ownerName: string, repoName: string) {
   }
 }
 
-export async function getRepoTree(
-  ownerName: string,
-  repoName: string,
-  refAndPath: string,
-) {
+export async function getRepoTree(ownerName: string, repoName: string, refAndPath: string) {
   const currentUser = await getSessionUser();
   const repo = await findRepo(ownerName, repoName, currentUser?.id);
   if (!repo) return { error: "Repository not found" };
@@ -306,12 +257,7 @@ export async function getRepoTree(
       const [commitRecord] = await db
         .select({ treeOid: gitCommits.treeOid })
         .from(gitCommits)
-        .where(
-          and(
-            eq(gitCommits.repoId, repo.id),
-            eq(gitCommits.oid, refRecord.commitOid),
-          ),
-        )
+        .where(and(eq(gitCommits.repoId, repo.id), eq(gitCommits.oid, refRecord.commitOid)))
         .limit(1);
 
       if (commitRecord) {
@@ -330,10 +276,7 @@ export async function getRepoTree(
               eq(gitTreeEntries.parentPath, treePath),
             ),
           )
-          .orderBy(
-            desc(gitTreeEntries.entryType),
-            asc(gitTreeEntries.entryName),
-          );
+          .orderBy(desc(gitTreeEntries.entryType), asc(gitTreeEntries.entryName));
 
         if (entries.length > 0) {
           const paths = entries.map((e) => e.path);
@@ -364,10 +307,7 @@ export async function getRepoTree(
               ),
             )
             .where(
-              and(
-                eq(gitCommitFiles.repoId, repo.id),
-                sql`${gitCommitFiles.filePath} IN ${paths}`,
-              ),
+              and(eq(gitCommitFiles.repoId, repo.id), sql`${gitCommitFiles.filePath} IN ${paths}`),
             )
             .orderBy(asc(gitCommitAncestry.depth));
 
@@ -393,12 +333,47 @@ export async function getRepoTree(
             }
           }
 
+          // Detect LFS pointers
+          const lfsOids = new Set<string>();
+          const [lfsCount] = await db
+            .select({ count: sql<number>`cast(count(*) as integer)` })
+            .from(lfsObjects)
+            .where(eq(lfsObjects.repoId, repo.id));
+
+          if (lfsCount.count > 0) {
+            const blobOids = entries.filter((e) => e.type === "blob").map((e) => e.oid);
+            if (blobOids.length > 0) {
+              const candidateBlobs = await db
+                .select({ oid: gitBlobs.oid, content: gitBlobs.content })
+                .from(gitBlobs)
+                .where(
+                  and(
+                    eq(gitBlobs.repoId, repo.id),
+                    sql`${gitBlobs.oid} IN ${blobOids}`,
+                    sql`${gitBlobs.size} < 200`,
+                    eq(gitBlobs.isBinary, false),
+                  ),
+                );
+              for (const blob of candidateBlobs) {
+                if (blob.content && parseLfsPointer(blob.content)) {
+                  lfsOids.add(blob.oid);
+                }
+              }
+            }
+          }
+
           const entriesWithCommits = entries.map((entry) => ({
             ...entry,
             lastCommit: lastCommitMap.get(entry.path) || null,
+            isLfs: lfsOids.has(entry.oid),
           }));
 
-          return { entries: entriesWithCommits, ref, path: treePath };
+          return {
+            entries: entriesWithCommits,
+            ref,
+            path: treePath,
+            hasLfs: lfsCount.count > 0,
+          };
         }
       }
     }
@@ -425,29 +400,49 @@ export async function getRepoTree(
 
     const entries = await getTree(repo.diskPath, gitRef, gitTreePath);
     const paths = entries.map((e) => e.path);
-    const lastCommits = await getLastCommitsForPaths(
-      repo.diskPath,
-      gitRef,
-      paths,
-    );
+    const lastCommits = await getLastCommitsForPaths(repo.diskPath, gitRef, paths);
+
+    // Check if repo uses LFS
+    const [lfsCount] = await db
+      .select({ count: sql<number>`cast(count(*) as integer)` })
+      .from(lfsObjects)
+      .where(eq(lfsObjects.repoId, repo.id));
+
+    const lfsOids = new Set<string>();
+    if (lfsCount.count > 0) {
+      // Read small blobs from git to check for LFS pointers
+      for (const entry of entries) {
+        if (entry.type !== "blob") continue;
+        try {
+          const { content } = await getBlob(repo.diskPath, gitRef, entry.path);
+          if (content.length < 200) {
+            const text = new TextDecoder().decode(content);
+            if (parseLfsPointer(text)) lfsOids.add(entry.oid);
+          }
+        } catch {
+          // skip unreadable blobs
+        }
+      }
+    }
 
     const entriesWithCommits = entries.map((entry) => {
       const commit = lastCommits.get(entry.path);
-      return { ...entry, lastCommit: commit || null };
+      return { ...entry, lastCommit: commit || null, isLfs: lfsOids.has(entry.oid) };
     });
 
-    return { entries: entriesWithCommits, ref: gitRef, path: gitTreePath };
+    return {
+      entries: entriesWithCommits,
+      ref: gitRef,
+      path: gitTreePath,
+      hasLfs: lfsCount.count > 0,
+    };
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to read tree";
     return { error: message };
   }
 }
 
-export async function getRepoBlob(
-  ownerName: string,
-  repoName: string,
-  refAndPath: string,
-) {
+export async function getRepoBlob(ownerName: string, repoName: string, refAndPath: string) {
   const currentUser = await getSessionUser();
   const repo = await findRepo(ownerName, repoName, currentUser?.id);
   if (!repo) return { error: "Repository not found" };
@@ -470,12 +465,7 @@ export async function getRepoBlob(
       const [commitRecord] = await db
         .select({ treeOid: gitCommits.treeOid })
         .from(gitCommits)
-        .where(
-          and(
-            eq(gitCommits.repoId, repo.id),
-            eq(gitCommits.oid, refRecord.commitOid),
-          ),
-        )
+        .where(and(eq(gitCommits.repoId, repo.id), eq(gitCommits.oid, refRecord.commitOid)))
         .limit(1);
 
       if (commitRecord) {
@@ -495,12 +485,7 @@ export async function getRepoBlob(
           const [blob] = await db
             .select()
             .from(gitBlobs)
-            .where(
-              and(
-                eq(gitBlobs.repoId, repo.id),
-                eq(gitBlobs.oid, treeEntry.entryOid),
-              ),
-            )
+            .where(and(eq(gitBlobs.repoId, repo.id), eq(gitBlobs.oid, treeEntry.entryOid)))
             .limit(1);
 
           if (blob) {
@@ -515,6 +500,21 @@ export async function getRepoBlob(
               };
             }
             if (!blob.isTruncated) {
+              const lfsInfo = parseLfsPointer(blob.content);
+              if (lfsInfo) {
+                const [lfsRecord] = await db
+                  .select({ oid: lfsObjects.oid })
+                  .from(lfsObjects)
+                  .where(and(eq(lfsObjects.repoId, repo.id), eq(lfsObjects.oid, lfsInfo.oid)))
+                  .limit(1);
+                return {
+                  content: blob.content,
+                  oid: blob.oid,
+                  ref,
+                  path: filePath,
+                  lfsPointer: { oid: lfsInfo.oid, size: lfsInfo.size, stored: !!lfsRecord },
+                };
+              }
               return {
                 content: blob.content,
                 oid: blob.oid,
@@ -549,6 +549,21 @@ export async function getRepoBlob(
 
     const { content, oid } = await getBlob(repo.diskPath, gitRef, gitFilePath);
     const text = new TextDecoder().decode(content);
+    const lfsInfo = parseLfsPointer(text);
+    if (lfsInfo) {
+      const [lfsRecord] = await db
+        .select({ oid: lfsObjects.oid })
+        .from(lfsObjects)
+        .where(and(eq(lfsObjects.repoId, repo.id), eq(lfsObjects.oid, lfsInfo.oid)))
+        .limit(1);
+      return {
+        content: text,
+        oid,
+        ref: gitRef,
+        path: gitFilePath,
+        lfsPointer: { oid: lfsInfo.oid, size: lfsInfo.size, stored: !!lfsRecord },
+      };
+    }
     return { content: text, oid, ref: gitRef, path: gitFilePath };
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to read file";
@@ -589,12 +604,7 @@ export async function getRepoCommits(
         eq(gitCommits.oid, gitCommitAncestry.commitOid),
       ),
     )
-    .where(
-      and(
-        eq(gitCommitAncestry.repoId, repo.id),
-        eq(gitCommitAncestry.refName, ref),
-      ),
-    )
+    .where(and(eq(gitCommitAncestry.repoId, repo.id), eq(gitCommitAncestry.refName, ref)))
     .groupBy(gitCommits.authorEmail)
     .orderBy(sql`count(*) desc`);
 
@@ -674,11 +684,7 @@ export async function getRepoCommits(
   }
 }
 
-export async function getRepoCommit(
-  ownerName: string,
-  repoName: string,
-  sha: string,
-) {
+export async function getRepoCommit(ownerName: string, repoName: string, sha: string) {
   const currentUser = await getSessionUser();
   const repo = await findRepo(ownerName, repoName, currentUser?.id);
   if (!repo) return { error: "Repository not found" };
@@ -807,12 +813,7 @@ export async function getRepoLanguages(ownerName: string, repoName: string) {
   const [commitRecord] = await db
     .select({ treeOid: gitCommits.treeOid })
     .from(gitCommits)
-    .where(
-      and(
-        eq(gitCommits.repoId, repo.id),
-        eq(gitCommits.oid, refRecord.commitOid),
-      ),
-    )
+    .where(and(eq(gitCommits.repoId, repo.id), eq(gitCommits.oid, refRecord.commitOid)))
     .limit(1);
 
   if (!commitRecord) return { languages: [] };
@@ -826,10 +827,7 @@ export async function getRepoLanguages(ownerName: string, repoName: string) {
     .from(gitTreeEntries)
     .innerJoin(
       gitBlobs,
-      and(
-        eq(gitBlobs.repoId, gitTreeEntries.repoId),
-        eq(gitBlobs.oid, gitTreeEntries.entryOid),
-      ),
+      and(eq(gitBlobs.repoId, gitTreeEntries.repoId), eq(gitBlobs.oid, gitTreeEntries.entryOid)),
     )
     .where(
       and(
@@ -873,11 +871,7 @@ export async function getRepoLanguages(ownerName: string, repoName: string) {
   return { languages };
 }
 
-export async function getRepoFilePaths(
-  ownerName: string,
-  repoName: string,
-  ref?: string,
-) {
+export async function getRepoFilePaths(ownerName: string, repoName: string, ref?: string) {
   const currentUser = await getSessionUser();
   const repo = await findRepo(ownerName, repoName, currentUser?.id);
   if (!repo) return { paths: [] };
@@ -896,12 +890,7 @@ export async function getRepoFilePaths(
   const [commitRecord] = await db
     .select({ treeOid: gitCommits.treeOid })
     .from(gitCommits)
-    .where(
-      and(
-        eq(gitCommits.repoId, repo.id),
-        eq(gitCommits.oid, refRecord.commitOid),
-      ),
-    )
+    .where(and(eq(gitCommits.repoId, repo.id), eq(gitCommits.oid, refRecord.commitOid)))
     .limit(1);
 
   if (!commitRecord) return { paths: [], ref: targetRef };
@@ -943,12 +932,8 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
     })
     .from(gitCommits)
     .where(and(...commitConditions))
-    .groupBy(
-      sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`,
-    )
-    .orderBy(
-      sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`,
-    );
+    .groupBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`)
+    .orderBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`);
 
   const weeklyRows = await db
     .select({
@@ -957,12 +942,8 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
     })
     .from(gitCommits)
     .where(and(...commitConditions))
-    .groupBy(
-      sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
-    )
-    .orderBy(
-      sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
-    );
+    .groupBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`)
+    .orderBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`);
 
   // Contributors always show all (not filtered) so the dropdown works
   const contributors = await db
@@ -991,12 +972,8 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
         sql`cast(${pullRequests.createdAt} as integer) >= ${oneYearAgo}`,
       ),
     )
-    .groupBy(
-      sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`,
-    )
-    .orderBy(
-      sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`,
-    );
+    .groupBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`)
+    .orderBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`);
 
   // Daily issue counts (by createdAt)
   const dailyIssueRows = await db
@@ -1006,17 +983,10 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
     })
     .from(issues)
     .where(
-      and(
-        eq(issues.repoId, repo.id),
-        sql`cast(${issues.createdAt} as integer) >= ${oneYearAgo}`,
-      ),
+      and(eq(issues.repoId, repo.id), sql`cast(${issues.createdAt} as integer) >= ${oneYearAgo}`),
     )
-    .groupBy(
-      sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`,
-    )
-    .orderBy(
-      sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`,
-    );
+    .groupBy(sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`)
+    .orderBy(sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`);
 
   const [totalRow] = await db
     .select({ count: sql<number>`cast(count(*) as integer)` })
@@ -1063,12 +1033,13 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
       sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
       gitCommitFiles.changeType,
     )
-    .orderBy(
-      sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
-    );
+    .orderBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`);
 
   // Aggregate file changes into {week, additions, modifications, deletions}
-  const fileFreqMap = new Map<number, { additions: number; modifications: number; deletions: number }>();
+  const fileFreqMap = new Map<
+    number,
+    { additions: number; modifications: number; deletions: number }
+  >();
   for (const r of fileChangeRows) {
     const entry = fileFreqMap.get(r.week) || { additions: 0, modifications: 0, deletions: 0 };
     if (r.changeType === "add") entry.additions += r.count;
@@ -1085,12 +1056,7 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
   const defaultRef = await db
     .select({ commitOid: gitRefs.commitOid })
     .from(gitRefs)
-    .where(
-      and(
-        eq(gitRefs.repoId, repo.id),
-        eq(gitRefs.name, repo.defaultBranch),
-      ),
-    )
+    .where(and(eq(gitRefs.repoId, repo.id), eq(gitRefs.name, repo.defaultBranch)))
     .limit(1);
 
   let languages: { language: string; count: number; percentage: number }[] = [];
@@ -1098,12 +1064,7 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
     const headCommit = await db
       .select({ treeOid: gitCommits.treeOid })
       .from(gitCommits)
-      .where(
-        and(
-          eq(gitCommits.repoId, repo.id),
-          eq(gitCommits.oid, defaultRef[0].commitOid),
-        ),
-      )
+      .where(and(eq(gitCommits.repoId, repo.id), eq(gitCommits.oid, defaultRef[0].commitOid)))
       .limit(1);
 
     if (headCommit.length > 0) {
@@ -1225,9 +1186,7 @@ export async function getRepoAuditLogs(
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(
-      and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)),
-    )
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)))
     .limit(1);
 
   if (!repo) return { error: "Repository not found" };
@@ -1248,22 +1207,14 @@ export async function getRepoAuditLogs(
     })
     .from(auditLogs)
     .innerJoin(users, eq(users.id, auditLogs.userId))
-    .where(
-      and(
-        eq(auditLogs.targetType, "repository"),
-        eq(auditLogs.targetId, repo.id),
-      ),
-    )
+    .where(and(eq(auditLogs.targetType, "repository"), eq(auditLogs.targetId, repo.id)))
     .orderBy(desc(auditLogs.createdAt))
     .limit(limit)
     .offset(offset);
 
   const serializedLogs = logs.map((log) => ({
     ...log,
-    createdAt:
-      log.createdAt instanceof Date
-        ? log.createdAt.toISOString()
-        : log.createdAt,
+    createdAt: log.createdAt instanceof Date ? log.createdAt.toISOString() : log.createdAt,
   }));
 
   return { logs: serializedLogs };
@@ -1271,11 +1222,7 @@ export async function getRepoAuditLogs(
 
 // --- Mutation Functions ---
 
-export async function createRepo(
-  name: string,
-  description: string,
-  isPublic: boolean = true,
-) {
+export async function createRepo(name: string, description: string, isPublic: boolean = true) {
   const user = await getSessionUser();
   if (!user) return { error: "Unauthorized" };
 
@@ -1338,25 +1285,18 @@ export async function updateRepo(
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(
-      and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)),
-    )
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)))
     .limit(1);
 
   if (!repo) return { error: "Repository not found" };
 
   const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
-  if (typeof updates.description === "string")
-    dbUpdates.description = updates.description || null;
-  if (typeof updates.isPublic === "boolean")
-    dbUpdates.isPublic = updates.isPublic;
+  if (typeof updates.description === "string") dbUpdates.description = updates.description || null;
+  if (typeof updates.isPublic === "boolean") dbUpdates.isPublic = updates.isPublic;
   if (typeof updates.defaultBranch === "string" && updates.defaultBranch)
     dbUpdates.defaultBranch = updates.defaultBranch;
 
-  await db
-    .update(repositories)
-    .set(dbUpdates)
-    .where(eq(repositories.id, repo.id));
+  await db.update(repositories).set(dbUpdates).where(eq(repositories.id, repo.id));
 
   const req = getRequest();
   logAudit({
@@ -1378,13 +1318,9 @@ export async function updateRepo(
       ...updated,
       owner: ownerName,
       createdAt:
-        updated.createdAt instanceof Date
-          ? updated.createdAt.toISOString()
-          : updated.createdAt,
+        updated.createdAt instanceof Date ? updated.createdAt.toISOString() : updated.createdAt,
       updatedAt:
-        updated.updatedAt instanceof Date
-          ? updated.updatedAt.toISOString()
-          : updated.updatedAt,
+        updated.updatedAt instanceof Date ? updated.updatedAt.toISOString() : updated.updatedAt,
     },
   };
 }
@@ -1397,9 +1333,7 @@ export async function deleteRepo(ownerName: string, repoName: string) {
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(
-      and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)),
-    )
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)))
     .limit(1);
 
   if (!repo) return { error: "Repository not found" };

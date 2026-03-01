@@ -162,12 +162,7 @@ export function CommitsList({
                   : "border-border bg-surface text-text-secondary"
               }`}
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -182,7 +177,12 @@ export function CommitsList({
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </button>
             {selectedAuthor && (
@@ -196,7 +196,12 @@ export function CommitsList({
                 title="Clear author filter"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             )}
@@ -227,8 +232,18 @@ export function CommitsList({
                     >
                       <span>All authors</span>
                       {!authorFilter && (
-                        <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <svg
+                          className="w-4 h-4 text-primary"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
                       )}
                     </button>
@@ -244,7 +259,9 @@ export function CommitsList({
                           setAuthorSearch("");
                         }}
                         className={`w-full text-left px-3 py-2 text-sm hover:bg-surface-secondary flex items-center justify-between gap-2 ${
-                          authorFilter === a.email ? "text-primary font-medium" : "text-text-primary"
+                          authorFilter === a.email
+                            ? "text-primary font-medium"
+                            : "text-text-primary"
                         }`}
                       >
                         <span className="flex items-center gap-2 min-w-0">
@@ -257,8 +274,18 @@ export function CommitsList({
                           </span>
                         </span>
                         {authorFilter === a.email && (
-                          <svg className="w-4 h-4 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          <svg
+                            className="w-4 h-4 text-primary flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
                           </svg>
                         )}
                       </button>
@@ -273,20 +300,13 @@ export function CommitsList({
         )}
 
         {loading && (
-          <span className="text-xs text-text-secondary animate-pulse-subtle">
-            Loading...
-          </span>
+          <span className="text-xs text-text-secondary animate-pulse-subtle">Loading...</span>
         )}
       </div>
 
       {/* Commit count */}
       <div className="flex items-center gap-2 mb-4 text-sm text-text-secondary">
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -310,10 +330,7 @@ export function CommitsList({
       {loading ? (
         <div className="border border-border rounded-lg overflow-hidden bg-surface">
           {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className={`px-4 py-3 ${i < 4 ? "border-b border-border" : ""}`}
-            >
+            <div key={i} className={`px-4 py-3 ${i < 4 ? "border-b border-border" : ""}`}>
               <div className="skeleton w-3/4 h-4 mb-1.5" />
               <div className="skeleton w-48 h-3" />
             </div>
@@ -367,9 +384,7 @@ export function CommitsList({
               d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <h3 className="text-sm font-medium text-text-primary mb-1">
-            No commits found
-          </h3>
+          <h3 className="text-sm font-medium text-text-primary mb-1">No commits found</h3>
           {selectedAuthor && (
             <p className="text-xs text-text-secondary">
               No commits by {selectedAuthor.name} on this branch.

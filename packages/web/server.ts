@@ -44,7 +44,11 @@ async function main() {
   app.use("*", async (c, next) => {
     const pathname = new URL(c.req.url).pathname;
     // Skip paths handled by other routes
-    if (pathname.startsWith("/api/") || pathname.startsWith("/assets/") || pathname.startsWith("/_flight")) {
+    if (
+      pathname.startsWith("/api/") ||
+      pathname.startsWith("/assets/") ||
+      pathname.startsWith("/_flight")
+    ) {
       return next();
     }
     const ext = pathname.slice(pathname.lastIndexOf("."));
@@ -75,9 +79,7 @@ async function main() {
   startSshServer();
 
   // Backfill indexes for existing repos (runs in background on startup)
-  backfillIndexes().catch((err: unknown) =>
-    console.error("Backfill failed:", err),
-  );
+  backfillIndexes().catch((err: unknown) => console.error("Backfill failed:", err));
 }
 
 main().catch(console.error);

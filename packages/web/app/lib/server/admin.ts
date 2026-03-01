@@ -17,10 +17,18 @@ async function requireAdmin() {
 export async function getAdminDashboard() {
   await requireAdmin();
 
-  const [userCount] = await db.select({ count: sql<number>`cast(count(*) as integer)` }).from(users);
-  const [repoCount] = await db.select({ count: sql<number>`cast(count(*) as integer)` }).from(repositories);
-  const [sessionCount] = await db.select({ count: sql<number>`cast(count(*) as integer)` }).from(sessions);
-  const [logCount] = await db.select({ count: sql<number>`cast(count(*) as integer)` }).from(systemLogs);
+  const [userCount] = await db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(users);
+  const [repoCount] = await db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(repositories);
+  const [sessionCount] = await db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(sessions);
+  const [logCount] = await db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(systemLogs);
 
   const memUsage = process.memoryUsage();
   const uptimeMs = Date.now() - startTime;
@@ -52,7 +60,8 @@ export async function getSystemLogs(filters?: {
   const offset = filters?.offset || 0;
 
   const conditions = [];
-  if (filters?.level) conditions.push(eq(systemLogs.level, filters.level as "debug" | "info" | "warn" | "error"));
+  if (filters?.level)
+    conditions.push(eq(systemLogs.level, filters.level as "debug" | "info" | "warn" | "error"));
   if (filters?.source) conditions.push(eq(systemLogs.source, filters.source));
   if (filters?.search) conditions.push(like(systemLogs.message, `%${filters.search}%`));
 

@@ -760,7 +760,13 @@ async function main() {
         }
 
         const branchAuthor = GIT_AUTHORS[r.branches.indexOf(branch) % GIT_AUTHORS.length];
-        const branchCommit = makeCommit(diskPath, branchTree, commitMsg, [parentHash!], branchAuthor);
+        const branchCommit = makeCommit(
+          diskPath,
+          branchTree,
+          commitMsg,
+          [parentHash!],
+          branchAuthor,
+        );
         updateRef(diskPath, `refs/heads/${branch}`, branchCommit);
       }
     }

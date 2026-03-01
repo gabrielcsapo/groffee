@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  createContext,
-  useContext,
-} from "react";
+import { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
 import { useRouter } from "react-flight-router/client";
 import { getRepoFilePaths } from "../lib/server/repos";
 
@@ -15,10 +8,7 @@ import { getRepoFilePaths } from "../lib/server/repos";
  * Fuzzy match: all chars in pattern must appear in order in target.
  * Returns score (lower = better) and match indices, or null.
  */
-function fuzzyMatch(
-  pattern: string,
-  target: string,
-): { score: number; indices: number[] } | null {
+function fuzzyMatch(pattern: string, target: string): { score: number; indices: number[] } | null {
   const pLower = pattern.toLowerCase();
   const tLower = target.toLowerCase();
   const indices: number[] = [];
@@ -45,13 +35,7 @@ function fuzzyMatch(
   return { score, indices };
 }
 
-function HighlightedPath({
-  path,
-  indices,
-}: {
-  path: string;
-  indices: number[];
-}) {
+function HighlightedPath({ path, indices }: { path: string; indices: number[] }) {
   const indexSet = new Set(indices);
   const parts: { text: string; highlight: boolean }[] = [];
   let current = "";
@@ -143,9 +127,7 @@ export function FileSearchProvider({
         e.key === "t" &&
         !e.metaKey &&
         !e.ctrlKey &&
-        !["INPUT", "TEXTAREA", "SELECT"].includes(
-          (e.target as HTMLElement).tagName,
-        )
+        !["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement).tagName)
       ) {
         e.preventDefault();
         setIsOpen(true);
@@ -184,9 +166,7 @@ export function FileSearchProvider({
 
   useEffect(() => {
     if (listRef.current) {
-      const el = listRef.current.children[selectedIdx] as
-        | HTMLElement
-        | undefined;
+      const el = listRef.current.children[selectedIdx] as HTMLElement | undefined;
       el?.scrollIntoView({ block: "nearest" });
     }
   }, [selectedIdx]);
@@ -297,10 +277,7 @@ export function FileSearchProvider({
                         />
                       </svg>
                       {query ? (
-                        <HighlightedPath
-                          path={result.path}
-                          indices={result.indices}
-                        />
+                        <HighlightedPath path={result.path} indices={result.indices} />
                       ) : (
                         <span className="font-mono text-sm">{result.path}</span>
                       )}
@@ -328,9 +305,7 @@ export function FileSearchProvider({
                     open
                   </span>
                   {allPaths.length > MAX_RESULTS && !query && (
-                    <span className="ml-auto">
-                      {allPaths.length.toLocaleString()} files
-                    </span>
+                    <span className="ml-auto">{allPaths.length.toLocaleString()} files</span>
                   )}
                 </div>
               )}
@@ -353,12 +328,7 @@ export function FileSearchButton() {
       onClick={() => ctx?.open()}
       className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-text-secondary/60 bg-surface border border-border rounded-md hover:border-border-hover hover:text-text-secondary transition-colors cursor-text"
     >
-      <svg
-        className="w-4 h-4 flex-shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
+      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
