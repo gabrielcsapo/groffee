@@ -4,8 +4,8 @@ import { getIssues } from "../lib/server/issues";
 import { getPullRequests } from "../lib/server/pulls";
 import { RepoNav } from "../components/repo-nav";
 
-export default async function RepoLayout({ params }: { params: { owner: string; repo: string } }) {
-  const { owner, repo } = params;
+export default async function RepoLayout({ params }: { params?: Record<string, string> }) {
+  const { owner, repo } = params as { owner: string; repo: string };
 
   const [repoData, issueData, prData] = await Promise.all([
     getRepo(owner, repo),
@@ -47,7 +47,9 @@ export default async function RepoLayout({ params }: { params: { owner: string; 
               >
                 {repo}
               </Link>
-              <span className={`ml-2 badge ${repository.isPublic ? "badge-public" : "badge-private"}`}>
+              <span
+                className={`ml-2 badge ${repository.isPublic ? "badge-public" : "badge-private"}`}
+              >
                 {repository.isPublic ? "Public" : "Private"}
               </span>
             </div>

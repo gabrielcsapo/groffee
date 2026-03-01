@@ -70,6 +70,7 @@ export default function AdminLogsClient() {
         return fetchLogs();
       })
       .catch(() => setAuthorized(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!authorized) {
@@ -77,7 +78,9 @@ export default function AdminLogsClient() {
       <div className="text-center py-20">
         <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
         <p className="text-text-secondary">Admin access required.</p>
-        <Link to="/" className="text-primary mt-4 inline-block">Go home</Link>
+        <Link to="/" className="text-primary mt-4 inline-block">
+          Go home
+        </Link>
       </div>
     );
   }
@@ -85,7 +88,9 @@ export default function AdminLogsClient() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">System Logs</h1>
-      <p className="text-text-secondary text-sm mb-6">View structured request and application logs</p>
+      <p className="text-text-secondary text-sm mb-6">
+        View structured request and application logs
+      </p>
       <AdminNav />
 
       {/* Filters */}
@@ -94,7 +99,10 @@ export default function AdminLogsClient() {
           {["", "debug", "info", "warn", "error"].map((l) => (
             <button
               key={l}
-              onClick={() => { setLevel(l); fetchLogs(0); }}
+              onClick={() => {
+                setLevel(l);
+                fetchLogs(0);
+              }}
               className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${
                 level === l
                   ? "bg-primary text-white"
@@ -152,11 +160,15 @@ export default function AdminLogsClient() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-text-secondary">Loading...</td>
+                <td colSpan={7} className="px-3 py-8 text-center text-text-secondary">
+                  Loading...
+                </td>
               </tr>
             ) : logs.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-text-secondary">No logs found</td>
+                <td colSpan={7} className="px-3 py-8 text-center text-text-secondary">
+                  No logs found
+                </td>
               </tr>
             ) : (
               logs.map((log) => (
@@ -165,17 +177,26 @@ export default function AdminLogsClient() {
                     {new Date(log.createdAt).toLocaleString()}
                   </td>
                   <td className="px-3 py-1.5">
-                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${LEVEL_COLORS[log.level] || ""}`}>
+                    <span
+                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${LEVEL_COLORS[log.level] || ""}`}
+                    >
                       {log.level}
                     </span>
                   </td>
                   <td className="px-3 py-1.5 text-text-secondary">{log.source || "-"}</td>
-                  <td className="px-3 py-1.5 truncate max-w-md" title={log.message}>{log.message}</td>
-                  <td className="px-3 py-1.5 text-text-secondary font-mono">{log.statusCode || "-"}</td>
+                  <td className="px-3 py-1.5 truncate max-w-md" title={log.message}>
+                    {log.message}
+                  </td>
+                  <td className="px-3 py-1.5 text-text-secondary font-mono">
+                    {log.statusCode || "-"}
+                  </td>
                   <td className="px-3 py-1.5 text-text-secondary font-mono">
                     {log.duration != null ? `${log.duration}ms` : "-"}
                   </td>
-                  <td className="px-3 py-1.5 text-text-secondary font-mono" title={log.requestId || ""}>
+                  <td
+                    className="px-3 py-1.5 text-text-secondary font-mono"
+                    title={log.requestId || ""}
+                  >
                     {log.requestId ? log.requestId.slice(0, 8) : "-"}
                   </td>
                 </tr>

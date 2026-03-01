@@ -27,8 +27,10 @@ import {
 } from "@groffee/git";
 import { getDiff } from "@groffee/git";
 import path from "node:path";
+import fs from "node:fs";
 import type { AppEnv } from "../types.js";
 import { logAudit, getClientIp } from "../lib/audit.js";
+import { parseLfsPointer, lfsObjectDiskPath } from "../../lib/lfs.js";
 import { getCachedActivity, setCachedActivity } from "../lib/activity-cache.js";
 
 const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data", "repositories");
@@ -79,9 +81,7 @@ repoRoutes.get("/", async (c) => {
   // Attach owner usernames
   const ownerIds = [...new Set(repos.map((r) => r.ownerId))];
   const owners =
-    ownerIds.length > 0
-      ? await db.select().from(users).where(inArray(users.id, ownerIds))
-      : [];
+    ownerIds.length > 0 ? await db.select().from(users).where(inArray(users.id, ownerIds)) : [];
   const ownerMap = new Map(owners.filter(Boolean).map((u) => [u.id, u.username]));
 
   const result = repos.map((r) => ({
@@ -460,10 +460,7 @@ repoRoutes.get("/:owner/:name/tree/:ref{.+}", optionalAuth, async (c) => {
               ),
             )
             .where(
-              and(
-                eq(gitCommitFiles.repoId, repo.id),
-                sql`${gitCommitFiles.filePath} IN ${paths}`,
-              ),
+              and(eq(gitCommitFiles.repoId, repo.id), sql`${gitCommitFiles.filePath} IN ${paths}`),
             )
             .orderBy(asc(gitCommitAncestry.depth));
 
@@ -819,10 +816,30 @@ repoRoutes.get("/:owner/:name/raw/:ref{.+}", optionalAuth, async (c) => {
 
     const { content } = await getBlob(repo.diskPath, gitRef, gitFilePath);
 
+    // Check if the blob is an LFS pointer and serve the actual object
+    const text = new TextDecoder().decode(content);
+    const lfsPointer = parseLfsPointer(text);
+    if (lfsPointer) {
+      const dataDir = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
+      const objectPath = lfsObjectDiskPath(dataDir, lfsPointer.oid);
+      if (fs.existsSync(objectPath)) {
+        const ext = gitFilePath.split(".").pop()?.toLowerCase() || "";
+        const contentType = CONTENT_TYPE_MAP[ext] || "application/octet-stream";
+        const stream = fs.createReadStream(objectPath);
+        return new Response(stream as unknown as ReadableStream, {
+          headers: {
+            "Content-Type": contentType,
+            "Content-Length": String(lfsPointer.size),
+            "Cache-Control": "public, max-age=3600, immutable",
+          },
+        });
+      }
+    }
+
     const ext = gitFilePath.split(".").pop()?.toLowerCase() || "";
     const contentType = CONTENT_TYPE_MAP[ext] || "application/octet-stream";
 
-    return new Response(content, {
+    return new Response(Buffer.from(content), {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=3600, immutable",
@@ -899,7 +916,10 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
     })
     .from(pullRequests)
     .where(
-      and(eq(pullRequests.repoId, repo.id), sql`cast(${pullRequests.createdAt} as integer) >= ${oneYearAgo}`),
+      and(
+        eq(pullRequests.repoId, repo.id),
+        sql`cast(${pullRequests.createdAt} as integer) >= ${oneYearAgo}`,
+      ),
     )
     .groupBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`)
     .orderBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`);
@@ -948,7 +968,10 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
     .from(gitCommitFiles)
     .innerJoin(
       gitCommits,
-      and(eq(gitCommitFiles.repoId, gitCommits.repoId), eq(gitCommitFiles.commitOid, gitCommits.oid)),
+      and(
+        eq(gitCommitFiles.repoId, gitCommits.repoId),
+        eq(gitCommitFiles.commitOid, gitCommits.oid),
+      ),
     )
     .where(and(...fileConds))
     .groupBy(
@@ -957,7 +980,10 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
     )
     .orderBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`);
 
-  const fileFreqMap = new Map<number, { additions: number; modifications: number; deletions: number }>();
+  const fileFreqMap = new Map<
+    number,
+    { additions: number; modifications: number; deletions: number }
+  >();
   for (const r of fileChangeRows) {
     const entry = fileFreqMap.get(r.week) || { additions: 0, modifications: 0, deletions: 0 };
     if (r.changeType === "add") entry.additions += r.count;

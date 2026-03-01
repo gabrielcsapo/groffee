@@ -56,7 +56,6 @@ export const routes: RouteConfig[] = [
       {
         id: "admin",
         path: "admin",
-        index: true,
         component: () => import("./routes/admin"),
       },
       {
@@ -148,18 +147,11 @@ export const routes: RouteConfig[] = [
             id: "pull-detail",
             path: "pull/:number",
             component: () => import("./routes/pull-detail"),
-            children: [
-              {
-                id: "pull-conversation",
-                index: true,
-                component: () => import("./routes/pull-conversation"),
-              },
-              {
-                id: "pull-files",
-                path: "files-changed",
-                component: () => import("./routes/pull-files"),
-              },
-            ],
+          },
+          {
+            id: "pull-detail-files",
+            path: "pull/:number/files-changed",
+            component: () => import("./routes/pull-detail"),
           },
         ],
       },

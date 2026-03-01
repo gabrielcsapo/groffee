@@ -179,36 +179,35 @@ export default function SettingsKeysClient() {
       <div className="bg-surface border border-border rounded-lg p-6">
         <h2 className="text-lg font-semibold text-text-primary mb-3">Generating an SSH key</h2>
         <p className="text-sm text-text-secondary mb-4">
-          If you don't have an SSH key yet, you can generate one using the instructions below.
-          We recommend ed25519 keys for the best security and performance.
+          If you don't have an SSH key yet, you can generate one using the instructions below. We
+          recommend ed25519 keys for the best security and performance.
         </p>
 
         <div className="flex flex-col gap-4">
           <div>
             <h3 className="text-sm font-medium text-text-primary mb-1">macOS / Linux</h3>
-            <p className="text-xs text-text-secondary mb-2">
-              Open a terminal and run:
-            </p>
+            <p className="text-xs text-text-secondary mb-2">Open a terminal and run:</p>
             <pre className="text-xs bg-surface-secondary p-3 rounded-md border border-border font-mono text-text-primary overflow-x-auto">
               ssh-keygen -t ed25519 -C "your_email@example.com"
             </pre>
             <p className="text-xs text-text-secondary mt-2">
-              Press Enter to accept the default file location. Optionally set a passphrase.
-              Then copy your public key:
+              Press Enter to accept the default file location. Optionally set a passphrase. Then
+              copy your public key:
             </p>
             <pre className="text-xs bg-surface-secondary p-3 rounded-md border border-border font-mono text-text-primary overflow-x-auto mt-2">
-              <span className="text-text-secondary"># macOS</span>{"\n"}
-              pbcopy &lt; ~/.ssh/id_ed25519.pub{"\n"}{"\n"}
-              <span className="text-text-secondary"># Linux</span>{"\n"}
+              <span className="text-text-secondary"># macOS</span>
+              {"\n"}
+              pbcopy &lt; ~/.ssh/id_ed25519.pub{"\n"}
+              {"\n"}
+              <span className="text-text-secondary"># Linux</span>
+              {"\n"}
               cat ~/.ssh/id_ed25519.pub
             </pre>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-text-primary mb-1">Windows</h3>
-            <p className="text-xs text-text-secondary mb-2">
-              Open PowerShell or Git Bash and run:
-            </p>
+            <p className="text-xs text-text-secondary mb-2">Open PowerShell or Git Bash and run:</p>
             <pre className="text-xs bg-surface-secondary p-3 rounded-md border border-border font-mono text-text-primary overflow-x-auto">
               ssh-keygen -t ed25519 -C "your_email@example.com"
             </pre>
@@ -216,9 +215,12 @@ export default function SettingsKeysClient() {
               Press Enter to accept the default file location. Then copy your public key:
             </p>
             <pre className="text-xs bg-surface-secondary p-3 rounded-md border border-border font-mono text-text-primary overflow-x-auto mt-2">
-              <span className="text-text-secondary"># PowerShell</span>{"\n"}
-              Get-Content ~\.ssh\id_ed25519.pub | Set-Clipboard{"\n"}{"\n"}
-              <span className="text-text-secondary"># Git Bash</span>{"\n"}
+              <span className="text-text-secondary"># PowerShell</span>
+              {"\n"}
+              Get-Content ~\.ssh\id_ed25519.pub | Set-Clipboard{"\n"}
+              {"\n"}
+              <span className="text-text-secondary"># Git Bash</span>
+              {"\n"}
               cat ~/.ssh/id_ed25519.pub
             </pre>
           </div>

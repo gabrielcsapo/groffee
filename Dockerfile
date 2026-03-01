@@ -1,7 +1,8 @@
 FROM node:22-slim
 
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/* \
-    && git config --global safe.directory '*'
+RUN apt-get update && apt-get install -y git git-lfs && rm -rf /var/lib/apt/lists/* \
+    && git config --global safe.directory '*' \
+    && git lfs install --system
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"

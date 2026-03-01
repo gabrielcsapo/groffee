@@ -30,7 +30,9 @@ migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
 // One-time backfill: hash any existing plaintext session tokens
 try {
   const { createHash } = await import("node:crypto");
-  const rows = sqlite.prepare("SELECT id, token FROM sessions WHERE token IS NOT NULL AND token_hash IS NULL").all() as Array<{ id: string; token: string }>;
+  const rows = sqlite
+    .prepare("SELECT id, token FROM sessions WHERE token IS NOT NULL AND token_hash IS NULL")
+    .all() as Array<{ id: string; token: string }>;
   if (rows.length > 0) {
     const stmt = sqlite.prepare("UPDATE sessions SET token_hash = ?, token = NULL WHERE id = ?");
     for (const row of rows) {

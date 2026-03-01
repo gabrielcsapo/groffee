@@ -1,13 +1,6 @@
 "use server";
 
-import {
-  db,
-  repositories,
-  users,
-  issues,
-  pullRequests,
-  editHistory,
-} from "@groffee/db";
+import { db, repositories, users, issues, pullRequests, editHistory } from "@groffee/db";
 import { eq, desc, asc, inArray, sql } from "drizzle-orm";
 import { highlightSearchSnippet } from "../highlight";
 
@@ -24,11 +17,8 @@ export async function searchCode(
 
   const safeLimit = Math.min(Math.max(limit, 1), 100);
   const safeOffset = Math.max(offset, 0);
-  const safeExt =
-    ext && /^[a-zA-Z0-9]+$/.test(ext) ? ext.toLowerCase() : null;
-  const extFilter = safeExt
-    ? sql` AND cs.file_path LIKE ${"%" + "." + safeExt}`
-    : sql``;
+  const safeExt = ext && /^[a-zA-Z0-9]+$/.test(ext) ? ext.toLowerCase() : null;
+  const extFilter = safeExt ? sql` AND cs.file_path LIKE ${"%" + "." + safeExt}` : sql``;
 
   const orderClause =
     sort === "newest"
@@ -47,9 +37,7 @@ export async function searchCode(
     ) as [{ total: number }];
 
     // Enrich with repo name/owner
-    const repoIds = [
-      ...new Set((results as Array<{ repo_id: string }>).map((r) => r.repo_id)),
-    ];
+    const repoIds = [...new Set((results as Array<{ repo_id: string }>).map((r) => r.repo_id))];
     let repoMap = new Map<string, { name: string; owner: string }>();
     if (repoIds.length > 0) {
       const repos = await db
@@ -69,10 +57,7 @@ export async function searchCode(
       const ownerMap = new Map(owners.map((u) => [u.id, u.username]));
 
       repoMap = new Map(
-        repos.map((r) => [
-          r.id,
-          { name: r.name, owner: ownerMap.get(r.ownerId) || "unknown" },
-        ]),
+        repos.map((r) => [r.id, { name: r.name, owner: ownerMap.get(r.ownerId) || "unknown" }]),
       );
     }
 
@@ -406,18 +391,13 @@ export async function searchRepoCode(
     .select({ id: repositories.id })
     .from(repositories)
     .innerJoin(users, eq(users.id, repositories.ownerId))
-    .where(
-      sql`${users.username} = ${ownerName} AND ${repositories.name} = ${repoName}`,
-    )
+    .where(sql`${users.username} = ${ownerName} AND ${repositories.name} = ${repoName}`)
     .then((rows) => rows[0]);
 
   if (!repo) return { results: [], total: 0, limit: safeLimit, offset: safeOffset };
 
-  const safeExt =
-    ext && /^[a-zA-Z0-9]+$/.test(ext) ? ext.toLowerCase() : null;
-  const extFilter = safeExt
-    ? sql` AND cs.file_path LIKE ${"%" + "." + safeExt}`
-    : sql``;
+  const safeExt = ext && /^[a-zA-Z0-9]+$/.test(ext) ? ext.toLowerCase() : null;
+  const extFilter = safeExt ? sql` AND cs.file_path LIKE ${"%" + "." + safeExt}` : sql``;
 
   const orderClause =
     sort === "newest"
@@ -435,7 +415,12 @@ export async function searchRepoCode(
       sql`SELECT COUNT(*) as total FROM code_search cs WHERE cs.repo_id = ${repo.id} AND code_search MATCH ${query.trim()}${extFilter}`,
     ) as [{ total: number }];
 
-    const typedResults = results as Array<{ file_path: string; blob_oid: string; snippet: string; last_modified: number }>;
+    const typedResults = results as Array<{
+      file_path: string;
+      blob_oid: string;
+      snippet: string;
+      last_modified: number;
+    }>;
     const highlighted = await Promise.all(
       typedResults.map(async (r) => ({
         file_path: r.file_path,
@@ -459,20 +444,14 @@ export async function searchRepoCode(
 
 // ─── Repo-scoped Code Language Facets ───
 
-export async function searchRepoCodeLanguages(
-  ownerName: string,
-  repoName: string,
-  query: string,
-) {
+export async function searchRepoCodeLanguages(ownerName: string, repoName: string, query: string) {
   if (!query.trim()) return { languages: [] };
 
   const repo = await db
     .select({ id: repositories.id })
     .from(repositories)
     .innerJoin(users, eq(users.id, repositories.ownerId))
-    .where(
-      sql`${users.username} = ${ownerName} AND ${repositories.name} = ${repoName}`,
-    )
+    .where(sql`${users.username} = ${ownerName} AND ${repositories.name} = ${repoName}`)
     .then((rows) => rows[0]);
 
   if (!repo) return { languages: [] };
@@ -518,9 +497,7 @@ export async function searchRepoIssues(
     .select({ id: repositories.id })
     .from(repositories)
     .innerJoin(users, eq(users.id, repositories.ownerId))
-    .where(
-      sql`${users.username} = ${ownerName} AND ${repositories.name} = ${repoName}`,
-    )
+    .where(sql`${users.username} = ${ownerName} AND ${repositories.name} = ${repoName}`)
     .then((rows) => rows[0]);
 
   if (!repo) return { results: [], total: 0 };
@@ -595,9 +572,7 @@ export async function searchRepoPullRequests(
     .select({ id: repositories.id })
     .from(repositories)
     .innerJoin(users, eq(users.id, repositories.ownerId))
-    .where(
-      sql`${users.username} = ${ownerName} AND ${repositories.name} = ${repoName}`,
-    )
+    .where(sql`${users.username} = ${ownerName} AND ${repositories.name} = ${repoName}`)
     .then((rows) => rows[0]);
 
   if (!repo) return { results: [], total: 0 };

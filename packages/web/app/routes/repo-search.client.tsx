@@ -143,14 +143,23 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
   const [langCounts, setLangCounts] = useState<LangCount[]>([]);
   const [selectedLang, setSelectedLang] = useState<string | null>(initialExt);
 
-  function fetchLanguages(q: string) {
-    searchRepoCodeLanguages(owner, repo, q)
-      .then((data) => setLangCounts(data.languages || []))
-      .catch(() => setLangCounts([]));
-  }
+  const fetchLanguages = useCallback(
+    (q: string) => {
+      searchRepoCodeLanguages(owner, repo, q)
+        .then((data) => setLangCounts(data.languages || []))
+        .catch(() => setLangCounts([]));
+    },
+    [owner, repo],
+  );
 
   const performSearchAll = useCallback(
-    async (q: string, activeType: SearchType, p: number, ext: string | null, s: SortOption = "relevance") => {
+    async (
+      q: string,
+      activeType: SearchType,
+      p: number,
+      ext: string | null,
+      s: SortOption = "relevance",
+    ) => {
       if (!q.trim()) return;
       setLoading(true);
       setSearched(true);
@@ -188,11 +197,17 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
         setLoading(false);
       }
     },
-    [owner, repo],
+    [owner, repo, fetchLanguages],
   );
 
   const performSearchTab = useCallback(
-    async (q: string, type: SearchType, p: number, ext: string | null, s: SortOption = "relevance") => {
+    async (
+      q: string,
+      type: SearchType,
+      p: number,
+      ext: string | null,
+      s: SortOption = "relevance",
+    ) => {
       if (!q.trim()) return;
       setLoading(true);
 
@@ -234,7 +249,13 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function updateParams(q: string, type: SearchType, p: number, ext: string | null, s: SortOption = "relevance") {
+  function updateParams(
+    q: string,
+    type: SearchType,
+    p: number,
+    ext: string | null,
+    s: SortOption = "relevance",
+  ) {
     const params: Record<string, string> = { q, type };
     if (p > 1) params.page = String(p);
     if (ext && type === "code") params.ext = ext;
@@ -675,15 +696,7 @@ function IssueResults({
   );
 }
 
-function PRResults({
-  results,
-  owner,
-  repo,
-}: {
-  results: PRResult[];
-  owner: string;
-  repo: string;
-}) {
+function PRResults({ results, owner, repo }: { results: PRResult[]; owner: string; repo: string }) {
   if (results.length === 0) return <NoResults type="pull requests" />;
 
   return (

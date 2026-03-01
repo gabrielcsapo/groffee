@@ -221,7 +221,10 @@ export function ActivityHeatmap({ daily, owner, repo }: ActivityHeatmapProps) {
 
   // Build a map of local date key -> { total count, breakdown, originating UTC day timestamps }
   // This tracks which UTC day buckets map to each local date so we can query the right range
-  const dayMap = new Map<string, { commits: number; prs: number; issues: number; utcDays: number[] }>();
+  const dayMap = new Map<
+    string,
+    { commits: number; prs: number; issues: number; utcDays: number[] }
+  >();
   for (const d of daily) {
     const date = new Date(d.day * 1000);
     const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
@@ -324,9 +327,7 @@ export function ActivityHeatmap({ daily, owner, repo }: ActivityHeatmapProps) {
       const allIssues: IssueData[] = [];
 
       for (const utcDay of cell.utcDays) {
-        const res = await fetch(
-          `/api/repos/${owner}/${repo}/activity/commits?day=${utcDay}`,
-        );
+        const res = await fetch(`/api/repos/${owner}/${repo}/activity/commits?day=${utcDay}`);
         if (res.ok) {
           const data = await res.json();
           allCommits.push(...(data.commits || []));
@@ -468,8 +469,8 @@ export function ActivityHeatmap({ daily, owner, repo }: ActivityHeatmapProps) {
       </div>
 
       {/* Drill-down for selected day */}
-      {selectedDay && (
-        loading ? (
+      {selectedDay &&
+        (loading ? (
           <div className="mt-4 p-6 text-center text-sm text-text-secondary border border-border rounded-lg bg-surface">
             Loading activity...
           </div>
@@ -481,10 +482,14 @@ export function ActivityHeatmap({ daily, owner, repo }: ActivityHeatmapProps) {
             owner={owner}
             repo={repo}
             label={`Activity on ${selectedDay.date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}`}
-            onClose={() => { setSelectedDay(null); setCommits(null); setPullRequests(null); setIssueList(null); }}
+            onClose={() => {
+              setSelectedDay(null);
+              setCommits(null);
+              setPullRequests(null);
+              setIssueList(null);
+            }}
           />
-        ) : null
-      )}
+        ) : null)}
     </div>
   );
 }
@@ -503,7 +508,12 @@ interface ContributorListProps {
   defaultBranch: string;
 }
 
-export function ContributorList({ contributors, owner, repo, defaultBranch }: ContributorListProps) {
+export function ContributorList({
+  contributors,
+  owner,
+  repo,
+  defaultBranch,
+}: ContributorListProps) {
   const maxCommits = Math.max(1, ...contributors.map((c) => c.commits));
 
   return (
@@ -522,11 +532,16 @@ export function ContributorList({ contributors, owner, repo, defaultBranch }: Co
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-text-primary truncate">{contributor.name}</span>
+              <span className="text-sm font-medium text-text-primary truncate">
+                {contributor.name}
+              </span>
               <span className="text-xs text-text-secondary truncate">{contributor.email}</span>
             </div>
             <div className="mt-1 h-1.5 rounded-full bg-surface-secondary overflow-hidden">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${(contributor.commits / maxCommits) * 100}%` }} />
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${(contributor.commits / maxCommits) * 100}%` }}
+              />
             </div>
           </div>
 
@@ -535,7 +550,12 @@ export function ContributorList({ contributors, owner, repo, defaultBranch }: Co
             <p className="text-xs text-text-secondary">{timeAgo(contributor.lastCommitAt)}</p>
           </div>
 
-          <svg className="w-4 h-4 text-text-secondary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg
+            className="w-4 h-4 text-text-secondary shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </Link>

@@ -25,13 +25,9 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default async function RepoBlob({
-  params,
-}: {
-  params: Record<string, string>;
-}) {
-  const { owner, repo: repoName } = params;
-  const splat = params.splat || "";
+export default async function RepoBlob({ params }: { params?: Record<string, string> }) {
+  const { owner, repo: repoName } = params as { owner: string; repo: string };
+  const splat = params!.splat || "";
 
   const blobData = await getRepoBlob(owner, repoName, splat);
 
@@ -46,7 +42,21 @@ export default async function RepoBlob({
     );
   }
 
-  const { content, ref, path: filePath, isBinary, size } = blobData as { content: string | null; ref: string; path: string; isBinary?: boolean; size?: number };
+  const {
+    content,
+    ref,
+    path: filePath,
+    isBinary,
+    size,
+    lfsPointer,
+  } = blobData as {
+    content: string | null;
+    ref: string;
+    path: string;
+    isBinary?: boolean;
+    size?: number;
+    lfsPointer?: { oid: string; size: number; stored: boolean };
+  };
   const pathParts = filePath.split("/");
   const fileName = pathParts[pathParts.length - 1];
   const parentPath = pathParts.slice(0, -1).join("/");
@@ -62,7 +72,7 @@ export default async function RepoBlob({
   let lineCount = 0;
   let highlightedLines: string[] | null = null;
 
-  if (content && !isBinary) {
+  if (content && !isBinary && !lfsPointer) {
     lines = content.split("\n");
     lineCount = lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
     const lang = getLangFromFilename(fileName);
@@ -106,12 +116,21 @@ export default async function RepoBlob({
       {/* File content */}
       <div className="border border-border rounded-lg overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2 bg-surface-secondary border-b border-border">
-          <span className="text-sm font-medium text-text-primary">{fileName}</span>
-          <div className="flex items-center gap-3">
-            {size != null && (
-              <span className="text-xs text-text-secondary">{formatBytes(size)}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-text-primary">{fileName}</span>
+            {lfsPointer && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/10 text-blue-600">
+                LFS
+              </span>
             )}
-            {!isBinary && content && (
+          </div>
+          <div className="flex items-center gap-3">
+            {(lfsPointer ? true : size != null) && (
+              <span className="text-xs text-text-secondary">
+                {formatBytes(lfsPointer ? lfsPointer.size : size!)}
+              </span>
+            )}
+            {!isBinary && !lfsPointer && content && (
               <span className="text-xs text-text-secondary">{lineCount} lines</span>
             )}
             <a
@@ -140,13 +159,42 @@ export default async function RepoBlob({
         {/* Video preview */}
         {isVideo && (
           <div className="flex items-center justify-center p-8 bg-surface">
-            <video
-              src={rawUrl}
-              controls
-              className="max-w-full max-h-[600px] rounded"
-            >
+            <video src={rawUrl} controls className="max-w-full max-h-[600px] rounded">
               Your browser does not support the video tag.
             </video>
+          </div>
+        )}
+
+        {/* LFS pointer file */}
+        {lfsPointer && (
+          <div className="flex flex-col items-center justify-center p-12 bg-surface text-center">
+            <svg
+              className="w-12 h-12 text-text-secondary mb-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6h.1a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
+              />
+            </svg>
+            <p className="text-sm font-medium text-text-primary">Stored with Git LFS</p>
+            <p className="text-xs text-text-secondary mt-1">{formatBytes(lfsPointer.size)}</p>
+            <p className="text-xs text-text-secondary mt-1 font-mono break-all max-w-md">
+              sha256:{lfsPointer.oid}
+            </p>
+            {lfsPointer.stored ? (
+              <a href={rawUrl} className="mt-3 btn-secondary btn-sm" download={fileName}>
+                Download
+              </a>
+            ) : (
+              <p className="mt-3 text-xs text-text-secondary italic">
+                LFS object not available on this server
+              </p>
+            )}
           </div>
         )}
 
@@ -170,18 +218,14 @@ export default async function RepoBlob({
             {size != null && (
               <p className="text-xs text-text-secondary mt-1">{formatBytes(size)}</p>
             )}
-            <a
-              href={rawUrl}
-              className="mt-3 btn-secondary btn-sm"
-              download={fileName}
-            >
+            <a href={rawUrl} className="mt-3 btn-secondary btn-sm" download={fileName}>
               Download
             </a>
           </div>
         )}
 
         {/* Text content with syntax highlighting */}
-        {content && !isBinary && (
+        {content && !isBinary && !lfsPointer && (
           <div className="overflow-x-auto bg-surface">
             <table className="w-full text-sm font-mono">
               <tbody>

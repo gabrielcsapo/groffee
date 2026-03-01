@@ -1,14 +1,18 @@
-import { Outlet } from "react-flight-router/client";
 import { getPullRequest } from "../lib/server/pulls";
 import { PullDetailLayout } from "./pull-detail.client";
+import { getRequest } from "../lib/server/request-context";
 
-export default async function PullDetail({
-  params,
-}: {
-  params: { owner: string; repo: string; number: string };
-}) {
-  const { owner, repo, number: prNumber } = params;
+export default async function PullDetail({ params }: { params?: Record<string, string> }) {
+  const {
+    owner,
+    repo,
+    number: prNumber,
+  } = params as { owner: string; repo: string; number: string };
   const data = await getPullRequest(owner, repo, Number(prNumber));
+
+  // Detect tab from request URL path
+  const req = getRequest();
+  const isFilesTab = req ? new URL(req.url).pathname.endsWith("/files-changed") : false;
 
   return (
     <PullDetailLayout
@@ -18,8 +22,7 @@ export default async function PullDetail({
       initialPR={data.pullRequest || null}
       initialDiff={data.diff || null}
       initialComments={data.comments || []}
-    >
-      <Outlet />
-    </PullDetailLayout>
+      tab={isFilesTab ? "files" : "conversation"}
+    />
   );
 }

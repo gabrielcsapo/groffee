@@ -196,9 +196,7 @@ export async function indexRef(
 ): Promise<void> {
   // Handle ref deletion
   if (!newOid || newOid === "0000000000000000000000000000000000000000") {
-    await db
-      .delete(gitRefs)
-      .where(and(eq(gitRefs.repoId, repoId), eq(gitRefs.name, refName)));
+    await db.delete(gitRefs).where(and(eq(gitRefs.repoId, repoId), eq(gitRefs.name, refName)));
     await db
       .delete(gitCommitAncestry)
       .where(and(eq(gitCommitAncestry.repoId, repoId), eq(gitCommitAncestry.refName, refName)));

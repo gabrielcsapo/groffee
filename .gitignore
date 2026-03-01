@@ -75,3 +75,9 @@ data/
 # OS
 .DS_Store
 deploy.json
+
+# Playwright
+e2e/.auth/
+screenshots/
+playwright-report/
+test-results/

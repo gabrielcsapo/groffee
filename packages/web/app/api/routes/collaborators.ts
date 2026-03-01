@@ -70,11 +70,7 @@ collaboratorRoutes.post("/:owner/:repo/collaborators", async (c) => {
     return c.json({ error: "Permission must be read, write, or admin" }, 400);
   }
 
-  const [targetUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, username))
-    .limit(1);
+  const [targetUser] = await db.select().from(users).where(eq(users.username, username)).limit(1);
   if (!targetUser) return c.json({ error: "User not found" }, 404);
 
   if (targetUser.id === owner.id) {
@@ -85,9 +81,7 @@ collaboratorRoutes.post("/:owner/:repo/collaborators", async (c) => {
   const [existing] = await db
     .select()
     .from(repoCollaborators)
-    .where(
-      and(eq(repoCollaborators.repoId, repo.id), eq(repoCollaborators.userId, targetUser.id)),
-    )
+    .where(and(eq(repoCollaborators.repoId, repo.id), eq(repoCollaborators.userId, targetUser.id)))
     .limit(1);
 
   if (existing) {

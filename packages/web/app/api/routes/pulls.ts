@@ -51,9 +51,7 @@ pullRoutes.get("/:owner/:repo/pulls", optionalAuth, async (c) => {
   // Attach author usernames
   const authorIds = [...new Set(prList.map((p) => p.authorId))];
   const authors =
-    authorIds.length > 0
-      ? await db.select().from(users).where(inArray(users.id, authorIds))
-      : [];
+    authorIds.length > 0 ? await db.select().from(users).where(inArray(users.id, authorIds)) : [];
   const authorMap = new Map(authors.filter(Boolean).map((u) => [u.id, u.username]));
 
   const prsWithAuthors = prList.map((p) => ({
@@ -255,7 +253,11 @@ pullRoutes.patch("/:owner/:repo/pulls/:number", requireAuth, async (c) => {
   const body = await c.req.json();
 
   // Authorization: only author or repo owner can edit title/body or change status
-  if (typeof body.title === "string" || typeof body.body === "string" || typeof body.status === "string") {
+  if (
+    typeof body.title === "string" ||
+    typeof body.body === "string" ||
+    typeof body.status === "string"
+  ) {
     if (user.id !== pr.authorId && user.id !== result.owner.id) {
       return c.json({ error: "Only the author or repo owner can modify this pull request" }, 403);
     }
@@ -307,7 +309,8 @@ pullRoutes.patch("/:owner/:repo/pulls/:number", requireAuth, async (c) => {
 
   logAudit({
     userId: user.id,
-    action: body.status === "closed" ? "pr.close" : body.status === "open" ? "pr.reopen" : "pr.update",
+    action:
+      body.status === "closed" ? "pr.close" : body.status === "open" ? "pr.reopen" : "pr.update",
     targetType: "pull_request",
     targetId: pr.id,
     metadata: { number: pr.number, repoName: c.req.param("repo") },
@@ -422,7 +425,12 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
       action: "pr.merge",
       targetType: "pull_request",
       targetId: pr.id,
-      metadata: { number: pr.number, sourceBranch: pr.sourceBranch, targetBranch: pr.targetBranch, repoName: c.req.param("repo") },
+      metadata: {
+        number: pr.number,
+        sourceBranch: pr.sourceBranch,
+        targetBranch: pr.targetBranch,
+        repoName: c.req.param("repo"),
+      },
       ipAddress: getClientIp(c.req.raw.headers),
     }).catch(console.error);
 

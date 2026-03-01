@@ -1,10 +1,6 @@
 import "./styles.css";
 import { Link, Outlet, ScrollRestoration } from "react-flight-router/client";
-import {
-  GlobalNavigationLoadingBar,
-  HeaderSearch,
-  UserNav,
-} from "./routes/root.client";
+import { GlobalNavigationLoadingBar, HeaderSearch, UserNav } from "./routes/root.client";
 import { GroffeeLogo } from "./components/groffee-logo";
 
 export default function Root() {
@@ -18,19 +14,10 @@ export default function Root() {
             __html: `(function(){var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark')})()`,
           }}
         />
-        <link
-          rel="icon"
-          type="image/png"
-          href="/favicon-96x96.png"
-          sizes="96x96"
-        />
+        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="shortcut icon" href="/favicon.ico" />
-        <link
-          rel="apple-touch-icon"
-          sizes="180x180"
-          href="/apple-touch-icon.png"
-        />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/site.webmanifest" />
         <title>Groffee</title>
       </head>

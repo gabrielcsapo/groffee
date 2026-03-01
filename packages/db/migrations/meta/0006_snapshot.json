@@ -67,24 +67,17 @@
       "indexes": {
         "audit_logs_user_idx": {
           "name": "audit_logs_user_idx",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         },
         "audit_logs_target_idx": {
           "name": "audit_logs_target_idx",
-          "columns": [
-            "target_type",
-            "target_id"
-          ],
+          "columns": ["target_type", "target_id"],
           "isUnique": false
         },
         "audit_logs_created_idx": {
           "name": "audit_logs_created_idx",
-          "columns": [
-            "created_at"
-          ],
+          "columns": ["created_at"],
           "isUnique": false
         }
       },
@@ -93,12 +86,8 @@
           "name": "audit_logs_user_id_users_id_fk",
           "tableFrom": "audit_logs",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -163,16 +152,12 @@
       "indexes": {
         "comments_issue_idx": {
           "name": "comments_issue_idx",
-          "columns": [
-            "issue_id"
-          ],
+          "columns": ["issue_id"],
           "isUnique": false
         },
         "comments_pr_idx": {
           "name": "comments_pr_idx",
-          "columns": [
-            "pull_request_id"
-          ],
+          "columns": ["pull_request_id"],
           "isUnique": false
         }
       },
@@ -181,12 +166,8 @@
           "name": "comments_author_id_users_id_fk",
           "tableFrom": "comments",
           "tableTo": "users",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -194,12 +175,8 @@
           "name": "comments_pull_request_id_pull_requests_id_fk",
           "tableFrom": "comments",
           "tableTo": "pull_requests",
-          "columnsFrom": [
-            "pull_request_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["pull_request_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -207,12 +184,8 @@
           "name": "comments_issue_id_issues_id_fk",
           "tableFrom": "comments",
           "tableTo": "issues",
-          "columnsFrom": [
-            "issue_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["issue_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -294,12 +267,8 @@
           "name": "edit_history_issue_id_issues_id_fk",
           "tableFrom": "edit_history",
           "tableTo": "issues",
-          "columnsFrom": [
-            "issue_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["issue_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -307,12 +276,8 @@
           "name": "edit_history_pull_request_id_pull_requests_id_fk",
           "tableFrom": "edit_history",
           "tableTo": "pull_requests",
-          "columnsFrom": [
-            "pull_request_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["pull_request_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -320,12 +285,8 @@
           "name": "edit_history_comment_id_comments_id_fk",
           "tableFrom": "edit_history",
           "tableTo": "comments",
-          "columnsFrom": [
-            "comment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["comment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -333,12 +294,8 @@
           "name": "edit_history_edited_by_id_users_id_fk",
           "tableFrom": "edit_history",
           "tableTo": "users",
-          "columnsFrom": [
-            "edited_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["edited_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -405,10 +362,7 @@
       "indexes": {
         "git_blobs_repo_oid_idx": {
           "name": "git_blobs_repo_oid_idx",
-          "columns": [
-            "repo_id",
-            "oid"
-          ],
+          "columns": ["repo_id", "oid"],
           "isUnique": true
         }
       },
@@ -417,12 +371,8 @@
           "name": "git_blobs_repo_id_repositories_id_fk",
           "tableFrom": "git_blobs",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -473,20 +423,12 @@
       "indexes": {
         "git_ancestry_repo_ref_commit_idx": {
           "name": "git_ancestry_repo_ref_commit_idx",
-          "columns": [
-            "repo_id",
-            "ref_name",
-            "commit_oid"
-          ],
+          "columns": ["repo_id", "ref_name", "commit_oid"],
           "isUnique": true
         },
         "git_ancestry_repo_ref_depth_idx": {
           "name": "git_ancestry_repo_ref_depth_idx",
-          "columns": [
-            "repo_id",
-            "ref_name",
-            "depth"
-          ],
+          "columns": ["repo_id", "ref_name", "depth"],
           "isUnique": false
         }
       },
@@ -495,12 +437,8 @@
           "name": "git_commit_ancestry_repo_id_repositories_id_fk",
           "tableFrom": "git_commit_ancestry",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -551,19 +489,12 @@
       "indexes": {
         "git_commit_files_repo_commit_path_idx": {
           "name": "git_commit_files_repo_commit_path_idx",
-          "columns": [
-            "repo_id",
-            "commit_oid",
-            "file_path"
-          ],
+          "columns": ["repo_id", "commit_oid", "file_path"],
           "isUnique": true
         },
         "git_commit_files_repo_path_idx": {
           "name": "git_commit_files_repo_path_idx",
-          "columns": [
-            "repo_id",
-            "file_path"
-          ],
+          "columns": ["repo_id", "file_path"],
           "isUnique": false
         }
       },
@@ -572,12 +503,8 @@
           "name": "git_commit_files_repo_id_repositories_id_fk",
           "tableFrom": "git_commit_files",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -678,26 +605,17 @@
       "indexes": {
         "git_commits_repo_oid_idx": {
           "name": "git_commits_repo_oid_idx",
-          "columns": [
-            "repo_id",
-            "oid"
-          ],
+          "columns": ["repo_id", "oid"],
           "isUnique": true
         },
         "git_commits_repo_author_ts_idx": {
           "name": "git_commits_repo_author_ts_idx",
-          "columns": [
-            "repo_id",
-            "author_timestamp"
-          ],
+          "columns": ["repo_id", "author_timestamp"],
           "isUnique": false
         },
         "git_commits_repo_author_email_idx": {
           "name": "git_commits_repo_author_email_idx",
-          "columns": [
-            "repo_id",
-            "author_email"
-          ],
+          "columns": ["repo_id", "author_email"],
           "isUnique": false
         }
       },
@@ -706,12 +624,8 @@
           "name": "git_commits_repo_id_repositories_id_fk",
           "tableFrom": "git_commits",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -769,10 +683,7 @@
       "indexes": {
         "git_refs_repo_name_idx": {
           "name": "git_refs_repo_name_idx",
-          "columns": [
-            "repo_id",
-            "name"
-          ],
+          "columns": ["repo_id", "name"],
           "isUnique": true
         }
       },
@@ -781,12 +692,8 @@
           "name": "git_refs_repo_id_repositories_id_fk",
           "tableFrom": "git_refs",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -865,20 +772,12 @@
       "indexes": {
         "git_tree_entry_tree_path_idx": {
           "name": "git_tree_entry_tree_path_idx",
-          "columns": [
-            "repo_id",
-            "root_tree_oid",
-            "entry_path"
-          ],
+          "columns": ["repo_id", "root_tree_oid", "entry_path"],
           "isUnique": true
         },
         "git_tree_entry_listing_idx": {
           "name": "git_tree_entry_listing_idx",
-          "columns": [
-            "repo_id",
-            "root_tree_oid",
-            "parent_path"
-          ],
+          "columns": ["repo_id", "root_tree_oid", "parent_path"],
           "isUnique": false
         }
       },
@@ -887,12 +786,8 @@
           "name": "git_tree_entries_repo_id_repositories_id_fk",
           "tableFrom": "git_tree_entries",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -979,10 +874,7 @@
       "indexes": {
         "issues_repo_status_idx": {
           "name": "issues_repo_status_idx",
-          "columns": [
-            "repo_id",
-            "status"
-          ],
+          "columns": ["repo_id", "status"],
           "isUnique": false
         }
       },
@@ -991,12 +883,8 @@
           "name": "issues_repo_id_repositories_id_fk",
           "tableFrom": "issues",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1004,12 +892,8 @@
           "name": "issues_author_id_users_id_fk",
           "tableFrom": "issues",
           "tableTo": "users",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1089,16 +973,12 @@
       "indexes": {
         "pat_user_idx": {
           "name": "pat_user_idx",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         },
         "pat_hash_idx": {
           "name": "pat_hash_idx",
-          "columns": [
-            "token_hash"
-          ],
+          "columns": ["token_hash"],
           "isUnique": true
         }
       },
@@ -1107,12 +987,8 @@
           "name": "personal_access_tokens_user_id_users_id_fk",
           "tableFrom": "personal_access_tokens",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1220,10 +1096,7 @@
       "indexes": {
         "prs_repo_status_idx": {
           "name": "prs_repo_status_idx",
-          "columns": [
-            "repo_id",
-            "status"
-          ],
+          "columns": ["repo_id", "status"],
           "isUnique": false
         }
       },
@@ -1232,12 +1105,8 @@
           "name": "pull_requests_repo_id_repositories_id_fk",
           "tableFrom": "pull_requests",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1245,12 +1114,8 @@
           "name": "pull_requests_author_id_users_id_fk",
           "tableFrom": "pull_requests",
           "tableTo": "users",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1258,12 +1123,8 @@
           "name": "pull_requests_merged_by_id_users_id_fk",
           "tableFrom": "pull_requests",
           "tableTo": "users",
-          "columnsFrom": [
-            "merged_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["merged_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1321,18 +1182,12 @@
       "indexes": {
         "repo_activity_cache_key_idx": {
           "name": "repo_activity_cache_key_idx",
-          "columns": [
-            "repo_id",
-            "cache_key",
-            "author_filter"
-          ],
+          "columns": ["repo_id", "cache_key", "author_filter"],
           "isUnique": true
         },
         "repo_activity_cache_repo_idx": {
           "name": "repo_activity_cache_repo_idx",
-          "columns": [
-            "repo_id"
-          ],
+          "columns": ["repo_id"],
           "isUnique": false
         }
       },
@@ -1341,12 +1196,8 @@
           "name": "repo_activity_cache_repo_id_repositories_id_fk",
           "tableFrom": "repo_activity_cache",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1398,10 +1249,7 @@
       "indexes": {
         "collab_repo_user_idx": {
           "name": "collab_repo_user_idx",
-          "columns": [
-            "repo_id",
-            "user_id"
-          ],
+          "columns": ["repo_id", "user_id"],
           "isUnique": true
         }
       },
@@ -1410,12 +1258,8 @@
           "name": "repo_collaborators_repo_id_repositories_id_fk",
           "tableFrom": "repo_collaborators",
           "tableTo": "repositories",
-          "columnsFrom": [
-            "repo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["repo_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1423,12 +1267,8 @@
           "name": "repo_collaborators_user_id_users_id_fk",
           "tableFrom": "repo_collaborators",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1509,10 +1349,7 @@
       "indexes": {
         "repo_owner_name_idx": {
           "name": "repo_owner_name_idx",
-          "columns": [
-            "owner_id",
-            "name"
-          ],
+          "columns": ["owner_id", "name"],
           "isUnique": true
         }
       },
@@ -1521,12 +1358,8 @@
           "name": "repositories_owner_id_users_id_fk",
           "tableFrom": "repositories",
           "tableTo": "users",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1584,9 +1417,7 @@
       "indexes": {
         "sessions_token_hash_idx": {
           "name": "sessions_token_hash_idx",
-          "columns": [
-            "token_hash"
-          ],
+          "columns": ["token_hash"],
           "isUnique": false
         }
       },
@@ -1595,12 +1426,8 @@
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1661,12 +1488,8 @@
           "name": "ssh_keys_user_id_users_id_fk",
           "tableFrom": "ssh_keys",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1766,30 +1589,22 @@
       "indexes": {
         "system_logs_level_idx": {
           "name": "system_logs_level_idx",
-          "columns": [
-            "level"
-          ],
+          "columns": ["level"],
           "isUnique": false
         },
         "system_logs_created_idx": {
           "name": "system_logs_created_idx",
-          "columns": [
-            "created_at"
-          ],
+          "columns": ["created_at"],
           "isUnique": false
         },
         "system_logs_request_idx": {
           "name": "system_logs_request_idx",
-          "columns": [
-            "request_id"
-          ],
+          "columns": ["request_id"],
           "isUnique": false
         },
         "system_logs_source_idx": {
           "name": "system_logs_source_idx",
-          "columns": [
-            "source"
-          ],
+          "columns": ["source"],
           "isUnique": false
         }
       },
@@ -1869,16 +1684,12 @@
       "indexes": {
         "users_username_unique": {
           "name": "users_username_unique",
-          "columns": [
-            "username"
-          ],
+          "columns": ["username"],
           "isUnique": true
         },
         "users_email_unique": {
           "name": "users_email_unique",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "isUnique": true
         }
       },

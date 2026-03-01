@@ -112,7 +112,8 @@ export async function getIssue(ownerName: string, repoName: string, issueNumber:
       e.commentId,
       {
         editCount: e.editCount,
-        lastEditedAt: e.lastEditedAt instanceof Date ? e.lastEditedAt.toISOString() : e.lastEditedAt ?? null,
+        lastEditedAt:
+          e.lastEditedAt instanceof Date ? e.lastEditedAt.toISOString() : (e.lastEditedAt ?? null),
       },
     ]),
   );
@@ -134,9 +135,12 @@ export async function getIssue(ownerName: string, repoName: string, issueNumber:
       closedAt: issue.closedAt instanceof Date ? issue.closedAt.toISOString() : issue.closedAt,
       author: author?.username || "unknown",
       editCount: issueEditInfo?.editCount || 0,
-      lastEditedAt: issueEditInfo?.lastEditedAt instanceof Date
-        ? issueEditInfo.lastEditedAt.toISOString()
-        : typeof issueEditInfo?.lastEditedAt === "string" ? issueEditInfo.lastEditedAt : null,
+      lastEditedAt:
+        issueEditInfo?.lastEditedAt instanceof Date
+          ? issueEditInfo.lastEditedAt.toISOString()
+          : typeof issueEditInfo?.lastEditedAt === "string"
+            ? issueEditInfo.lastEditedAt
+            : null,
     },
     comments: commentsWithAuthors,
   };
@@ -225,7 +229,11 @@ export async function updateIssue(
   if (!issue) return { error: "Issue not found" };
 
   // Only author or repo owner can edit title/body or change status
-  if (typeof updates.title === "string" || typeof updates.body === "string" || typeof updates.status === "string") {
+  if (
+    typeof updates.title === "string" ||
+    typeof updates.body === "string" ||
+    typeof updates.status === "string"
+  ) {
     if (user.id !== issue.authorId && user.id !== result.owner.id) {
       return { error: "Only the author or repo owner can modify this issue" };
     }
@@ -326,7 +334,9 @@ export async function createIssueComment(
     updatedAt: now,
   });
 
-  return { comment: { id, body: body.trim(), author: user.username, createdAt: now.toISOString() } };
+  return {
+    comment: { id, body: body.trim(), author: user.username, createdAt: now.toISOString() },
+  };
 }
 
 export async function updateIssueComment(
@@ -376,7 +386,8 @@ export async function updateIssueComment(
       id: comment.id,
       body: trimmedBody,
       author: author?.username || "unknown",
-      createdAt: comment.createdAt instanceof Date ? comment.createdAt.toISOString() : comment.createdAt,
+      createdAt:
+        comment.createdAt instanceof Date ? comment.createdAt.toISOString() : comment.createdAt,
       updatedAt: new Date().toISOString(),
     },
   };

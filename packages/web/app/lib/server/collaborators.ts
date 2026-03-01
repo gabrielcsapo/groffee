@@ -41,7 +41,8 @@ export async function getCollaborators(ownerName: string, repoName: string) {
         .limit(1);
       return {
         ...collab,
-        createdAt: collab.createdAt instanceof Date ? collab.createdAt.toISOString() : collab.createdAt,
+        createdAt:
+          collab.createdAt instanceof Date ? collab.createdAt.toISOString() : collab.createdAt,
         username: u?.username || "unknown",
       };
     }),
@@ -76,11 +77,7 @@ export async function addCollaborator(
     return { error: "Permission must be read, write, or admin" };
   }
 
-  const [targetUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, username))
-    .limit(1);
+  const [targetUser] = await db.select().from(users).where(eq(users.username, username)).limit(1);
   if (!targetUser) return { error: "User not found" };
 
   if (targetUser.id === owner.id) {
@@ -119,11 +116,7 @@ export async function addCollaborator(
   return { collaborator: { id, username, permission, createdAt: now.toISOString() } };
 }
 
-export async function removeCollaborator(
-  ownerName: string,
-  repoName: string,
-  collabId: string,
-) {
+export async function removeCollaborator(ownerName: string, repoName: string, collabId: string) {
   const user = await getSessionUser();
   if (!user) return { error: "Unauthorized" };
 

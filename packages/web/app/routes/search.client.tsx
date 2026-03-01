@@ -188,7 +188,13 @@ export function SearchView() {
 
   // Search all types in parallel
   const performSearchAll = useCallback(
-    async (q: string, activeType: SearchType, p: number, ext: string | null, s: SortOption = "relevance") => {
+    async (
+      q: string,
+      activeType: SearchType,
+      p: number,
+      ext: string | null,
+      s: SortOption = "relevance",
+    ) => {
       if (!q.trim()) return;
       setLoading(true);
       setSearched(true);
@@ -236,7 +242,13 @@ export function SearchView() {
 
   // Load a single tab's page
   const performSearchTab = useCallback(
-    async (q: string, type: SearchType, p: number, ext: string | null, s: SortOption = "relevance") => {
+    async (
+      q: string,
+      type: SearchType,
+      p: number,
+      ext: string | null,
+      s: SortOption = "relevance",
+    ) => {
       if (!q.trim()) return;
       setLoading(true);
 
@@ -290,7 +302,13 @@ export function SearchView() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function updateParams(q: string, type: SearchType, p: number, ext: string | null, s: SortOption = "relevance") {
+  function updateParams(
+    q: string,
+    type: SearchType,
+    p: number,
+    ext: string | null,
+    s: SortOption = "relevance",
+  ) {
     const params: Record<string, string> = { q, type };
     if (p > 1) params.page = String(p);
     if (ext && type === "code") params.ext = ext;
@@ -478,12 +496,7 @@ export function SearchView() {
                     onClick={() => handleLangFilter(null)}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-link hover:bg-surface-secondary border-b border-border"
                   >
-                    <svg
-                      className="w-3 h-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -626,10 +639,7 @@ function SearchHelpModal({ onClose }: { onClose: () => void }) {
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <h2 className="text-lg font-semibold text-text-primary">Search Syntax</h2>
-            <button
-              onClick={onClose}
-              className="text-text-secondary hover:text-text-primary p-1"
-            >
+            <button onClick={onClose} className="text-text-secondary hover:text-text-primary p-1">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -726,7 +736,10 @@ function HelpRow({
   return (
     <tr className="border-b border-border last:border-0">
       <td className="py-2 pr-4 font-mono whitespace-nowrap">{syntax}</td>
-      <td className="py-2 pr-4 text-text-secondary" dangerouslySetInnerHTML={{ __html: description }} />
+      <td
+        className="py-2 pr-4 text-text-secondary"
+        dangerouslySetInnerHTML={{ __html: description }}
+      />
       <td className="py-2 font-mono text-text-secondary">{example}</td>
     </tr>
   );
@@ -827,9 +840,7 @@ function CodeResults({ results }: { results: CodeResult[] }) {
                 {result.repo_owner}/{result.repo_name}
               </Link>
             ) : null}
-            <span className="text-sm font-medium font-mono text-text-link">
-              {result.file_path}
-            </span>
+            <span className="text-sm font-medium font-mono text-text-link">{result.file_path}</span>
           </div>
           <pre
             className={`text-xs bg-surface-secondary rounded p-2 overflow-x-auto font-mono ${result.highlightedSnippet ? "shiki-line" : "text-text-secondary"}`}
@@ -927,10 +938,7 @@ function IssueResults({ results }: { results: IssueResult[] }) {
             <span className="text-xs text-text-secondary">#{issue.number}</span>
           </div>
           <div className="ml-6 text-xs text-text-secondary mb-1">
-            <Link
-              to={`/${issue.repoOwner}/${issue.repoName}`}
-              className="hover:text-text-link"
-            >
+            <Link to={`/${issue.repoOwner}/${issue.repoName}`} className="hover:text-text-link">
               {issue.repoOwner}/{issue.repoName}
             </Link>
             {issue.createdAt && <span className="ml-2">opened {timeAgo(issue.createdAt)}</span>}
@@ -980,10 +988,7 @@ function PRResults({ results }: { results: PRResult[] }) {
             <span className="text-xs text-text-secondary">#{pr.number}</span>
           </div>
           <div className="ml-6 text-xs text-text-secondary mb-1">
-            <Link
-              to={`/${pr.repoOwner}/${pr.repoName}`}
-              className="hover:text-text-link"
-            >
+            <Link to={`/${pr.repoOwner}/${pr.repoName}`} className="hover:text-text-link">
               {pr.repoOwner}/{pr.repoName}
             </Link>
             <span className="ml-2">

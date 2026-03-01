@@ -24,10 +24,7 @@ export default function Docs() {
             <a href="#auth" className="block text-text-secondary hover:text-text-link py-0.5">
               Auth
             </a>
-            <a
-              href="#ssh-keys"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
+            <a href="#ssh-keys" className="block text-text-secondary hover:text-text-link py-0.5">
               SSH Keys
             </a>
             <a
@@ -857,12 +854,32 @@ export default function Docs() {
               </tr>
             </thead>
             <tbody className="text-text-primary">
-              <SyntaxRow syntax={'"exact phrase"'} desc="Match exact sequence of words" example={'"hello world"'} />
-              <SyntaxRow syntax="word1 word2" desc="Implicit AND — both must appear" example="react router" />
-              <SyntaxRow syntax="word1 OR word2" desc="Match either word" example="useState OR useReducer" />
-              <SyntaxRow syntax="NOT word" desc="Exclude documents containing word" example="router NOT express" />
+              <SyntaxRow
+                syntax={'"exact phrase"'}
+                desc="Match exact sequence of words"
+                example={'"hello world"'}
+              />
+              <SyntaxRow
+                syntax="word1 word2"
+                desc="Implicit AND — both must appear"
+                example="react router"
+              />
+              <SyntaxRow
+                syntax="word1 OR word2"
+                desc="Match either word"
+                example="useState OR useReducer"
+              />
+              <SyntaxRow
+                syntax="NOT word"
+                desc="Exclude documents containing word"
+                example="router NOT express"
+              />
               <SyntaxRow syntax="prefix*" desc="Prefix matching" example="func*" />
-              <SyntaxRow syntax="(a OR b) AND c" desc="Group with parentheses" example={'(error OR warning) AND "log"'} />
+              <SyntaxRow
+                syntax="(a OR b) AND c"
+                desc="Group with parentheses"
+                example={'(error OR warning) AND "log"'}
+              />
             </tbody>
           </table>
           <p>
@@ -959,9 +976,7 @@ export default function Docs() {
           path="/api/search/code/languages"
           auth="optional"
           description="Get language breakdown for code search results."
-          queryParams={[
-            { name: "q", type: "string", description: "Search query (required)" },
-          ]}
+          queryParams={[{ name: "q", type: "string", description: "Search query (required)" }]}
           response={{
             languages: [
               {
@@ -1051,9 +1066,9 @@ export default function Docs() {
         <div className="card p-4 text-sm text-text-secondary mb-6">
           <p className="mb-2">
             These endpoints implement Git's Smart HTTP protocol for <Code>git clone</Code>,{" "}
-            <Code>git fetch</Code>, and <Code>git push</Code>. They use binary git protocol
-            streams, not JSON. You typically interact with these via the <Code>git</Code> CLI rather
-            than calling them directly.
+            <Code>git fetch</Code>, and <Code>git push</Code>. They use binary git protocol streams,
+            not JSON. You typically interact with these via the <Code>git</Code> CLI rather than
+            calling them directly.
           </p>
           <p>
             Groffee also supports <strong>SSH git access</strong> (port 2222). Push operations
@@ -1125,11 +1140,7 @@ function MethodBadge({ method }: { method: string }) {
     PATCH: "badge-method-patch",
     DELETE: "badge-method-delete",
   };
-  return (
-    <span className={`inline-block ${classes[method] || ""}`}>
-      {method}
-    </span>
-  );
+  return <span className={`inline-block ${classes[method] || ""}`}>{method}</span>;
 }
 
 function AuthBadge({ level }: { level: "required" | "optional" | "none" }) {
@@ -1143,11 +1154,7 @@ function AuthBadge({ level }: { level: "required" | "optional" | "none" }) {
     optional: "Auth Optional",
     none: "No Auth",
   };
-  return (
-    <span className={`inline-block ${classes[level]}`}>
-      {labels[level]}
-    </span>
-  );
+  return <span className={`inline-block ${classes[level]}`}>{labels[level]}</span>;
 }
 
 interface ParamDef {
@@ -1254,7 +1261,9 @@ function ParamTable({ params }: { params: ParamDef[] }) {
 function SyntaxRow({ syntax, desc, example }: { syntax: string; desc: string; example: string }) {
   return (
     <tr>
-      <td className="py-1 pr-4 font-mono"><Code>{syntax}</Code></td>
+      <td className="py-1 pr-4 font-mono">
+        <Code>{syntax}</Code>
+      </td>
       <td className="py-1 pr-4">{desc}</td>
       <td className="py-1 font-mono text-text-secondary">{example}</td>
     </tr>

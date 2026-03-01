@@ -111,7 +111,9 @@ export default function RepoSettingsClient() {
       <div className="max-w-6xl mx-auto mt-4">
         <div className="bg-surface border border-border rounded-lg p-6">
           <h1 className="text-xl font-semibold text-text-primary">Access denied</h1>
-          <p className="text-sm text-text-secondary mt-2">Only the repository owner can access settings.</p>
+          <p className="text-sm text-text-secondary mt-2">
+            Only the repository owner can access settings.
+          </p>
         </div>
       </div>
     );
@@ -227,7 +229,12 @@ export default function RepoSettingsClient() {
             setError("");
             setMessage("");
 
-            const result = await addCollaborator(owner!, repoName!, newCollab.trim(), newCollabPerm);
+            const result = await addCollaborator(
+              owner!,
+              repoName!,
+              newCollab.trim(),
+              newCollabPerm,
+            );
 
             if (result.error) {
               setError(result.error);

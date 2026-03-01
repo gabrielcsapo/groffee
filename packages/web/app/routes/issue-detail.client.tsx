@@ -294,7 +294,13 @@ export function IssueDetailView({
             {issue.status === "open" ? "Open" : "Closed"}
           </span>
           <span className="text-sm text-text-secondary">
-            <Link to={`/${issue.author}`} className="font-semibold text-text-primary hover:underline">{issue.author}</Link> opened this issue {timeAgo(issue.createdAt)}
+            <Link
+              to={`/${issue.author}`}
+              className="font-semibold text-text-primary hover:underline"
+            >
+              {issue.author}
+            </Link>{" "}
+            opened this issue {timeAgo(issue.createdAt)}
           </span>
         </div>
       </div>
@@ -303,7 +309,9 @@ export function IssueDetailView({
       <div className="border border-border rounded-lg mb-4">
         <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm font-medium text-text-primary flex items-center justify-between">
           <span className="flex items-center">
-            <Link to={`/${issue.author}`} className="hover:underline">{issue.author}</Link>
+            <Link to={`/${issue.author}`} className="hover:underline">
+              {issue.author}
+            </Link>
             <EditedIndicator
               editCount={issue.editCount}
               lastEditedAt={issue.lastEditedAt}
@@ -368,7 +376,12 @@ export function IssueDetailView({
           <div className="border border-border rounded-lg mb-2">
             <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm flex items-center justify-between">
               <span className="flex items-center">
-                <Link to={`/${comment.author}`} className="text-text-primary font-bold hover:underline">{comment.author}</Link>
+                <Link
+                  to={`/${comment.author}`}
+                  className="text-text-primary font-bold hover:underline"
+                >
+                  {comment.author}
+                </Link>
                 <span className="text-text-secondary ml-1">
                   commented {timeAgo(comment.createdAt)}
                 </span>

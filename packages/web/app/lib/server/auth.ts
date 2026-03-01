@@ -20,7 +20,14 @@ function hashToken(token: string): string {
 function serializeCookie(
   name: string,
   value: string,
-  opts: { httpOnly?: boolean; sameSite?: string; path?: string; expires?: Date; maxAge?: number; secure?: boolean },
+  opts: {
+    httpOnly?: boolean;
+    sameSite?: string;
+    path?: string;
+    expires?: Date;
+    maxAge?: number;
+    secure?: boolean;
+  },
 ): string {
   let cookie = `${name}=${encodeURIComponent(value)}`;
   if (opts.httpOnly) cookie += "; HttpOnly";
@@ -35,7 +42,11 @@ function serializeCookie(
 export async function login(
   username: string,
   password: string,
-): Promise<{ user?: { id: string; username: string; email: string }; error?: string; setCookie?: string }> {
+): Promise<{
+  user?: { id: string; username: string; email: string };
+  error?: string;
+  setCookie?: string;
+}> {
   if (!username || !password) return { error: "Missing required fields" };
 
   const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
@@ -59,9 +70,22 @@ export async function login(
     createdAt: now,
   });
 
-  const [check] = await db.select({ hash: sessions.tokenHash }).from(sessions).where(eq(sessions.id, sessionId)).limit(1);
-  console.log("[login] inserted session hash:", tokenHash.slice(0, 8) + "..., verify:", check ? "found" : "MISSING");
-  console.log("[login] cookie will be HttpOnly:", true, "token starts with:", token.slice(0, 8) + "...");
+  const [check] = await db
+    .select({ hash: sessions.tokenHash })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+  console.log(
+    "[login] inserted session hash:",
+    tokenHash.slice(0, 8) + "..., verify:",
+    check ? "found" : "MISSING",
+  );
+  console.log(
+    "[login] cookie will be HttpOnly:",
+    true,
+    "token starts with:",
+    token.slice(0, 8) + "...",
+  );
 
   const req = getRequest();
   logAudit({
@@ -94,7 +118,11 @@ export async function register(
   username: string,
   email: string,
   password: string,
-): Promise<{ user?: { id: string; username: string; email: string }; error?: string; setCookie?: string }> {
+): Promise<{
+  user?: { id: string; username: string; email: string };
+  error?: string;
+  setCookie?: string;
+}> {
   if (!username || !email || !password) return { error: "Missing required fields" };
   if (password.length < 8) return { error: "Password must be at least 8 characters" };
 

@@ -1,17 +1,10 @@
 import { Link } from "react-flight-router/client";
 
-export default function ErrorPage({
-  error,
-}: {
-  error?: Error;
-  params?: Record<string, string>;
-}) {
+export default function ErrorPage({ error }: { error?: Error; params?: Record<string, string> }) {
   return (
     <div className="max-w-xl mx-auto mt-16">
       <div className="bg-surface border border-danger/30 rounded-lg p-6">
-        <h1 className="text-xl font-semibold text-danger mb-2">
-          Something went wrong
-        </h1>
+        <h1 className="text-xl font-semibold text-danger mb-2">Something went wrong</h1>
         {error && (
           <>
             <p className="text-sm text-text-secondary mb-4">{error.message}</p>

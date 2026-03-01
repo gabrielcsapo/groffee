@@ -222,10 +222,7 @@ export async function highlightSearchSnippet(
  * Inserts <mark> tags at correct text positions within Shiki-highlighted HTML.
  * Skips over HTML tags and handles entities as single characters.
  */
-function insertMarksIntoHtml(
-  html: string,
-  marks: { start: number; end: number }[],
-): string {
+function insertMarksIntoHtml(html: string, marks: { start: number; end: number }[]): string {
   if (marks.length === 0) return html;
 
   const sorted = [...marks].sort((a, b) => a.start - b.start);

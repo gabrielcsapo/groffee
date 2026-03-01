@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
-import { usePullDetailContext } from "./pull-detail.client";
 
 interface DiffFile {
   oldPath: string;
@@ -165,9 +164,7 @@ function DiffSidebar({
 // PullFilesView — main export
 // ---------------------------------------------------------------------------
 
-export function PullFilesView() {
-  const { diff } = usePullDetailContext();
-
+export function PullFilesView({ diff }: { diff: DiffFile[] | null }) {
   const [fileFilter, setFileFilter] = useState("");
   const [renderedCount, setRenderedCount] = useState(INITIAL_RENDER_COUNT);
   const [activeFileIdx, setActiveFileIdx] = useState(0);

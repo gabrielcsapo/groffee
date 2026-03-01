@@ -45,9 +45,7 @@ issueRoutes.get("/:owner/:repo/issues", optionalAuth, async (c) => {
   // Attach author usernames
   const authorIds = [...new Set(issueList.map((i) => i.authorId))];
   const authors =
-    authorIds.length > 0
-      ? await db.select().from(users).where(inArray(users.id, authorIds))
-      : [];
+    authorIds.length > 0 ? await db.select().from(users).where(inArray(users.id, authorIds)) : [];
   const authorMap = new Map(authors.filter(Boolean).map((u) => [u.id, u.username]));
 
   const issuesWithAuthors = issueList.map((i) => ({
@@ -221,7 +219,11 @@ issueRoutes.patch("/:owner/:repo/issues/:number", requireAuth, async (c) => {
   const body = await c.req.json();
 
   // Authorization: only author or repo owner can edit title/body or change status
-  if (typeof body.title === "string" || typeof body.body === "string" || typeof body.status === "string") {
+  if (
+    typeof body.title === "string" ||
+    typeof body.body === "string" ||
+    typeof body.status === "string"
+  ) {
     if (user.id !== issue.authorId && user.id !== result.owner.id) {
       return c.json({ error: "Only the author or repo owner can modify this issue" }, 403);
     }
@@ -275,7 +277,12 @@ issueRoutes.patch("/:owner/:repo/issues/:number", requireAuth, async (c) => {
 
   logAudit({
     userId: user.id,
-    action: body.status === "closed" ? "issue.close" : body.status === "open" ? "issue.reopen" : "issue.update",
+    action:
+      body.status === "closed"
+        ? "issue.close"
+        : body.status === "open"
+          ? "issue.reopen"
+          : "issue.update",
     targetType: "issue",
     targetId: issue.id,
     metadata: { number: issue.number, repoName: c.req.param("repo") },
