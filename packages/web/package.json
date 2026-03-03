@@ -18,19 +18,19 @@
   "dependencies": {
     "@groffee/db": "workspace:*",
     "@groffee/git": "workspace:*",
-    "@hono/node-server": "^1.19.9",
+    "@hono/node-server": "^1.19.10",
     "@node-rs/argon2": "^2.0.2",
     "better-sqlite3": "^12.6.2",
     "drizzle-orm": "^0.45.1",
-    "hono": "^4.12.3",
+    "hono": "^4.12.4",
     "isomorphic-dompurify": "^3.0.0",
     "isomorphic-git": "^1.37.2",
     "marked": "^17.0.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-flight-router": "^0.3.1",
+    "react-flight-router": "^0.3.3",
     "react-server-dom-webpack": "^19.2.4",
-    "shiki": "^4.0.0",
+    "shiki": "^4.0.1",
     "ssh2": "^1.17.0"
   },
   "devDependencies": {

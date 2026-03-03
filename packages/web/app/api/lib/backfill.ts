@@ -2,6 +2,7 @@ import { db, repositories, gitRefs, issues, pullRequests } from "@groffee/db";
 import { eq, sql } from "drizzle-orm";
 import { fullReindex } from "./indexer.js";
 import { listAllRefsWithOids } from "@groffee/git";
+import { resolveDiskPath } from "./paths.js";
 
 /**
  * Backfill indexes for existing repos that haven't been indexed yet.
@@ -22,10 +23,10 @@ export async function backfillIndexes(): Promise<void> {
     if (!existingRef) {
       // Check if the repo actually has any branches
       try {
-        const refs = await listAllRefsWithOids(repo.diskPath);
+        const refs = await listAllRefsWithOids(resolveDiskPath(repo.diskPath));
         if (refs.length > 0) {
           console.log(`Backfilling index for ${repo.name}...`);
-          await fullReindex(repo.id, repo.diskPath);
+          await fullReindex(repo.id, resolveDiskPath(repo.diskPath));
           console.log(`Finished indexing ${repo.name}`);
         }
       } catch (err) {

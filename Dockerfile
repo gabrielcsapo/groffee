@@ -12,9 +12,10 @@ WORKDIR /app
 COPY . .
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm run build
+
+ENV EXTERNAL_URL=""
 
 EXPOSE 3000
-EXPOSE 2222
+EXPOSE 2223
 
 CMD ["pnpm", "start"]

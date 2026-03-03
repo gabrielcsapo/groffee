@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
 import { getRequest } from "./request-context";
+import { resolveDiskPath } from "../../api/lib/paths";
 
 const execFileAsync = promisify(execFile);
 
@@ -90,9 +91,9 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
     const { stdout: mergeBase } = await execFileAsync(
       "git",
       ["merge-base", pr.targetBranch, pr.sourceBranch],
-      { cwd: result.repo.diskPath },
+      { cwd: resolveDiskPath(result.repo.diskPath) },
     );
-    diff = await getDiff(result.repo.diskPath, mergeBase.trim(), pr.sourceBranch);
+    diff = await getDiff(resolveDiskPath(result.repo.diskPath), mergeBase.trim(), pr.sourceBranch);
   } catch {
     // Branches may not exist anymore
   }
@@ -196,7 +197,7 @@ export async function createPullRequest(
 
   const target = data.targetBranch || result.repo.defaultBranch;
 
-  const refs = await listRefs(result.repo.diskPath);
+  const refs = await listRefs(resolveDiskPath(result.repo.diskPath));
   const refNames = refs.map((r) => r.name);
   if (!refNames.includes(data.sourceBranch))
     return { error: `Branch '${data.sourceBranch}' not found` };
@@ -374,27 +375,27 @@ export async function mergePullRequest(ownerName: string, repoName: string, prNu
     const { stdout: mergeBase } = await execFileAsync(
       "git",
       ["merge-base", pr.targetBranch, pr.sourceBranch],
-      { cwd: result.repo.diskPath },
+      { cwd: resolveDiskPath(result.repo.diskPath) },
     );
 
     const { stdout: targetTip } = await execFileAsync("git", ["rev-parse", pr.targetBranch], {
-      cwd: result.repo.diskPath,
+      cwd: resolveDiskPath(result.repo.diskPath),
     });
 
     if (mergeBase.trim() === targetTip.trim()) {
       const { stdout: sourceTip } = await execFileAsync("git", ["rev-parse", pr.sourceBranch], {
-        cwd: result.repo.diskPath,
+        cwd: resolveDiskPath(result.repo.diskPath),
       });
       await execFileAsync(
         "git",
         ["update-ref", `refs/heads/${pr.targetBranch}`, sourceTip.trim()],
-        { cwd: result.repo.diskPath },
+        { cwd: resolveDiskPath(result.repo.diskPath) },
       );
     } else {
       const { stdout: treeOid } = await execFileAsync(
         "git",
         ["merge-tree", "--write-tree", pr.targetBranch, pr.sourceBranch],
-        { cwd: result.repo.diskPath },
+        { cwd: resolveDiskPath(result.repo.diskPath) },
       );
 
       const mergeMessage = `Merge pull request #${pr.number} from ${pr.sourceBranch}\n\n${pr.title}`;
@@ -411,7 +412,7 @@ export async function mergePullRequest(ownerName: string, repoName: string, prNu
           mergeMessage,
         ],
         {
-          cwd: result.repo.diskPath,
+          cwd: resolveDiskPath(result.repo.diskPath),
           env: {
             ...process.env,
             GIT_AUTHOR_NAME: user.username,
@@ -425,7 +426,7 @@ export async function mergePullRequest(ownerName: string, repoName: string, prNu
       await execFileAsync(
         "git",
         ["update-ref", `refs/heads/${pr.targetBranch}`, commitOid.trim()],
-        { cwd: result.repo.diskPath },
+        { cwd: resolveDiskPath(result.repo.diskPath) },
       );
     }
 

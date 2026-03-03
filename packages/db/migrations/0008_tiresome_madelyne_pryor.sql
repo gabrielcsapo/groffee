@@ -1,0 +1,1 @@
+ALTER TABLE `git_blobs` ADD `is_lfs` integer DEFAULT false NOT NULL;

@@ -6,6 +6,7 @@ import { listRefs, getDiff } from "@groffee/git";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { logAudit, getClientIp } from "../lib/audit.js";
+import { resolveDiskPath } from "../lib/paths.js";
 import type { AppEnv } from "../types.js";
 
 const execFileAsync = promisify(execFile);
@@ -86,9 +87,9 @@ pullRoutes.get("/:owner/:repo/pulls/:number", optionalAuth, async (c) => {
     const { stdout: mergeBase } = await execFileAsync(
       "git",
       ["merge-base", pr.targetBranch, pr.sourceBranch],
-      { cwd: result.repo.diskPath },
+      { cwd: resolveDiskPath(result.repo.diskPath) },
     );
-    diff = await getDiff(result.repo.diskPath, mergeBase.trim(), pr.sourceBranch);
+    diff = await getDiff(resolveDiskPath(result.repo.diskPath), mergeBase.trim(), pr.sourceBranch);
   } catch {
     // Branches may not exist anymore
   }
@@ -175,7 +176,7 @@ pullRoutes.post("/:owner/:repo/pulls", requireAuth, async (c) => {
   const target = targetBranch || result.repo.defaultBranch;
 
   // Verify branches exist
-  const refs = await listRefs(result.repo.diskPath);
+  const refs = await listRefs(resolveDiskPath(result.repo.diskPath));
   const refNames = refs.map((r) => r.name);
   if (!refNames.includes(sourceBranch))
     return c.json({ error: `Branch '${sourceBranch}' not found` }, 400);
@@ -351,29 +352,29 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
     const { stdout: mergeBase } = await execFileAsync(
       "git",
       ["merge-base", pr.targetBranch, pr.sourceBranch],
-      { cwd: result.repo.diskPath },
+      { cwd: resolveDiskPath(result.repo.diskPath) },
     );
 
     const { stdout: targetTip } = await execFileAsync("git", ["rev-parse", pr.targetBranch], {
-      cwd: result.repo.diskPath,
+      cwd: resolveDiskPath(result.repo.diskPath),
     });
 
     if (mergeBase.trim() === targetTip.trim()) {
       // Fast-forward: just update the target ref
       const { stdout: sourceTip } = await execFileAsync("git", ["rev-parse", pr.sourceBranch], {
-        cwd: result.repo.diskPath,
+        cwd: resolveDiskPath(result.repo.diskPath),
       });
       await execFileAsync(
         "git",
         ["update-ref", `refs/heads/${pr.targetBranch}`, sourceTip.trim()],
-        { cwd: result.repo.diskPath },
+        { cwd: resolveDiskPath(result.repo.diskPath) },
       );
     } else {
       // Create a merge commit using git merge-tree + commit-tree
       const { stdout: treeOid } = await execFileAsync(
         "git",
         ["merge-tree", "--write-tree", pr.targetBranch, pr.sourceBranch],
-        { cwd: result.repo.diskPath },
+        { cwd: resolveDiskPath(result.repo.diskPath) },
       );
 
       const mergeMessage = `Merge pull request #${pr.number} from ${pr.sourceBranch}\n\n${pr.title}`;
@@ -390,7 +391,7 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
           mergeMessage,
         ],
         {
-          cwd: result.repo.diskPath,
+          cwd: resolveDiskPath(result.repo.diskPath),
           env: {
             ...process.env,
             GIT_AUTHOR_NAME: user.username,
@@ -404,7 +405,7 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
       await execFileAsync(
         "git",
         ["update-ref", `refs/heads/${pr.targetBranch}`, commitOid.trim()],
-        { cwd: result.repo.diskPath },
+        { cwd: resolveDiskPath(result.repo.diskPath) },
       );
     }
 

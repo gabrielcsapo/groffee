@@ -3,6 +3,7 @@ import { handleInfoRefs, handleServiceRpc, snapshotRefs } from "@groffee/git";
 import { canPush, canRead } from "../lib/permissions.js";
 import { triggerIncrementalIndex } from "../lib/indexer.js";
 import { authenticateGitUser, authChallenge, resolveRepo } from "../lib/git-auth.js";
+import { resolveDiskPath } from "../lib/paths.js";
 
 type ServiceType = "git-upload-pack" | "git-receive-pack";
 
@@ -33,7 +34,7 @@ gitProtocolRoutes.get("/:owner/:repo/info/refs", async (c) => {
   }
 
   const serviceType = service.replace("git-", "") as "upload-pack" | "receive-pack";
-  return handleInfoRefs(repo.diskPath, serviceType);
+  return handleInfoRefs(resolveDiskPath(repo.diskPath), serviceType);
 });
 
 // POST /:owner/:repo.git/git-upload-pack
@@ -49,7 +50,7 @@ gitProtocolRoutes.post("/:owner/:repo/git-upload-pack", async (c) => {
     if (!allowed) return c.text("Repository not found", 404);
   }
 
-  return handleServiceRpc(repo.diskPath, "upload-pack", c.req.raw.body!);
+  return handleServiceRpc(resolveDiskPath(repo.diskPath), "upload-pack", c.req.raw.body!);
 });
 
 // POST /:owner/:repo.git/git-receive-pack
@@ -64,13 +65,18 @@ gitProtocolRoutes.post("/:owner/:repo/git-receive-pack", async (c) => {
   if (!allowed) return c.text("Permission denied", 403);
 
   // Snapshot refs before push to detect changes afterwards
-  const refsBefore = await snapshotRefs(repo.diskPath);
+  const refsBefore = await snapshotRefs(resolveDiskPath(repo.diskPath));
 
-  return handleServiceRpc(repo.diskPath, "receive-pack", c.req.raw.body!, (exitCode) => {
-    if (exitCode === 0) {
-      triggerIncrementalIndex(repo.id, repo.diskPath, refsBefore).catch((err) =>
-        console.error("Post-push indexing failed:", err),
-      );
-    }
-  });
+  return handleServiceRpc(
+    resolveDiskPath(repo.diskPath),
+    "receive-pack",
+    c.req.raw.body!,
+    (exitCode) => {
+      if (exitCode === 0) {
+        triggerIncrementalIndex(repo.id, resolveDiskPath(repo.diskPath), refsBefore).catch((err) =>
+          console.error("Post-push indexing failed:", err),
+        );
+      }
+    },
+  );
 });

@@ -9,6 +9,7 @@ import {
 } from "@groffee/db";
 import { eq, and, sql } from "drizzle-orm";
 import { invalidateActivityCache } from "./activity-cache.js";
+import { parseLfsPointer } from "../../lib/lfs.js";
 import {
   walkTree,
   readBlobForIndex,
@@ -91,6 +92,10 @@ async function indexCommit(repoId: string, repoPath: string, oid: string): Promi
 
       if (!existingBlob) {
         const blobData = await readBlobForIndex(repoPath, entry.entryOid);
+        const isLfs =
+          !blobData.isBinary &&
+          blobData.content != null &&
+          parseLfsPointer(blobData.content) !== null;
         await db
           .insert(gitBlobs)
           .values({
@@ -101,6 +106,7 @@ async function indexCommit(repoId: string, repoPath: string, oid: string): Promi
             size: blobData.size,
             isBinary: blobData.isBinary,
             isTruncated: blobData.isTruncated,
+            isLfs,
           })
           .onConflictDoNothing();
 
@@ -287,13 +293,21 @@ export async function fullReindex(repoId: string, repoPath: string): Promise<voi
   }
 
   // List all refs from git
+  let refs: Awaited<ReturnType<typeof listAllRefsWithOids>>;
   try {
-    const refs = await listAllRefsWithOids(repoPath);
-    for (const ref of refs) {
-      await indexRef(repoId, repoPath, ref.name, ref.type, null, ref.oid);
-    }
+    refs = await listAllRefsWithOids(repoPath);
   } catch {
-    // Empty repo
+    // Empty repo — no refs to index
+    await invalidateActivityCache(repoId).catch(() => {});
+    return;
+  }
+
+  for (const ref of refs) {
+    try {
+      await indexRef(repoId, repoPath, ref.name, ref.type, null, ref.oid);
+    } catch (err) {
+      console.error(`fullReindex: failed to index ref ${ref.name} for repo ${repoId}:`, err);
+    }
   }
 
   // Invalidate activity cache after full reindex

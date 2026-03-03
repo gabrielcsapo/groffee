@@ -57,6 +57,13 @@
       "when": 1772322448345,
       "tag": "0007_loose_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1772569269433,
+      "tag": "0008_tiresome_madelyne_pryor",
+      "breakpoints": true
     }
   ]
 }

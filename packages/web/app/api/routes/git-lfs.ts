@@ -7,9 +7,9 @@ import { db, lfsObjects } from "@groffee/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { authenticateGitUser, authChallenge, resolveRepo } from "../lib/git-auth.js";
 import { canPush, canRead } from "../lib/permissions.js";
+import { DATA_DIR, EXTERNAL_URL } from "../lib/paths.js";
 
 const LFS_CONTENT_TYPE = "application/vnd.git-lfs+json";
-const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
 const LFS_STORAGE_DIR = path.resolve(DATA_DIR, "lfs-objects");
 
 mkdirSync(LFS_STORAGE_DIR, { recursive: true });
@@ -81,8 +81,7 @@ gitLfsRoutes.post("/:owner/:repo/info/lfs/objects/batch", async (c) => {
 
   const existingSet = new Map(existingRecords.map((r) => [r.oid, r.size]));
 
-  const url = new URL(c.req.url);
-  const baseUrl = `${url.protocol}//${url.host}/${owner}/${repoParam}`;
+  const baseUrl = `${EXTERNAL_URL}/${owner}/${repoParam}`;
   const authHeader = c.req.header("Authorization");
 
   const responseObjects = body.objects.map((obj) => {

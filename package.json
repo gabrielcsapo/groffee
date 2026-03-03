@@ -5,7 +5,7 @@
   "description": "The best way to deal with git is with a little bit of coffee",
   "type": "module",
   "scripts": {
-    "start": "pnpm --filter @groffee/web start",
+    "start": "pnpm run build && pnpm --filter @groffee/web start",
     "dev": "pnpm --filter @groffee/web dev",
     "build": "pnpm -r build",
     "db:generate": "pnpm --filter @groffee/db generate",
@@ -30,8 +30,8 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "oxfmt": "^0.35.0",
-    "oxlint": "^1.50.0",
+    "oxfmt": "^0.36.0",
+    "oxlint": "^1.51.0",
     "typescript": "^5.9.3"
   },
   "pnpm": {

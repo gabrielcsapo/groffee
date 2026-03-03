@@ -1,6 +1,6 @@
 import git from "isomorphic-git";
 import fs from "node:fs";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -119,6 +119,110 @@ export async function getBlob(
   return { content: blob, oid };
 }
 
+/**
+ * Read a blob by OID, but only if its size is at most `maxBytes`.
+ * Returns null if the blob is larger than `maxBytes`.
+ * Uses `git cat-file -s` to check size first, avoiding loading large blobs into memory.
+ */
+export async function readBlobIfSmall(
+  repoPath: string,
+  oid: string,
+  maxBytes: number,
+): Promise<Uint8Array | null> {
+  const { stdout: sizeStr } = await execFileAsync("git", ["cat-file", "-s", oid], {
+    cwd: repoPath,
+  });
+  const size = parseInt(sizeStr.trim(), 10);
+  if (size > maxBytes) return null;
+
+  const { blob } = await git.readBlob({ ...bareOpts(repoPath), oid });
+  return blob;
+}
+
+/**
+ * Read multiple blobs that are small enough (≤ maxBytes), in just 2 subprocesses:
+ *   1. `git cat-file --batch-check` to get sizes
+ *   2. `git cat-file --batch` to read content of small ones
+ * Returns Map<oid, Buffer> for blobs within the size limit.
+ */
+export async function readSmallBlobs(
+  repoPath: string,
+  oids: string[],
+  maxBytes: number,
+): Promise<Map<string, Buffer>> {
+  if (oids.length === 0) return new Map();
+
+  // Step 1: check sizes with --batch-check (1 subprocess)
+  const smallOids: string[] = [];
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn("git", ["cat-file", "--batch-check"], { cwd: repoPath });
+    let output = "";
+    proc.stdout.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`git cat-file --batch-check exited ${code}`));
+        return;
+      }
+      for (const line of output.trim().split("\n")) {
+        if (!line) continue;
+        const parts = line.split(" ");
+        if (parts.length >= 3 && parts[1] === "blob") {
+          const size = parseInt(parts[2], 10);
+          if (size <= maxBytes) smallOids.push(parts[0]);
+        }
+      }
+      resolve();
+    });
+    proc.stdin.write(oids.join("\n") + "\n");
+    proc.stdin.end();
+  });
+
+  if (smallOids.length === 0) return new Map();
+
+  // Step 2: read content of small blobs with --batch (1 subprocess)
+  const result = new Map<string, Buffer>();
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn("git", ["cat-file", "--batch"], { cwd: repoPath });
+    const chunks: Buffer[] = [];
+    proc.stdout.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`git cat-file --batch exited ${code}`));
+        return;
+      }
+      const buf = Buffer.concat(chunks);
+      let offset = 0;
+      while (offset < buf.length) {
+        // Header line: "<oid> <type> <size>\n"
+        const nlIdx = buf.indexOf(0x0a, offset);
+        if (nlIdx < 0) break;
+        const header = buf.subarray(offset, nlIdx).toString();
+        const parts = header.split(" ");
+        if (parts.length < 3) break;
+        const oid = parts[0];
+        const size = parseInt(parts[2], 10);
+        const contentStart = nlIdx + 1;
+        const contentEnd = contentStart + size;
+        if (contentEnd > buf.length) break;
+        result.set(oid, buf.subarray(contentStart, contentEnd));
+        // Skip trailing newline after content
+        offset = contentEnd + 1;
+      }
+      resolve();
+    });
+    proc.stdin.write(smallOids.join("\n") + "\n");
+    proc.stdin.end();
+  });
+
+  return result;
+}
+
 export async function getCommitLog(
   repoPath: string,
   ref: string,
@@ -171,35 +275,51 @@ export interface LastCommitInfo {
 
 /**
  * For each path, find the last commit that touched it.
- * Uses git CLI for performance on bare repos.
+ * Uses a single `git log` call with --name-only to avoid spawning N subprocesses.
+ * Directory paths are matched by prefix (e.g. file "src/foo.ts" matches path "src").
  */
 export async function getLastCommitsForPaths(
   repoPath: string,
   ref: string,
   paths: string[],
 ): Promise<Map<string, LastCommitInfo>> {
+  if (paths.length === 0) return new Map();
+
   const result = new Map<string, LastCommitInfo>();
+  const remaining = new Set(paths);
 
-  const promises = paths.map(async (filePath) => {
-    try {
-      const { stdout } = await execFileAsync(
-        "git",
-        ["log", "-1", "--format=%H%x00%s%x00%at", ref, "--", filePath],
-        { cwd: repoPath, maxBuffer: 1024 * 1024 },
-      );
-      const trimmed = stdout.trim();
-      if (!trimmed) return;
-      const [oid, message, ts] = trimmed.split("\0");
-      result.set(filePath, {
-        oid,
-        message,
-        timestamp: parseInt(ts, 10),
-      });
-    } catch {
-      // Skip entries where git log fails
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["log", "--format=COMMIT%x00%H%x00%s%x00%at", "--name-only", ref, "--", ...paths],
+      { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 },
+    );
+
+    let currentCommit: LastCommitInfo | null = null;
+
+    for (const line of stdout.split("\n")) {
+      if (remaining.size === 0) break;
+
+      if (line.startsWith("COMMIT\0")) {
+        const parts = line.split("\0");
+        currentCommit = {
+          oid: parts[1],
+          message: parts[2],
+          timestamp: parseInt(parts[3], 10),
+        };
+      } else if (line && currentCommit) {
+        // Match file paths against remaining entries (exact or directory prefix)
+        for (const p of remaining) {
+          if (line === p || line.startsWith(p + "/")) {
+            result.set(p, currentCommit);
+            remaining.delete(p);
+          }
+        }
+      }
     }
-  });
+  } catch {
+    // Skip if git log fails (e.g. empty repo)
+  }
 
-  await Promise.all(promises);
   return result;
 }

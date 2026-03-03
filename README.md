@@ -63,20 +63,37 @@ git push origin main
 
 LFS objects are stored on disk at `data/lfs-objects/` using content-addressable storage. Authentication uses the same credentials as regular git operations (password or personal access token via HTTP Basic Auth).
 
+LFS over SSH is also supported. When pushing via an SSH remote, Groffee handles `git-lfs-authenticate` to issue short-lived tokens automatically. This requires the `EXTERNAL_URL` environment variable so the SSH server knows the HTTP endpoint to advertise to the LFS client:
+
+```bash
+EXTERNAL_URL=https://groffee.example.com pnpm start
+```
+
 ### Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/:owner/:repo.git/info/lfs/objects/batch` | Batch API (negotiate uploads/downloads) |
-| PUT | `/:owner/:repo.git/info/lfs/objects/:oid` | Upload an LFS object |
-| GET | `/:owner/:repo.git/info/lfs/objects/:oid` | Download an LFS object |
-| POST | `/:owner/:repo.git/info/lfs/verify` | Verify an upload completed |
+| Method | Path                                       | Description                             |
+| ------ | ------------------------------------------ | --------------------------------------- |
+| POST   | `/:owner/:repo.git/info/lfs/objects/batch` | Batch API (negotiate uploads/downloads) |
+| PUT    | `/:owner/:repo.git/info/lfs/objects/:oid`  | Upload an LFS object                    |
+| GET    | `/:owner/:repo.git/info/lfs/objects/:oid`  | Download an LFS object                  |
+| POST   | `/:owner/:repo.git/info/lfs/verify`        | Verify an upload completed              |
+
+## Environment Variables
+
+| Variable       | Default                  | Description                                                      |
+| -------------- | ------------------------ | ---------------------------------------------------------------- |
+| `PORT`         | `3000`                   | HTTP server port                                                 |
+| `SSH_PORT`     | `2223`                   | SSH server port                                                  |
+| `DATA_DIR`     | `./data`                 | Directory for database, repositories, and LFS objects            |
+| `EXTERNAL_URL` | `http://localhost:$PORT` | Public-facing URL (required for Git LFS over SSH)                |
 
 ## Docker
 
 ```bash
 docker build -t groffee .
-docker run -p 3000:3000 -p 2222:2222 -v groffee-data:/app/data groffee
+docker run -p 3000:3000 -p 2223:2223 \
+  -e EXTERNAL_URL=https://groffee.example.com \
+  -v groffee-data:/app/data groffee
 ```
 
 ## Project Structure

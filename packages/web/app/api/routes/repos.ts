@@ -32,8 +32,7 @@ import type { AppEnv } from "../types.js";
 import { logAudit, getClientIp } from "../lib/audit.js";
 import { parseLfsPointer, lfsObjectDiskPath } from "../../lib/lfs.js";
 import { getCachedActivity, setCachedActivity } from "../lib/activity-cache.js";
-
-const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data", "repositories");
+import { DATA_DIR, REPOS_DIR, resolveDiskPath } from "../lib/paths.js";
 
 export const repoRoutes = new Hono<AppEnv>();
 
@@ -134,8 +133,8 @@ repoRoutes.post("/", requireAuth, async (c) => {
     return c.json({ error: "Repository already exists" }, 409);
   }
 
-  const diskPath = path.resolve(DATA_DIR, user.username, `${name}.git`);
-  await initBareRepo(diskPath);
+  const diskPath = `${user.username}/${name}.git`;
+  await initBareRepo(resolveDiskPath(diskPath));
 
   const now = new Date();
   const id = crypto.randomUUID();
@@ -209,7 +208,7 @@ repoRoutes.get("/:owner/:name", optionalAuth, async (c) => {
   }
 
   // Resolve actual HEAD branch from the git repo on disk
-  const headBranch = await resolveHead(repo.diskPath);
+  const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
   const defaultBranch = headBranch || repo.defaultBranch;
 
   return c.json({ repository: { ...repo, defaultBranch, owner: ownerName } });
@@ -284,7 +283,7 @@ repoRoutes.delete("/:owner/:name", requireAuth, async (c) => {
   // Delete bare git repo from disk
   const { rm } = await import("node:fs/promises");
   try {
-    await rm(repo.diskPath, { recursive: true, force: true });
+    await rm(resolveDiskPath(repo.diskPath), { recursive: true, force: true });
   } catch {
     // Best effort — DB record is already gone
   }
@@ -369,14 +368,14 @@ repoRoutes.get("/:owner/:name/refs", optionalAuth, async (c) => {
     .where(eq(gitRefs.repoId, repo.id));
 
   if (indexedRefs.length > 0) {
-    const headBranch = await resolveHead(repo.diskPath);
+    const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
     return c.json({ refs: indexedRefs, defaultBranch: headBranch || repo.defaultBranch });
   }
 
   // Fallback to git
   try {
-    const refs = await listRefs(repo.diskPath);
-    const headBranch = await resolveHead(repo.diskPath);
+    const refs = await listRefs(resolveDiskPath(repo.diskPath));
+    const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
     return c.json({ refs, defaultBranch: headBranch || repo.defaultBranch });
   } catch {
     return c.json({ refs: [], defaultBranch: repo.defaultBranch });
@@ -496,7 +495,7 @@ repoRoutes.get("/:owner/:name/tree/:ref{.+}", optionalAuth, async (c) => {
 
   // Fallback to git
   try {
-    const refs = await listRefs(repo.diskPath);
+    const refs = await listRefs(resolveDiskPath(repo.diskPath));
     const refNames = refs.map((r) => r.name);
 
     // Re-resolve ref from git refs if index resolution failed
@@ -512,9 +511,9 @@ repoRoutes.get("/:owner/:name/tree/:ref{.+}", optionalAuth, async (c) => {
       }
     }
 
-    const entries = await getTree(repo.diskPath, gitRef, gitTreePath);
+    const entries = await getTree(resolveDiskPath(repo.diskPath), gitRef, gitTreePath);
     const paths = entries.map((e) => e.path);
-    const lastCommits = await getLastCommitsForPaths(repo.diskPath, gitRef, paths);
+    const lastCommits = await getLastCommitsForPaths(resolveDiskPath(repo.diskPath), gitRef, paths);
 
     const entriesWithCommits = entries.map((entry) => {
       const commit = lastCommits.get(entry.path);
@@ -605,7 +604,7 @@ repoRoutes.get("/:owner/:name/blob/:ref{.+}", optionalAuth, async (c) => {
 
   // Fallback to git
   try {
-    const refs = await listRefs(repo.diskPath);
+    const refs = await listRefs(resolveDiskPath(repo.diskPath));
     const refNames = refs.map((r) => r.name);
 
     let gitRef = ref;
@@ -620,7 +619,7 @@ repoRoutes.get("/:owner/:name/blob/:ref{.+}", optionalAuth, async (c) => {
       }
     }
 
-    const { content, oid } = await getBlob(repo.diskPath, gitRef, gitFilePath);
+    const { content, oid } = await getBlob(resolveDiskPath(repo.diskPath), gitRef, gitFilePath);
     const text = new TextDecoder().decode(content);
     return c.json({ content: text, oid, ref: gitRef, path: gitFilePath });
   } catch (e: unknown) {
@@ -695,7 +694,7 @@ repoRoutes.get("/:owner/:name/commits/:ref", optionalAuth, async (c) => {
 
   // Fallback to git (no author filter available)
   try {
-    const commits = await getCommitLog(repo.diskPath, ref, limit);
+    const commits = await getCommitLog(resolveDiskPath(repo.diskPath), ref, limit);
     return c.json({ commits, ref, defaultBranch: repo.defaultBranch });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to read commits";
@@ -740,7 +739,7 @@ repoRoutes.get("/:owner/:name/commit/:sha", optionalAuth, async (c) => {
       // Diff still comes from git (on-demand)
       let diff = null;
       if (parents.length > 0) {
-        diff = await getDiff(repo.diskPath, parents[0], sha);
+        diff = await getDiff(resolveDiskPath(repo.diskPath), parents[0], sha);
       }
       return c.json({ commit, diff });
     }
@@ -750,10 +749,10 @@ repoRoutes.get("/:owner/:name/commit/:sha", optionalAuth, async (c) => {
 
   // Fallback to git
   try {
-    const commit = await getCommit(repo.diskPath, sha);
+    const commit = await getCommit(resolveDiskPath(repo.diskPath), sha);
     let diff = null;
     if (commit.parents.length > 0) {
-      diff = await getDiff(repo.diskPath, commit.parents[0], sha);
+      diff = await getDiff(resolveDiskPath(repo.diskPath), commit.parents[0], sha);
     }
     return c.json({ commit, diff });
   } catch (e: unknown) {
@@ -799,7 +798,7 @@ repoRoutes.get("/:owner/:name/raw/:ref{.+}", optionalAuth, async (c) => {
 
   try {
     // Try git CLI for raw binary content
-    const refs = await listRefs(repo.diskPath);
+    const refs = await listRefs(resolveDiskPath(repo.diskPath));
     const refNames = refs.map((r) => r.name);
 
     let gitRef = ref;
@@ -814,13 +813,13 @@ repoRoutes.get("/:owner/:name/raw/:ref{.+}", optionalAuth, async (c) => {
       }
     }
 
-    const { content } = await getBlob(repo.diskPath, gitRef, gitFilePath);
+    const { content } = await getBlob(resolveDiskPath(repo.diskPath), gitRef, gitFilePath);
 
     // Check if the blob is an LFS pointer and serve the actual object
     const text = new TextDecoder().decode(content);
     const lfsPointer = parseLfsPointer(text);
     if (lfsPointer) {
-      const dataDir = process.env.DATA_DIR || path.resolve(process.cwd(), "data");
+      const dataDir = DATA_DIR;
       const objectPath = lfsObjectDiskPath(dataDir, lfsPointer.oid);
       if (fs.existsSync(objectPath)) {
         const ext = gitFilePath.split(".").pop()?.toLowerCase() || "";

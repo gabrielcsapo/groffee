@@ -1,5 +1,3 @@
-import git from "isomorphic-git";
-import fs from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -7,10 +5,6 @@ const execFileAsync = promisify(execFile);
 
 const MAX_BLOB_SIZE = 1 * 1024 * 1024; // 1MB
 const BINARY_CHECK_SIZE = 8000;
-
-function bareOpts(repoPath: string) {
-  return { fs, gitdir: repoPath };
-}
 
 // --- Types ---
 
@@ -63,31 +57,37 @@ export interface CommitMeta {
 
 /**
  * Recursively walk a commit's tree and return all entries flattened.
+ * Uses `git ls-tree -r` for efficiency with large repos.
  */
 export async function walkTree(repoPath: string, commitOid: string): Promise<WalkedTree> {
-  const { commit } = await git.readCommit({ ...bareOpts(repoPath), oid: commitOid });
-  const rootTreeOid = commit.tree;
-  const entries: WalkedTreeEntry[] = [];
+  // Get the tree OID for this commit
+  const { stdout: treeOidStr } = await execFileAsync("git", ["rev-parse", `${commitOid}^{tree}`], {
+    cwd: repoPath,
+  });
+  const rootTreeOid = treeOidStr.trim();
 
-  async function recurse(treeOid: string, parentPath: string) {
-    const { tree } = await git.readTree({ ...bareOpts(repoPath), oid: treeOid });
-    for (const entry of tree) {
-      const entryPath = parentPath ? `${parentPath}/${entry.path}` : entry.path;
-      const entryType = entry.type === "tree" ? ("tree" as const) : ("blob" as const);
-      entries.push({
-        parentPath,
-        entryName: entry.path,
-        entryPath,
-        entryType,
-        entryOid: entry.oid,
-      });
-      if (entry.type === "tree") {
-        await recurse(entry.oid, entryPath);
-      }
-    }
+  // List all entries recursively (blobs and trees)
+  const { stdout } = await execFileAsync("git", ["ls-tree", "-r", "-t", "--full-tree", commitOid], {
+    cwd: repoPath,
+    maxBuffer: 50 * 1024 * 1024,
+  });
+
+  const entries: WalkedTreeEntry[] = [];
+  for (const line of stdout.trim().split("\n")) {
+    if (!line) continue;
+    // Format: <mode> <type> <oid>\t<path>
+    const tabIdx = line.indexOf("\t");
+    const meta = line.slice(0, tabIdx).split(" ");
+    const entryPath = line.slice(tabIdx + 1);
+    const entryType = meta[1] === "tree" ? ("tree" as const) : ("blob" as const);
+    const entryOid = meta[2];
+    const lastSlash = entryPath.lastIndexOf("/");
+    const parentPath = lastSlash >= 0 ? entryPath.slice(0, lastSlash) : "";
+    const entryName = lastSlash >= 0 ? entryPath.slice(lastSlash + 1) : entryPath;
+
+    entries.push({ parentPath, entryName, entryPath, entryType, entryOid });
   }
 
-  await recurse(rootTreeOid, "");
   return { rootTreeOid, entries };
 }
 
@@ -97,8 +97,25 @@ export async function walkTree(repoPath: string, commitOid: string): Promise<Wal
  * Read a blob's content for indexing. Detects binary files and truncates large ones.
  */
 export async function readBlobForIndex(repoPath: string, oid: string): Promise<BlobIndexData> {
-  const { blob } = await git.readBlob({ ...bareOpts(repoPath), oid });
-  const size = blob.length;
+  // Check size first to avoid loading huge blobs into memory
+  const { stdout: sizeStr } = await execFileAsync("git", ["cat-file", "-s", oid], {
+    cwd: repoPath,
+  });
+  const size = parseInt(sizeStr.trim(), 10);
+
+  // For blobs larger than MAX_BLOB_SIZE, skip content entirely
+  if (size > MAX_BLOB_SIZE) {
+    return { content: null, size, isBinary: true, isTruncated: true };
+  }
+
+  // Read blob content via git cat-file
+  const { stdout: rawContent } = await execFileAsync("git", ["cat-file", "blob", oid], {
+    cwd: repoPath,
+    maxBuffer: MAX_BLOB_SIZE + 1024,
+    encoding: "buffer",
+  });
+
+  const blob = rawContent as unknown as Buffer;
 
   // Binary detection: check for null bytes in first 8KB
   const checkLen = Math.min(blob.length, BINARY_CHECK_SIZE);
@@ -114,11 +131,8 @@ export async function readBlobForIndex(repoPath: string, oid: string): Promise<B
     return { content: null, size, isBinary: true, isTruncated: false };
   }
 
-  const isTruncated = size > MAX_BLOB_SIZE;
-  const slice = isTruncated ? blob.slice(0, MAX_BLOB_SIZE) : blob;
-  const content = new TextDecoder().decode(slice);
-
-  return { content, size, isBinary, isTruncated };
+  const content = blob.toString("utf8");
+  return { content, size, isBinary, isTruncated: false };
 }
 
 // --- Changed Files ---
@@ -189,20 +203,67 @@ export async function getChangedFiles(
 
 /**
  * Read full commit metadata for indexing.
+ * Uses `git cat-file -p` for reliability with large pack files.
  */
 export async function readCommitForIndex(repoPath: string, oid: string): Promise<CommitMeta> {
-  const { commit } = await git.readCommit({ ...bareOpts(repoPath), oid });
+  const { stdout } = await execFileAsync("git", ["cat-file", "-p", oid], {
+    cwd: repoPath,
+    maxBuffer: 1024 * 1024,
+  });
+
+  const lines = stdout.split("\n");
+  let treeOid = "";
+  const parentOids: string[] = [];
+  let authorName = "";
+  let authorEmail = "";
+  let authorTimestamp = 0;
+  let committerName = "";
+  let committerEmail = "";
+  let committerTimestamp = 0;
+  let headerDone = false;
+  const messageLines: string[] = [];
+
+  for (const line of lines) {
+    if (headerDone) {
+      messageLines.push(line);
+      continue;
+    }
+    if (line === "") {
+      headerDone = true;
+      continue;
+    }
+    if (line.startsWith("tree ")) {
+      treeOid = line.slice(5);
+    } else if (line.startsWith("parent ")) {
+      parentOids.push(line.slice(7));
+    } else if (line.startsWith("author ")) {
+      const match = line.match(/^author (.+) <(.+)> (\d+)/);
+      if (match) {
+        authorName = match[1];
+        authorEmail = match[2];
+        authorTimestamp = parseInt(match[3], 10);
+      }
+    } else if (line.startsWith("committer ")) {
+      const match = line.match(/^committer (.+) <(.+)> (\d+)/);
+      if (match) {
+        committerName = match[1];
+        committerEmail = match[2];
+        committerTimestamp = parseInt(match[3], 10);
+      }
+    }
+  }
+
   return {
     oid,
-    message: commit.message,
-    authorName: commit.author.name,
-    authorEmail: commit.author.email,
-    authorTimestamp: commit.author.timestamp,
-    committerName: commit.committer.name,
-    committerEmail: commit.committer.email,
-    committerTimestamp: commit.committer.timestamp,
-    parentOids: commit.parent,
-    treeOid: commit.tree,
+    message: messageLines.join("\n").trim(),
+    authorName,
+    authorEmail,
+    authorTimestamp,
+    committerName,
+    committerEmail,
+    committerTimestamp,
+    parentOids,
+    treeOid,
   };
 }
 
@@ -210,36 +271,34 @@ export async function readCommitForIndex(repoPath: string, oid: string): Promise
  * Get the parent OIDs of a commit (without reading full metadata).
  */
 export async function getCommitParents(repoPath: string, oid: string): Promise<string[]> {
-  const { commit } = await git.readCommit({ ...bareOpts(repoPath), oid });
-  return commit.parent;
+  const { stdout } = await execFileAsync("git", ["rev-parse", `${oid}^@`], { cwd: repoPath });
+  const trimmed = stdout.trim();
+  if (!trimmed) return [];
+  return trimmed.split("\n");
 }
 
 /**
  * List all branches and tags with their resolved OIDs.
+ * Uses `git for-each-ref` for efficiency.
  */
 export async function listAllRefsWithOids(
   repoPath: string,
 ): Promise<Array<{ name: string; oid: string; type: "branch" | "tag" }>> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["for-each-ref", "--format=%(refname)\t%(objectname)", "refs/heads", "refs/tags"],
+    { cwd: repoPath },
+  );
+
   const result: Array<{ name: string; oid: string; type: "branch" | "tag" }> = [];
-
-  try {
-    const branches = await git.listBranches({ ...bareOpts(repoPath) });
-    for (const name of branches) {
-      const oid = await git.resolveRef({ ...bareOpts(repoPath), ref: name });
-      result.push({ name, oid, type: "branch" });
+  for (const line of stdout.trim().split("\n")) {
+    if (!line) continue;
+    const [refname, oid] = line.split("\t");
+    if (refname.startsWith("refs/heads/")) {
+      result.push({ name: refname.slice("refs/heads/".length), oid, type: "branch" });
+    } else if (refname.startsWith("refs/tags/")) {
+      result.push({ name: refname.slice("refs/tags/".length), oid, type: "tag" });
     }
-  } catch {
-    // Empty repo
-  }
-
-  try {
-    const tags = await git.listTags({ ...bareOpts(repoPath) });
-    for (const name of tags) {
-      const oid = await git.resolveRef({ ...bareOpts(repoPath), ref: name });
-      result.push({ name, oid, type: "tag" });
-    }
-  } catch {
-    // No tags
   }
 
   return result;
@@ -252,25 +311,20 @@ export async function listAllRefsWithOids(
  */
 export async function snapshotRefs(repoPath: string): Promise<Map<string, string>> {
   const refs = new Map<string, string>();
+  const { stdout } = await execFileAsync(
+    "git",
+    ["for-each-ref", "--format=%(refname)\t%(objectname)", "refs/heads", "refs/tags"],
+    { cwd: repoPath },
+  );
 
-  try {
-    const branches = await git.listBranches({ ...bareOpts(repoPath) });
-    for (const branch of branches) {
-      const oid = await git.resolveRef({ ...bareOpts(repoPath), ref: branch });
-      refs.set(`branch:${branch}`, oid);
+  for (const line of stdout.trim().split("\n")) {
+    if (!line) continue;
+    const [refname, oid] = line.split("\t");
+    if (refname.startsWith("refs/heads/")) {
+      refs.set(`branch:${refname.slice("refs/heads/".length)}`, oid);
+    } else if (refname.startsWith("refs/tags/")) {
+      refs.set(`tag:${refname.slice("refs/tags/".length)}`, oid);
     }
-  } catch {
-    // Empty repo — no branches
-  }
-
-  try {
-    const tags = await git.listTags({ ...bareOpts(repoPath) });
-    for (const tag of tags) {
-      const oid = await git.resolveRef({ ...bareOpts(repoPath), ref: tag });
-      refs.set(`tag:${tag}`, oid);
-    }
-  } catch {
-    // No tags
   }
 
   return refs;
@@ -312,24 +366,18 @@ export function diffRefSnapshots(
 /**
  * Walk the first-parent ancestry chain from a tip commit.
  * Returns OIDs in order: [tip, parent, grandparent, ...].
+ * Uses `git rev-list --first-parent` for efficiency.
  */
 export async function walkAncestry(
   repoPath: string,
   tipOid: string,
   maxDepth: number = 5000,
 ): Promise<string[]> {
-  const chain: string[] = [];
-  let currentOid: string | null = tipOid;
+  const { stdout } = await execFileAsync(
+    "git",
+    ["rev-list", "--first-parent", `--max-count=${maxDepth}`, tipOid],
+    { cwd: repoPath, maxBuffer: 50 * 1024 * 1024 },
+  );
 
-  while (currentOid && chain.length < maxDepth) {
-    chain.push(currentOid);
-    try {
-      const { commit } = await git.readCommit({ ...bareOpts(repoPath), oid: currentOid });
-      currentOid = commit.parent.length > 0 ? commit.parent[0] : null;
-    } catch {
-      break;
-    }
-  }
-
-  return chain;
+  return stdout.trim().split("\n").filter(Boolean);
 }

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { db, repositories, users, personalAccessTokens } from "@groffee/db";
 import { eq, and, or, gt, isNull } from "drizzle-orm";
 import { verifyPassword } from "./password.js";
@@ -72,6 +72,28 @@ export function authChallenge() {
     status: 401,
     headers: { "WWW-Authenticate": 'Basic realm="Groffee"' },
   });
+}
+
+export async function createEphemeralLfsToken(
+  userId: string,
+): Promise<{ plainToken: string; expiresInSeconds: number }> {
+  const expiresInSeconds = 3600;
+  const plainToken = "groffee_" + randomBytes(20).toString("hex");
+  const tokenHash = createHash("sha256").update(plainToken).digest("hex");
+  const tokenPrefix = plainToken.slice(0, 16);
+
+  await db.insert(personalAccessTokens).values({
+    id: crypto.randomUUID(),
+    userId,
+    name: "lfs-ssh-ephemeral",
+    tokenHash,
+    tokenPrefix,
+    scopes: '["repo"]',
+    expiresAt: new Date(Date.now() + expiresInSeconds * 1000),
+    createdAt: new Date(),
+  });
+
+  return { plainToken, expiresInSeconds };
 }
 
 export async function resolveRepo(owner: string, repoName: string) {

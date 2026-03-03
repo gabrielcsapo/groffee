@@ -138,6 +138,27 @@ export default function SettingsKeysClient() {
         </div>
       )}
 
+      {/* Test connection hint */}
+      {keys.length > 0 && (
+        <div className="bg-surface-secondary border border-border rounded-lg px-4 py-3 mb-6">
+          <p className="text-sm font-medium text-text-primary mb-1">Test your SSH connection</p>
+          <p className="text-xs text-text-secondary mb-2">
+            After adding your key, verify it works by running:
+          </p>
+          <pre className="text-xs bg-surface p-3 rounded-md border border-border font-mono text-text-primary overflow-x-auto">
+            ssh -T git@
+            {typeof window !== "undefined" ? window.location.hostname : "hostname"} -p 2223
+          </pre>
+          <p className="text-xs text-text-secondary mt-2">
+            You should see:{" "}
+            <span className="font-mono">
+              Hi &lt;username&gt;! You've successfully authenticated, but Groffee does not provide
+              shell access.
+            </span>
+          </p>
+        </div>
+      )}
+
       {/* Add new key */}
       <div className="bg-surface border border-border rounded-lg p-6 mb-6">
         <h2 className="text-lg font-semibold text-text-primary mb-4">Add new SSH key</h2>

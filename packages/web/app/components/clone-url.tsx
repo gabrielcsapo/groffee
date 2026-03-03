@@ -20,7 +20,7 @@ export function CloneUrl({
 
   const httpsUrl = `${origin}${path}`;
   const hostname = origin ? new URL(origin).hostname : "localhost";
-  const sshUrl = `ssh://git@${hostname}:2222${path}`;
+  const sshUrl = `ssh://git@${hostname}:2223${path}`;
 
   const url = protocol === "https" ? httpsUrl : sshUrl;
 

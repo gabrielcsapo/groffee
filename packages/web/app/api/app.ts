@@ -3,7 +3,6 @@ import { cors } from "hono/cors";
 import { db } from "@groffee/db";
 import { sql } from "drizzle-orm";
 import { existsSync } from "node:fs";
-import path from "node:path";
 import { authRoutes } from "./routes/auth.js";
 import { repoRoutes } from "./routes/repos.js";
 import { issueRoutes } from "./routes/issues.js";
@@ -19,7 +18,7 @@ import { requestLogger } from "./middleware/request-logger.js";
 
 const startTime = Date.now();
 
-const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data", "repositories");
+import { REPOS_DIR } from "./lib/paths.js";
 
 export const app = new Hono();
 
@@ -37,7 +36,7 @@ app.get("/api/health", async (c) => {
     dbOk = false;
   }
 
-  const dataExists = existsSync(DATA_DIR);
+  const dataExists = existsSync(REPOS_DIR);
   const uptimeMs = Date.now() - startTime;
   const memUsage = process.memoryUsage();
   const healthy = dbOk && dataExists;

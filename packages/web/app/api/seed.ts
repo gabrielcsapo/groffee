@@ -19,8 +19,7 @@ import { db, users, repositories, issues, pullRequests, comments } from "@groffe
 import { eq } from "drizzle-orm";
 import { initBareRepo } from "@groffee/git";
 
-const DATA_DIR = resolve(process.cwd(), "data");
-const REPOS_DIR = resolve(DATA_DIR, "repositories");
+import { DATA_DIR, REPOS_DIR, resolveDiskPath } from "./lib/paths.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -639,16 +638,17 @@ async function main() {
     const id = randomUUID();
     const ownerUsername = r.owner;
     const ownerId = userMap[ownerUsername];
-    const diskPath = resolve(REPOS_DIR, ownerUsername, `${r.name}.git`);
+    const diskPath = `${ownerUsername}/${r.name}.git`;
+    const absDiskPath = resolveDiskPath(diskPath);
     const created = daysAgo(r.daysOld);
 
     // Init bare repo
-    await initBareRepo(diskPath);
+    await initBareRepo(absDiskPath);
 
     // Build file tree and commits
     if (Object.keys(r.files).length > 0) {
       // Build nested tree structure
-      const rootTree = buildTree(diskPath, r.files);
+      const rootTree = buildTree(absDiskPath, r.files);
 
       // Create chain of commits on main
       let parentHash: string | undefined;
@@ -659,13 +659,13 @@ async function main() {
         let treeHash = rootTree;
         if (i > 0) {
           // Add a small change to create distinct commits
-          const changeBlob = makeBlob(diskPath, `// Change ${i}\nexport default ${i};\n`);
+          const changeBlob = makeBlob(absDiskPath, `// Change ${i}\nexport default ${i};\n`);
           // Merge with root tree using read-tree workaround: just use root tree
           // For simplicity, all commits point to the same tree but are linked in a chain
           treeHash = rootTree;
           // Actually modify: add the change file to a fresh combined tree
           // Re-read root tree entries, add new file
-          const existingEntries = git(diskPath, ["ls-tree", rootTree])
+          const existingEntries = git(absDiskPath, ["ls-tree", rootTree])
             .split("\n")
             .filter(Boolean)
             .map((line) => {
@@ -674,12 +674,12 @@ async function main() {
               return [mode, type, hash, name] as [string, string, string, string];
             });
           existingEntries.push(["100644", "blob", changeBlob, `.change-${i}`]);
-          treeHash = makeTree(diskPath, existingEntries);
+          treeHash = makeTree(absDiskPath, existingEntries);
         }
 
         const author = GIT_AUTHORS[i % GIT_AUTHORS.length];
         const commit = makeCommit(
-          diskPath,
+          absDiskPath,
           treeHash,
           commitMessages[i],
           parentHash ? [parentHash] : [],
@@ -689,7 +689,7 @@ async function main() {
       }
 
       if (parentHash) {
-        updateRef(diskPath, "refs/heads/main", parentHash);
+        updateRef(absDiskPath, "refs/heads/main", parentHash);
       }
 
       // Create feature branches (diverge from main at various points)
@@ -738,15 +738,15 @@ async function main() {
             README_LONG +
             "\n## Big Refactor\n\nThis branch restructures the entire codebase into a feature-based architecture.\n";
 
-          branchTree = buildTree(diskPath, bigRefactorFiles);
+          branchTree = buildTree(absDiskPath, bigRefactorFiles);
           commitMsg =
             "feat: massive refactor — restructure into feature-based architecture\n\nReorganizes the codebase into a feature-based architecture with\ncomponents, pages, hooks, contexts, and comprehensive test coverage.\n\n520 new files added across 18 directories.";
         } else {
           const branchBlob = makeBlob(
-            diskPath,
+            absDiskPath,
             `// Branch: ${branch}\nexport const branch = "${branch}";\n`,
           );
-          const branchEntries = git(diskPath, ["ls-tree", parentHash!])
+          const branchEntries = git(absDiskPath, ["ls-tree", parentHash!])
             .split("\n")
             .filter(Boolean)
             .map((line) => {
@@ -755,19 +755,19 @@ async function main() {
               return [mode, type, h, name] as [string, string, string, string];
             });
           branchEntries.push(["100644", "blob", branchBlob, `${branch.replace(/\//g, "-")}.ts`]);
-          branchTree = makeTree(diskPath, branchEntries);
+          branchTree = makeTree(absDiskPath, branchEntries);
           commitMsg = `feat: ${branch} changes`;
         }
 
         const branchAuthor = GIT_AUTHORS[r.branches.indexOf(branch) % GIT_AUTHORS.length];
         const branchCommit = makeCommit(
-          diskPath,
+          absDiskPath,
           branchTree,
           commitMsg,
           [parentHash!],
           branchAuthor,
         );
-        updateRef(diskPath, `refs/heads/${branch}`, branchCommit);
+        updateRef(absDiskPath, `refs/heads/${branch}`, branchCommit);
       }
     }
 

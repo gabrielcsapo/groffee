@@ -3,6 +3,8 @@ export {
   resolveHead,
   getTree,
   getBlob,
+  readBlobIfSmall,
+  readSmallBlobs,
   getCommitLog,
   getCommit,
   getLastCommitsForPaths,

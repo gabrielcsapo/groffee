@@ -899,7 +899,11 @@ export default function Docs() {
             { name: "repo", description: "Repository name" },
           ]}
           queryParams={[
-            { name: "q", type: "string", description: "Search query (required)" },
+            {
+              name: "q",
+              type: "string",
+              description: "Search query (required)",
+            },
             {
               name: "ext",
               type: "string",
@@ -936,7 +940,11 @@ export default function Docs() {
           auth="optional"
           description="Search code across all public repositories."
           queryParams={[
-            { name: "q", type: "string", description: "Search query (required)" },
+            {
+              name: "q",
+              type: "string",
+              description: "Search query (required)",
+            },
             {
               name: "ext",
               type: "string",
@@ -976,7 +984,13 @@ export default function Docs() {
           path="/api/search/code/languages"
           auth="optional"
           description="Get language breakdown for code search results."
-          queryParams={[{ name: "q", type: "string", description: "Search query (required)" }]}
+          queryParams={[
+            {
+              name: "q",
+              type: "string",
+              description: "Search query (required)",
+            },
+          ]}
           response={{
             languages: [
               {
@@ -998,7 +1012,11 @@ export default function Docs() {
             { name: "repo", description: "Repository name" },
           ]}
           queryParams={[
-            { name: "q", type: "string", description: "Search query (required)" },
+            {
+              name: "q",
+              type: "string",
+              description: "Search query (required)",
+            },
             {
               name: "limit",
               type: "number",
@@ -1034,7 +1052,11 @@ export default function Docs() {
             { name: "repo", description: "Repository name" },
           ]}
           queryParams={[
-            { name: "q", type: "string", description: "Search query (required)" },
+            {
+              name: "q",
+              type: "string",
+              description: "Search query (required)",
+            },
             {
               name: "limit",
               type: "number",
@@ -1063,18 +1085,33 @@ export default function Docs() {
         {/* Git Protocol */}
         <SectionHeader id="git-protocol" title="Git Protocol (Smart HTTP)" />
 
-        <div className="card p-4 text-sm text-text-secondary mb-6">
-          <p className="mb-2">
+        <div className="card p-4 text-sm text-text-secondary mb-6 space-y-3">
+          <p>
             These endpoints implement Git's Smart HTTP protocol for <Code>git clone</Code>,{" "}
             <Code>git fetch</Code>, and <Code>git push</Code>. They use binary git protocol streams,
             not JSON. You typically interact with these via the <Code>git</Code> CLI rather than
             calling them directly.
           </p>
           <p>
-            Groffee also supports <strong>SSH git access</strong> (port 2222). Push operations
+            Groffee also supports <strong>SSH git access</strong> (port 2223). Push operations
             require SSH key authentication — add your public key via{" "}
             <Code>POST /api/user/ssh-keys</Code> or the Settings page.
           </p>
+          <div className="border-t border-border-muted pt-3">
+            <p className="font-medium text-text-primary mb-1">Git LFS over SSH</p>
+            <p>
+              LFS over SSH is supported automatically. When pushing via an SSH remote, Groffee
+              handles <Code>git-lfs-authenticate</Code> to issue short-lived credentials. Set the{" "}
+              <Code>EXTERNAL_URL</Code> environment variable to the public-facing HTTP URL so the
+              SSH server can direct the LFS client to the correct endpoint:
+            </p>
+            <pre className="bg-surface-secondary border border-border-muted rounded p-2 text-xs font-mono mt-2">
+              EXTERNAL_URL=https://groffee.example.com
+            </pre>
+            <p className="mt-2">
+              Defaults to <Code>http://localhost:$PORT</Code> if not set.
+            </p>
+          </div>
         </div>
 
         <Endpoint

@@ -276,6 +276,7 @@ export const gitBlobs = sqliteTable(
     size: integer("size").notNull(),
     isBinary: integer("is_binary", { mode: "boolean" }).notNull().default(false),
     isTruncated: integer("is_truncated", { mode: "boolean" }).notNull().default(false),
+    isLfs: integer("is_lfs", { mode: "boolean" }).notNull().default(false),
   },
   (table) => [uniqueIndex("git_blobs_repo_oid_idx").on(table.repoId, table.oid)],
 );

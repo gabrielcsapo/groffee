@@ -20,6 +20,8 @@ import {
   initBareRepo,
   getTree,
   getBlob,
+  readBlobIfSmall,
+  readSmallBlobs,
   getCommitLog,
   getCommit,
   listRefs,
@@ -32,8 +34,7 @@ import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
 import { parseLfsPointer } from "../lfs";
 import { getRequest } from "./request-context";
-
-const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), "data", "repositories");
+import { REPOS_DIR, resolveDiskPath } from "../../api/lib/paths";
 
 // --- Helpers ---
 
@@ -186,7 +187,7 @@ export async function getRepo(ownerName: string, repoName: string) {
 
   const isOwner = currentUser?.id === owner.id;
 
-  const headBranch = await resolveHead(repo.diskPath);
+  const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
   const defaultBranch = headBranch || repo.defaultBranch;
 
   return {
@@ -217,7 +218,7 @@ export async function getRepoRefs(ownerName: string, repoName: string) {
     .where(eq(gitRefs.repoId, repo.id));
 
   if (indexedRefs.length > 0) {
-    const headBranch = await resolveHead(repo.diskPath);
+    const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
     return {
       refs: indexedRefs,
       defaultBranch: headBranch || repo.defaultBranch,
@@ -226,8 +227,8 @@ export async function getRepoRefs(ownerName: string, repoName: string) {
 
   // Fallback to git
   try {
-    const refs = await listRefs(repo.diskPath);
-    const headBranch = await resolveHead(repo.diskPath);
+    const refs = await listRefs(resolveDiskPath(repo.diskPath));
+    const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
     return { refs, defaultBranch: headBranch || repo.defaultBranch };
   } catch {
     return { refs: [], defaultBranch: repo.defaultBranch };
@@ -333,34 +334,28 @@ export async function getRepoTree(ownerName: string, repoName: string, refAndPat
             }
           }
 
-          // Detect LFS pointers
+          // Detect LFS pointers via pre-computed isLfs flag
           const lfsOids = new Set<string>();
+          const blobOids = entries.filter((e) => e.type === "blob").map((e) => e.oid);
+          if (blobOids.length > 0) {
+            const lfsBlobs = await db
+              .select({ oid: gitBlobs.oid })
+              .from(gitBlobs)
+              .where(
+                and(
+                  eq(gitBlobs.repoId, repo.id),
+                  sql`${gitBlobs.oid} IN ${blobOids}`,
+                  eq(gitBlobs.isLfs, true),
+                ),
+              );
+            for (const blob of lfsBlobs) {
+              lfsOids.add(blob.oid);
+            }
+          }
           const [lfsCount] = await db
             .select({ count: sql<number>`cast(count(*) as integer)` })
             .from(lfsObjects)
             .where(eq(lfsObjects.repoId, repo.id));
-
-          if (lfsCount.count > 0) {
-            const blobOids = entries.filter((e) => e.type === "blob").map((e) => e.oid);
-            if (blobOids.length > 0) {
-              const candidateBlobs = await db
-                .select({ oid: gitBlobs.oid, content: gitBlobs.content })
-                .from(gitBlobs)
-                .where(
-                  and(
-                    eq(gitBlobs.repoId, repo.id),
-                    sql`${gitBlobs.oid} IN ${blobOids}`,
-                    sql`${gitBlobs.size} < 200`,
-                    eq(gitBlobs.isBinary, false),
-                  ),
-                );
-              for (const blob of candidateBlobs) {
-                if (blob.content && parseLfsPointer(blob.content)) {
-                  lfsOids.add(blob.oid);
-                }
-              }
-            }
-          }
 
           const entriesWithCommits = entries.map((entry) => ({
             ...entry,
@@ -383,7 +378,7 @@ export async function getRepoTree(ownerName: string, repoName: string, refAndPat
 
   // Fallback to git
   try {
-    const refs = await listRefs(repo.diskPath);
+    const refs = await listRefs(resolveDiskPath(repo.diskPath));
     const refNames = refs.map((r) => r.name);
 
     let gitRef = ref;
@@ -398,9 +393,9 @@ export async function getRepoTree(ownerName: string, repoName: string, refAndPat
       }
     }
 
-    const entries = await getTree(repo.diskPath, gitRef, gitTreePath);
+    const entries = await getTree(resolveDiskPath(repo.diskPath), gitRef, gitTreePath);
     const paths = entries.map((e) => e.path);
-    const lastCommits = await getLastCommitsForPaths(repo.diskPath, gitRef, paths);
+    const lastCommits = await getLastCommitsForPaths(resolveDiskPath(repo.diskPath), gitRef, paths);
 
     // Check if repo uses LFS
     const [lfsCount] = await db
@@ -410,18 +405,15 @@ export async function getRepoTree(ownerName: string, repoName: string, refAndPat
 
     const lfsOids = new Set<string>();
     if (lfsCount.count > 0) {
-      // Read small blobs from git to check for LFS pointers
-      for (const entry of entries) {
-        if (entry.type !== "blob") continue;
-        try {
-          const { content } = await getBlob(repo.diskPath, gitRef, entry.path);
-          if (content.length < 200) {
-            const text = new TextDecoder().decode(content);
-            if (parseLfsPointer(text)) lfsOids.add(entry.oid);
-          }
-        } catch {
-          // skip unreadable blobs
+      // Batch-check blob sizes and read small ones (2 subprocesses total)
+      const blobOids = entries.filter((e) => e.type === "blob").map((e) => e.oid);
+      try {
+        const smallBlobs = await readSmallBlobs(resolveDiskPath(repo.diskPath), blobOids, 200);
+        for (const [oid, buf] of smallBlobs) {
+          if (parseLfsPointer(buf.toString("utf8"))) lfsOids.add(oid);
         }
+      } catch {
+        // skip if batch read fails
       }
     }
 
@@ -489,17 +481,8 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
             .limit(1);
 
           if (blob) {
-            if (blob.isBinary) {
-              return {
-                content: null,
-                isBinary: true,
-                oid: blob.oid,
-                size: blob.size,
-                ref,
-                path: filePath,
-              };
-            }
-            if (!blob.isTruncated) {
+            // Check isLfs flag first — avoids relying on content parsing for detection
+            if (blob.isLfs) {
               const lfsInfo = parseLfsPointer(blob.content);
               if (lfsInfo) {
                 const [lfsRecord] = await db
@@ -515,6 +498,18 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
                   lfsPointer: { oid: lfsInfo.oid, size: lfsInfo.size, stored: !!lfsRecord },
                 };
               }
+            }
+            if (blob.isBinary) {
+              return {
+                content: null,
+                isBinary: true,
+                oid: blob.oid,
+                size: blob.size,
+                ref,
+                path: filePath,
+              };
+            }
+            if (!blob.isTruncated) {
               return {
                 content: blob.content,
                 oid: blob.oid,
@@ -532,7 +527,7 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
 
   // Fallback to git
   try {
-    const refs = await listRefs(repo.diskPath);
+    const refs = await listRefs(resolveDiskPath(repo.diskPath));
     const refNames = refs.map((r) => r.name);
 
     let gitRef = ref;
@@ -547,7 +542,7 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
       }
     }
 
-    const { content, oid } = await getBlob(repo.diskPath, gitRef, gitFilePath);
+    const { content, oid } = await getBlob(resolveDiskPath(repo.diskPath), gitRef, gitFilePath);
     const text = new TextDecoder().decode(content);
     const lfsInfo = parseLfsPointer(text);
     if (lfsInfo) {
@@ -670,7 +665,7 @@ export async function getRepoCommits(
 
   // Fallback to git (no author filter available here)
   try {
-    const commits = await getCommitLog(repo.diskPath, ref, limit);
+    const commits = await getCommitLog(resolveDiskPath(repo.diskPath), ref, limit);
     return {
       commits,
       ref,
@@ -717,7 +712,7 @@ export async function getRepoCommit(ownerName: string, repoName: string, sha: st
 
       let diff = null;
       if (parents.length > 0) {
-        diff = await getDiff(repo.diskPath, parents[0], sha);
+        diff = await getDiff(resolveDiskPath(repo.diskPath), parents[0], sha);
       }
       return { commit, diff };
     }
@@ -727,10 +722,10 @@ export async function getRepoCommit(ownerName: string, repoName: string, sha: st
 
   // Fallback to git
   try {
-    const commit = await getCommit(repo.diskPath, sha);
+    const commit = await getCommit(resolveDiskPath(repo.diskPath), sha);
     let diff = null;
     if (commit.parents.length > 0) {
-      diff = await getDiff(repo.diskPath, commit.parents[0], sha);
+      diff = await getDiff(resolveDiskPath(repo.diskPath), commit.parents[0], sha);
     }
     return { commit, diff };
   } catch (e: unknown) {
@@ -799,7 +794,7 @@ export async function getRepoLanguages(ownerName: string, repoName: string) {
   if (!repo) return { error: "Repository not found" };
 
   // Get HEAD ref's tree OID
-  const headBranch = await resolveHead(repo.diskPath);
+  const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
   const defaultBranch = headBranch || repo.defaultBranch;
 
   const [refRecord] = await db
@@ -876,7 +871,7 @@ export async function getRepoFilePaths(ownerName: string, repoName: string, ref?
   const repo = await findRepo(ownerName, repoName, currentUser?.id);
   if (!repo) return { paths: [] };
 
-  const headBranch = await resolveHead(repo.diskPath);
+  const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
   const targetRef = ref || headBranch || repo.defaultBranch;
 
   const [refRecord] = await db
@@ -1241,8 +1236,8 @@ export async function createRepo(name: string, description: string, isPublic: bo
 
   if (existing) return { error: "Repository already exists" };
 
-  const diskPath = path.resolve(DATA_DIR, user.username, `${name}.git`);
-  await initBareRepo(diskPath);
+  const diskPath = `${user.username}/${name}.git`;
+  await initBareRepo(resolveDiskPath(diskPath));
 
   const now = new Date();
   const id = crypto.randomUUID();
@@ -1342,7 +1337,7 @@ export async function deleteRepo(ownerName: string, repoName: string) {
 
   const { rm } = await import("node:fs/promises");
   try {
-    await rm(repo.diskPath, { recursive: true, force: true });
+    await rm(resolveDiskPath(repo.diskPath), { recursive: true, force: true });
   } catch {
     // Best effort
   }
