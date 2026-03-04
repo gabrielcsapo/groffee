@@ -33,6 +33,8 @@ import { logAudit, getClientIp } from "./audit";
 import { parseLfsPointer } from "../lfs";
 import { getRequest } from "./request-context";
 import { resolveDiskPath } from "../../api/lib/paths";
+import { batchLoadUsers } from "./user-utils";
+import { getCachedActivity, setCachedActivity } from "../../api/lib/activity-cache";
 
 // --- Helpers ---
 
@@ -115,18 +117,8 @@ export async function getPublicRepos(opts: { limit?: number; offset?: number; q?
     .limit(limit)
     .offset(offset);
 
-  // Attach owner usernames
-  const ownerIds = [...new Set(repos.map((r) => r.ownerId))];
-  const owners =
-    ownerIds.length > 0
-      ? await Promise.all(
-          ownerIds.map(async (id) => {
-            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-            return u;
-          }),
-        )
-      : [];
-  const ownerMap = new Map(owners.filter(Boolean).map((u) => [u.id, u.username]));
+  // Attach owner usernames (single batch query)
+  const ownerMap = await batchLoadUsers(repos.map((r) => r.ownerId));
 
   const result = repos.map((r) => ({
     ...r,
@@ -908,6 +900,11 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
   const repo = await findRepo(ownerName, repoName, currentUser?.id);
   if (!repo) return { error: "Repository not found" };
 
+  // Check activity cache first (1-hour TTL)
+  const cached = await getCachedActivity(repo.id, "activity-v1", authorEmail ?? null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (cached) return cached as any;
+
   const now = Math.floor(Date.now() / 1000);
   const oneYearAgo = now - 365 * 86400;
 
@@ -1153,7 +1150,7 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
     .map(([day, counts]) => ({ day, ...counts }))
     .sort((a, b) => a.day - b.day);
 
-  return {
+  const result = {
     daily,
     weekly: weeklyRows,
     contributors,
@@ -1164,6 +1161,11 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
     contributorTimeline,
     defaultBranch: repo.defaultBranch,
   };
+
+  // Store in cache (fire-and-forget)
+  setCachedActivity(repo.id, "activity-v1", authorEmail ?? null, result).catch(() => {});
+
+  return result;
 }
 
 export async function getRepoAuditLogs(

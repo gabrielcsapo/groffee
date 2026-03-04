@@ -224,3 +224,85 @@ import { getSessionUser as _getSessionUser } from "./session";
 export async function getSessionUser() {
   return _getSessionUser();
 }
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok?: boolean; error?: string }> {
+  const sessionUser = await _getSessionUser();
+  if (!sessionUser) return { error: "Unauthorized" };
+
+  if (!currentPassword || !newPassword) return { error: "Missing required fields" };
+  if (newPassword.length < 8) return { error: "Password must be at least 8 characters" };
+
+  const [user] = await db.select().from(users).where(eq(users.id, sessionUser.id)).limit(1);
+  if (!user) return { error: "User not found" };
+
+  const valid = await verify(user.passwordHash, currentPassword);
+  if (!valid) return { error: "Current password is incorrect" };
+
+  const newHash = await hash(newPassword);
+  await db
+    .update(users)
+    .set({ passwordHash: newHash, updatedAt: new Date() })
+    .where(eq(users.id, user.id));
+
+  const req = getRequest();
+  logAudit({
+    userId: user.id,
+    action: "auth.password_change",
+    targetType: "user",
+    targetId: user.id,
+    ipAddress: req ? getClientIp(req) : "unknown",
+  }).catch(console.error);
+
+  return { ok: true };
+}
+
+export async function updateProfile(updates: {
+  email?: string;
+  displayName?: string;
+  bio?: string;
+}): Promise<{ ok?: boolean; error?: string }> {
+  const sessionUser = await _getSessionUser();
+  if (!sessionUser) return { error: "Unauthorized" };
+
+  const dbUpdates: Record<string, unknown> = { updatedAt: new Date() };
+
+  if (updates.email !== undefined) {
+    if (!updates.email?.trim()) return { error: "Email is required" };
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, updates.email.trim()))
+      .limit(1);
+    if (existing && existing.id !== sessionUser.id) return { error: "Email already in use" };
+    dbUpdates.email = updates.email.trim();
+  }
+  if (updates.displayName !== undefined)
+    dbUpdates.displayName = updates.displayName?.trim() || null;
+  if (updates.bio !== undefined) dbUpdates.bio = updates.bio?.trim() || null;
+
+  await db.update(users).set(dbUpdates).where(eq(users.id, sessionUser.id));
+  return { ok: true };
+}
+
+export async function getProfile(): Promise<{
+  user?: { email: string; displayName: string | null; bio: string | null; username: string };
+  error?: string;
+}> {
+  const sessionUser = await _getSessionUser();
+  if (!sessionUser) return { error: "Unauthorized" };
+
+  const [user] = await db.select().from(users).where(eq(users.id, sessionUser.id)).limit(1);
+  if (!user) return { error: "User not found" };
+
+  return {
+    user: {
+      username: user.username,
+      email: user.email,
+      displayName: user.displayName,
+      bio: user.bio,
+    },
+  };
+}

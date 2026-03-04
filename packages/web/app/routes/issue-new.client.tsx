@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "react-flight-router/client";
+import { useParams, Link } from "react-flight-router/client";
 import { createIssue } from "../lib/server/issues";
 
 export default function NewIssueClient() {
@@ -55,7 +55,10 @@ export default function NewIssueClient() {
             className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y"
           />
         </div>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
+          <Link to={`/${owner}/${repoName}/issues`} className="btn-secondary">
+            Cancel
+          </Link>
           <button type="submit" disabled={submitting || !title.trim()} className="btn-primary">
             {submitting ? "Creating..." : "Submit new issue"}
           </button>

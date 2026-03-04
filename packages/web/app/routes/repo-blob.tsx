@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Link } from "react-flight-router/client";
 import { getRepoBlob } from "../lib/server/repos";
 import { highlightCode, getLangFromFilename } from "../lib/highlight";
@@ -70,13 +71,10 @@ export default async function RepoBlob({ params }: { params?: Record<string, str
   // For text content
   let lines: string[] = [];
   let lineCount = 0;
-  let highlightedLines: string[] | null = null;
 
   if (content && !isBinary && !lfsPointer) {
     lines = content.split("\n");
     lineCount = lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
-    const lang = getLangFromFilename(fileName);
-    highlightedLines = lang ? await highlightCode(content, lang) : null;
   }
 
   return (
@@ -227,25 +225,9 @@ export default async function RepoBlob({ params }: { params?: Record<string, str
         {/* Text content with syntax highlighting */}
         {content && !isBinary && !lfsPointer && (
           <div className="overflow-x-auto bg-surface">
-            <table className="w-full text-sm font-mono">
-              <tbody>
-                {lines.map((line: string, i: number) => (
-                  <tr key={i} className="hover:bg-surface-secondary">
-                    <td className="py-0 px-4 text-right text-text-secondary select-none w-[1%] whitespace-nowrap border-r border-border">
-                      {i + 1}
-                    </td>
-                    {highlightedLines?.[i] != null ? (
-                      <td
-                        className="py-0 px-4 whitespace-pre shiki-line"
-                        dangerouslySetInnerHTML={{ __html: highlightedLines[i] }}
-                      />
-                    ) : (
-                      <td className="py-0 px-4 whitespace-pre text-text-primary">{line}</td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Suspense fallback={<PlainTextContent lines={lines} />}>
+              <HighlightedFileContent content={content} fileName={fileName} lines={lines} />
+            </Suspense>
           </div>
         )}
       </div>
@@ -262,5 +244,57 @@ export default async function RepoBlob({ params }: { params?: Record<string, str
         </Link>
       </div>
     </div>
+  );
+}
+
+function PlainTextContent({ lines }: { lines: string[] }) {
+  return (
+    <table className="w-full text-sm font-mono">
+      <tbody>
+        {lines.map((line: string, i: number) => (
+          <tr key={i} className="hover:bg-surface-secondary">
+            <td className="py-0 px-4 text-right text-text-secondary select-none w-[1%] whitespace-nowrap border-r border-border">
+              {i + 1}
+            </td>
+            <td className="py-0 px-4 whitespace-pre text-text-primary">{line}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+async function HighlightedFileContent({
+  content,
+  fileName,
+  lines,
+}: {
+  content: string;
+  fileName: string;
+  lines: string[];
+}) {
+  const lang = getLangFromFilename(fileName);
+  const highlightedLines = lang ? await highlightCode(content, lang) : null;
+
+  return (
+    <table className="w-full text-sm font-mono">
+      <tbody>
+        {lines.map((line: string, i: number) => (
+          <tr key={i} className="hover:bg-surface-secondary">
+            <td className="py-0 px-4 text-right text-text-secondary select-none w-[1%] whitespace-nowrap border-r border-border">
+              {i + 1}
+            </td>
+            {highlightedLines?.[i] != null ? (
+              <td
+                className="py-0 px-4 whitespace-pre shiki-line"
+                dangerouslySetInnerHTML={{ __html: highlightedLines[i] }}
+              />
+            ) : (
+              <td className="py-0 px-4 whitespace-pre text-text-primary">{line}</td>
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

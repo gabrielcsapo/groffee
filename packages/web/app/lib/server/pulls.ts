@@ -9,6 +9,7 @@ import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
 import { getRequest } from "./request-context";
 import { resolveDiskPath } from "../../api/lib/paths";
+import { batchLoadUsers } from "./user-utils";
 
 const execFileAsync = promisify(execFile);
 
@@ -48,17 +49,7 @@ export async function getPullRequests(
     )
     .orderBy(desc(pullRequests.createdAt));
 
-  const authorIds = [...new Set(prList.map((p) => p.authorId))];
-  const authors =
-    authorIds.length > 0
-      ? await Promise.all(
-          authorIds.map(async (id) => {
-            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-            return u;
-          }),
-        )
-      : [];
-  const authorMap = new Map(authors.filter(Boolean).map((u) => [u.id, u.username]));
+  const authorMap = await batchLoadUsers(prList.map((p) => p.authorId));
 
   const prsWithAuthors = prList.map((p) => ({
     ...p,
@@ -84,8 +75,6 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
 
   if (!pr) return { error: "Pull request not found" };
 
-  const [author] = await db.select().from(users).where(eq(users.id, pr.authorId)).limit(1);
-
   let diff = null;
   try {
     const { stdout: mergeBase } = await execFileAsync(
@@ -104,17 +93,14 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
     .where(eq(comments.pullRequestId, pr.id))
     .orderBy(comments.createdAt);
 
-  const commentAuthorIds = [...new Set(commentList.map((c) => c.authorId))];
-  const commentAuthors =
-    commentAuthorIds.length > 0
-      ? await Promise.all(
-          commentAuthorIds.map(async (id) => {
-            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-            return u;
-          }),
-        )
-      : [];
-  const commentAuthorMap = new Map(commentAuthors.filter(Boolean).map((u) => [u.id, u.username]));
+  // Batch-load all users (PR author + mergedBy + comment authors) in one query
+  const allUserIds = [
+    pr.authorId,
+    ...(pr.mergedById ? [pr.mergedById] : []),
+    ...commentList.map((c) => c.authorId),
+  ];
+  const userMap = await batchLoadUsers(allUserIds);
+  const commentAuthorMap = userMap;
 
   const [prEditInfo] = await db
     .select({ editCount: count(), lastEditedAt: max(editHistory.createdAt) })
@@ -154,11 +140,7 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
     lastEditedAt: commentEditMap.get(c.id)?.lastEditedAt || null,
   }));
 
-  let mergedBy = null;
-  if (pr.mergedById) {
-    const [u] = await db.select().from(users).where(eq(users.id, pr.mergedById)).limit(1);
-    mergedBy = u?.username || null;
-  }
+  const mergedBy = pr.mergedById ? userMap.get(pr.mergedById) || null : null;
 
   return {
     pullRequest: {
@@ -166,7 +148,7 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
       createdAt: pr.createdAt instanceof Date ? pr.createdAt.toISOString() : pr.createdAt,
       updatedAt: pr.updatedAt instanceof Date ? pr.updatedAt.toISOString() : pr.updatedAt,
       mergedAt: pr.mergedAt instanceof Date ? pr.mergedAt.toISOString() : pr.mergedAt,
-      author: author?.username || "unknown",
+      author: userMap.get(pr.authorId) || "unknown",
       mergedBy,
       editCount: prEditInfo?.editCount || 0,
       lastEditedAt:
@@ -536,13 +518,13 @@ export async function updatePRComment(
     .set({ body: trimmedBody, updatedAt: new Date() })
     .where(eq(comments.id, comment.id));
 
-  const [author] = await db.select().from(users).where(eq(users.id, comment.authorId)).limit(1);
+  const authorMap = await batchLoadUsers([comment.authorId]);
 
   return {
     comment: {
       id: comment.id,
       body: trimmedBody,
-      author: author?.username || "unknown",
+      author: authorMap.get(comment.authorId) || "unknown",
       createdAt:
         comment.createdAt instanceof Date ? comment.createdAt.toISOString() : comment.createdAt,
       updatedAt: new Date().toISOString(),

@@ -14,16 +14,23 @@ export const users = sqliteTable("users", {
 });
 
 // --- SSH Keys ---
-export const sshKeys = sqliteTable("ssh_keys", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  publicKey: text("public_key").notNull(),
-  fingerprint: text("fingerprint").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
+export const sshKeys = sqliteTable(
+  "ssh_keys",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    publicKey: text("public_key").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("ssh_keys_user_id_idx").on(table.userId),
+    index("ssh_keys_fingerprint_idx").on(table.fingerprint),
+  ],
+);
 
 // --- Sessions ---
 export const sessions = sqliteTable(
@@ -155,19 +162,29 @@ export const comments = sqliteTable(
 );
 
 // --- Edit History ---
-export const editHistory = sqliteTable("edit_history", {
-  id: text("id").primaryKey(),
-  issueId: text("issue_id").references(() => issues.id, { onDelete: "cascade" }),
-  pullRequestId: text("pull_request_id").references(() => pullRequests.id, { onDelete: "cascade" }),
-  commentId: text("comment_id").references(() => comments.id, { onDelete: "cascade" }),
-  targetType: text("target_type", { enum: ["issue", "pull_request", "comment"] }).notNull(),
-  previousTitle: text("previous_title"),
-  previousBody: text("previous_body"),
-  editedById: text("edited_by_id")
-    .notNull()
-    .references(() => users.id),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
+export const editHistory = sqliteTable(
+  "edit_history",
+  {
+    id: text("id").primaryKey(),
+    issueId: text("issue_id").references(() => issues.id, { onDelete: "cascade" }),
+    pullRequestId: text("pull_request_id").references(() => pullRequests.id, {
+      onDelete: "cascade",
+    }),
+    commentId: text("comment_id").references(() => comments.id, { onDelete: "cascade" }),
+    targetType: text("target_type", { enum: ["issue", "pull_request", "comment"] }).notNull(),
+    previousTitle: text("previous_title"),
+    previousBody: text("previous_body"),
+    editedById: text("edited_by_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("edit_history_issue_idx").on(table.issueId),
+    index("edit_history_pr_idx").on(table.pullRequestId),
+    index("edit_history_comment_idx").on(table.commentId),
+  ],
+);
 
 // =====================================================
 // Git Content Index Tables

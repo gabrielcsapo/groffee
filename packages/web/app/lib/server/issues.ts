@@ -5,6 +5,7 @@ import { eq, and, desc, max, count, inArray, sql } from "drizzle-orm";
 import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
 import { getRequest } from "./request-context";
+import { batchLoadUsers } from "./user-utils";
 
 async function findRepoForIssues(ownerName: string, repoName: string, currentUserId?: string) {
   const [owner] = await db.select().from(users).where(eq(users.username, ownerName)).limit(1);
@@ -33,17 +34,7 @@ export async function getIssues(ownerName: string, repoName: string, status: str
     .where(and(eq(issues.repoId, result.repo.id), eq(issues.status, status as "open" | "closed")))
     .orderBy(desc(issues.createdAt));
 
-  const authorIds = [...new Set(issueList.map((i) => i.authorId))];
-  const authors =
-    authorIds.length > 0
-      ? await Promise.all(
-          authorIds.map(async (id) => {
-            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-            return u;
-          }),
-        )
-      : [];
-  const authorMap = new Map(authors.filter(Boolean).map((u) => [u.id, u.username]));
+  const authorMap = await batchLoadUsers(issueList.map((i) => i.authorId));
 
   const issuesWithAuthors = issueList.map((i) => ({
     ...i,
@@ -69,25 +60,15 @@ export async function getIssue(ownerName: string, repoName: string, issueNumber:
 
   if (!issue) return { error: "Issue not found" };
 
-  const [author] = await db.select().from(users).where(eq(users.id, issue.authorId)).limit(1);
-
   const commentList = await db
     .select()
     .from(comments)
     .where(eq(comments.issueId, issue.id))
     .orderBy(comments.createdAt);
 
-  const commentAuthorIds = [...new Set(commentList.map((c) => c.authorId))];
-  const commentAuthors =
-    commentAuthorIds.length > 0
-      ? await Promise.all(
-          commentAuthorIds.map(async (id) => {
-            const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-            return u;
-          }),
-        )
-      : [];
-  const commentAuthorMap = new Map(commentAuthors.filter(Boolean).map((u) => [u.id, u.username]));
+  // Batch-load all users (issue author + comment authors) in one query
+  const userMap = await batchLoadUsers([issue.authorId, ...commentList.map((c) => c.authorId)]);
+  const commentAuthorMap = userMap;
 
   const [issueEditInfo] = await db
     .select({ editCount: count(), lastEditedAt: max(editHistory.createdAt) })
@@ -133,7 +114,7 @@ export async function getIssue(ownerName: string, repoName: string, issueNumber:
       createdAt: issue.createdAt instanceof Date ? issue.createdAt.toISOString() : issue.createdAt,
       updatedAt: issue.updatedAt instanceof Date ? issue.updatedAt.toISOString() : issue.updatedAt,
       closedAt: issue.closedAt instanceof Date ? issue.closedAt.toISOString() : issue.closedAt,
-      author: author?.username || "unknown",
+      author: userMap.get(issue.authorId) || "unknown",
       editCount: issueEditInfo?.editCount || 0,
       lastEditedAt:
         issueEditInfo?.lastEditedAt instanceof Date
@@ -379,13 +360,13 @@ export async function updateIssueComment(
     .set({ body: trimmedBody, updatedAt: new Date() })
     .where(eq(comments.id, comment.id));
 
-  const [author] = await db.select().from(users).where(eq(users.id, comment.authorId)).limit(1);
+  const authorMap = await batchLoadUsers([comment.authorId]);
 
   return {
     comment: {
       id: comment.id,
       body: trimmedBody,
-      author: author?.username || "unknown",
+      author: authorMap.get(comment.authorId) || "unknown",
       createdAt:
         comment.createdAt instanceof Date ? comment.createdAt.toISOString() : comment.createdAt,
       updatedAt: new Date().toISOString(),

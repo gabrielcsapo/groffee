@@ -6,7 +6,22 @@ function getHighlighter() {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
       themes: ["github-light", "github-dark"],
-      langs: [], // load on demand
+      langs: [
+        "javascript",
+        "typescript",
+        "jsx",
+        "tsx",
+        "python",
+        "go",
+        "rust",
+        "java",
+        "json",
+        "yaml",
+        "markdown",
+        "bash",
+        "css",
+        "html",
+      ],
     });
   }
   return highlighterPromise;

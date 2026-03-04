@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { getSSHKeys, addSSHKey, deleteSSHKey } from "../lib/server/keys";
+import { useConfirmDialog } from "../components/confirm-dialog.client";
+import { SettingsNav } from "../components/settings-nav.client";
 
 interface SshKey {
   id: string;
@@ -31,14 +33,11 @@ export default function SettingsKeysClient() {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const { confirm, dialog } = useConfirmDialog();
 
   useEffect(() => {
     getSSHKeys()
       .then((data) => {
-        if (data.error === "Unauthorized") {
-          window.location.href = "/login";
-          return;
-        }
         setKeys(data.keys || []);
       })
       .catch(() => {})
@@ -67,6 +66,12 @@ export default function SettingsKeysClient() {
   }
 
   async function handleDelete(id: string) {
+    const confirmed = await confirm({
+      title: "Delete SSH key?",
+      message: "This action cannot be undone. You will need to re-add this key to use it again.",
+    });
+    if (!confirmed) return;
+
     setError("");
     setMessage("");
     const result = await deleteSSHKey(id);
@@ -81,6 +86,7 @@ export default function SettingsKeysClient() {
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
+        <SettingsNav />
         <div className="skeleton w-32 h-7 mb-6" />
         <div className="bg-surface border border-border rounded-lg p-6 mb-6">
           <div className="skeleton w-full h-10 mb-3" />
@@ -92,6 +98,7 @@ export default function SettingsKeysClient() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
+      <SettingsNav />
       <h1 className="text-2xl font-bold text-text-primary mb-1">SSH Keys</h1>
       <p className="text-sm text-text-secondary mb-6">
         SSH keys allow you to push and pull from repositories over SSH.
@@ -247,6 +254,7 @@ export default function SettingsKeysClient() {
           </div>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }

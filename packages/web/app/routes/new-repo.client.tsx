@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "react-flight-router/client";
+import { useRouter, Link } from "react-flight-router/client";
 import { createRepo } from "../lib/server/repos";
 
 export default function NewRepoClient() {
@@ -98,10 +98,13 @@ export default function NewRepoClient() {
             </div>
           </fieldset>
 
-          <div className="border-t border-border pt-4">
+          <div className="border-t border-border pt-4 flex items-center gap-3">
             <button type="submit" className="btn-primary">
               Create repository
             </button>
+            <Link to="/" className="text-sm text-text-secondary hover:text-text-primary">
+              Cancel
+            </Link>
           </div>
         </form>
       </div>

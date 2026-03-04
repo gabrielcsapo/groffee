@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getTokens, createToken, revokeToken } from "../lib/server/tokens";
+import { SettingsNav } from "../components/settings-nav.client";
 
 interface Token {
   id: string;
@@ -109,6 +110,7 @@ export default function SettingsTokensClient() {
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
+        <SettingsNav />
         <div className="skeleton w-48 h-7 mb-6" />
         <div className="bg-surface border border-border rounded-lg p-6 mb-6">
           <div className="skeleton w-full h-10 mb-3" />
@@ -120,6 +122,7 @@ export default function SettingsTokensClient() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
+      <SettingsNav />
       <h1 className="text-2xl font-bold text-text-primary mb-1">Personal Access Tokens</h1>
       <p className="text-sm text-text-secondary mb-6">
         Tokens can be used to authenticate with the API and Git over HTTP. Use them as a password

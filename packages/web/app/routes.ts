@@ -44,6 +44,21 @@ export const routes: RouteConfig[] = [
         component: () => import("./routes/docs"),
       },
       {
+        id: "settings",
+        path: "settings",
+        component: () => import("./routes/settings-redirect"),
+      },
+      {
+        id: "settings-profile",
+        path: "settings/profile",
+        component: () => import("./routes/settings-profile"),
+      },
+      {
+        id: "settings-password",
+        path: "settings/password",
+        component: () => import("./routes/settings-password"),
+      },
+      {
         id: "settings-keys",
         path: "settings/keys",
         component: () => import("./routes/settings-keys"),

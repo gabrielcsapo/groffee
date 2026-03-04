@@ -29,7 +29,8 @@ export default function LoginClient() {
         return;
       }
 
-      window.location.href = "/";
+      const returnTo = new URLSearchParams(window.location.search).get("return") || "/";
+      window.location.href = returnTo;
     } catch {
       setError("An unexpected error occurred. Please try again.");
     }

@@ -11,7 +11,7 @@ type Channel = Duplex & {
 
 const { Server: SshServer } = ssh2;
 import { readFileSync, existsSync, mkdirSync } from "node:fs";
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, createHash } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 
 import { db, sshKeys, users, repositories } from "@groffee/db";
@@ -53,32 +53,41 @@ async function findUserByPublicKey(clientKey: {
   algo: string;
   data: Buffer;
 }): Promise<{ userId: string; username: string } | null> {
-  const allKeys = await db
+  // Compute fingerprint from client key data (same algorithm as keys.ts)
+  const hash = createHash("sha256").update(clientKey.data).digest("base64");
+  const fingerprint = `SHA256:${hash.replace(/=+$/, "")}`;
+
+  // Direct lookup by fingerprint (indexed)
+  const [stored] = await db
     .select({
       userId: sshKeys.userId,
       publicKey: sshKeys.publicKey,
     })
-    .from(sshKeys);
+    .from(sshKeys)
+    .where(eq(sshKeys.fingerprint, fingerprint))
+    .limit(1);
 
-  for (const stored of allKeys) {
-    const parts = stored.publicKey.trim().split(/\s+/);
-    if (parts.length < 2) continue;
+  if (!stored) return null;
 
+  // Verify full key data matches (defense in depth against hash collisions)
+  const parts = stored.publicKey.trim().split(/\s+/);
+  if (parts.length >= 2) {
     const storedKeyData = Buffer.from(parts[1], "base64");
-
     if (
-      storedKeyData.length === clientKey.data.length &&
-      timingSafeEqual(storedKeyData, clientKey.data)
+      storedKeyData.length !== clientKey.data.length ||
+      !timingSafeEqual(storedKeyData, clientKey.data)
     ) {
-      const [user] = await db
-        .select({ id: users.id, username: users.username })
-        .from(users)
-        .where(eq(users.id, stored.userId))
-        .limit(1);
-      if (user) return { userId: user.id, username: user.username };
+      return null;
     }
   }
-  return null;
+
+  const [user] = await db
+    .select({ id: users.id, username: users.username })
+    .from(users)
+    .where(eq(users.id, stored.userId))
+    .limit(1);
+
+  return user ? { userId: user.id, username: user.username } : null;
 }
 
 /**
