@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Link } from "react-flight-router/client";
-import { GroffeeLogo } from "../components/groffee-logo";
+import { GroffeeLogo } from "@groffee/ui";
 
 export default function LoginClient() {
   const [error, setError] = useState("");

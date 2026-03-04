@@ -1,5 +1,5 @@
 import { ApiDocs } from "@groffee/ui";
 
-export default function Docs() {
+export function Component() {
   return <ApiDocs />;
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Link } from "react-flight-router/client";
-import { GroffeeLogo } from "../components/groffee-logo";
+import { GroffeeLogo } from "@groffee/ui";
 import { timeAgo } from "../lib/time";
 import { getSessionUser } from "../lib/server/auth";
 

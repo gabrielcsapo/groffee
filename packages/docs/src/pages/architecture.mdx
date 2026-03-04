@@ -1,0 +1,45 @@
+# Architecture
+
+Groffee is a monorepo built with pnpm workspaces. The application runs as a single Node.js process that serves the web UI, API, and SSH server.
+
+## Packages
+
+### @groffee/web
+The main application package. Contains:
+- **React 19** with Server Components via `react-flight-router`
+- **Hono** API server with REST endpoints
+- **SSH server** for Git-over-SSH protocol
+- **Vite 7** for development and build tooling
+
+### @groffee/db
+Database layer using **Drizzle ORM** with **better-sqlite3** in WAL mode. Provides:
+- Schema definitions for core tables (users, sessions, SSH keys, personal access tokens), repository management (repositories, collaborators), collaboration (pull requests, issues, comments, edit history), git content index (refs, commits, tree entries, blobs), LFS objects, audit logs, and system logs
+- Migration support via Drizzle Kit
+
+### @groffee/git
+Git operations layer using **isomorphic-git** for reading operations and the Git CLI for protocol, diff, and blame operations.
+
+### @groffee/ui
+Shared UI component library and Tailwind theme. Router-agnostic components that work in both the main app and this documentation site.
+
+## Rendering Model
+
+Groffee uses React Server Components (RSC) via `react-flight-router`, a custom flight-based router:
+
+- **Server components** (`*.tsx`) are async functions that fetch data directly from the database — no API calls needed
+- **Client components** (`*.client.tsx`) handle interactivity, browser APIs, and can call server actions (`"use server"`)
+- The router provides `onRequest` hooks for per-request context via `AsyncLocalStorage`
+
+## Data Storage
+
+All runtime data is stored in the `data/` directory at the project root:
+- `data/groffee.db` — SQLite database
+- `data/repositories/` — Bare Git repositories
+- `data/lfs-objects/` — Git LFS object storage
+
+## Authentication
+
+- Password hashing via **Argon2** (`@node-rs/argon2`)
+- Session-based auth with secure cookies
+- Personal access tokens for API and Git HTTP authentication
+- SSH key authentication for Git operations

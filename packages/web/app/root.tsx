@@ -1,7 +1,7 @@
 import "./styles.css";
 import { Link, Outlet, ScrollRestoration } from "react-flight-router/client";
 import { GlobalNavigationLoadingBar, HeaderSearch, UserNav } from "./routes/root.client";
-import { GroffeeLogo } from "./components/groffee-logo";
+import { GroffeeLogo } from "@groffee/ui";
 
 export default function Root() {
   return (

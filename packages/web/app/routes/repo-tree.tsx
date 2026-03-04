@@ -1,7 +1,7 @@
 import { Link } from "react-flight-router/client";
 import { getRepoTree, getRepoRefs } from "../lib/server/repos";
-import { CloneUrl } from "../components/clone-url";
-import { BranchSwitcher } from "../components/branch-switcher";
+import { CloneUrl } from "@groffee/ui";
+import { BranchSwitcherWrapper as BranchSwitcher } from "../components/branch-switcher-wrapper.client";
 
 function formatRelativeDate(timestamp: number): string {
   const seconds = Math.floor(Date.now() / 1000 - timestamp);

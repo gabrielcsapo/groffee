@@ -2,7 +2,7 @@ import { Link, Outlet } from "react-flight-router/client";
 import { getRepo } from "../lib/server/repos";
 import { getIssues } from "../lib/server/issues";
 import { getPullRequests } from "../lib/server/pulls";
-import { RepoNav } from "../components/repo-nav";
+import { RepoNavWrapper as RepoNav } from "../components/repo-nav-wrapper.client";
 
 export default async function RepoLayout({ params }: { params?: Record<string, string> }) {
   const { owner, repo } = params as { owner: string; repo: string };

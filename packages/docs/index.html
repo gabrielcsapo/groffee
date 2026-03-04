@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Groffee Docs</title>
+    <script>
+      (function () {
+        var t = localStorage.getItem("theme");
+        var d =
+          t === "dark" ||
+          (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        if (d) document.documentElement.classList.add("dark");
+      })();
+    </script>
+    <!-- GitHub Pages SPA redirect handler -->
+    <script>
+      (function () {
+        var redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect !== location.href) {
+          history.replaceState(null, null, redirect);
+        } else {
+          var l = location;
+          if (l.search[1] === '/') {
+            var decoded = l.search.slice(1).split('&').map(function (s) {
+              return s.replace(/~and~/g, '&');
+            }).join('?');
+            var path = decoded.split('?');
+            var newUrl = l.pathname.slice(0, -1) + path[0] +
+              (path[1] ? '?' + path[1] : '') + l.hash;
+            history.replaceState(null, null, newUrl);
+          }
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,65 @@
+# Getting Started
+
+Groffee is a self-hosted Git platform. Follow these steps to get it running on your machine.
+
+## Prerequisites
+
+- **Node.js** >= 22.0.0
+- **pnpm** >= 10.0.0
+- **Git** installed and available in your PATH
+
+## Installation
+
+Clone the repository and install dependencies:
+
+```bash
+git clone https://github.com/gabrielcsapo/groffee.git
+cd groffee
+pnpm install
+```
+
+You may need to approve native module builds:
+
+```bash
+pnpm approve-builds
+```
+
+## Development
+
+Start the development server:
+
+```bash
+pnpm dev
+```
+
+This starts the Vite dev server on **port 3000** with hot module replacement. The server handles both the web application and API routes in a single process.
+
+## First User Setup
+
+1. Navigate to `http://localhost:3000`
+2. You'll be redirected to the registration page
+3. The first user created becomes the admin
+4. After registration, you can create repositories and manage settings
+
+## Project Structure
+
+```
+groffee/
+├── packages/
+│   ├── web/     # React app + API server + SSH server
+│   ├── db/      # Database schema and migrations (Drizzle + SQLite)
+│   ├── git/     # Git operations (isomorphic-git)
+│   ├── ui/      # Shared UI components and theme
+│   └── docs/    # Documentation site (Vite + React Router + MDX)
+├── data/        # Runtime data (repositories, database, LFS) - gitignored
+└── package.json # Monorepo root
+```
+
+## Building for Production
+
+```bash
+pnpm build
+pnpm --filter @groffee/web start
+```
+
+The production server runs on the port specified by the `PORT` environment variable (default: 3000).

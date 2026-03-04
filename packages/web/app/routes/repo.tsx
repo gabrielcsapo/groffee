@@ -7,8 +7,8 @@ import {
   getRepoCommits,
   getRepoLanguages,
 } from "../lib/server/repos";
-import { CloneUrl } from "../components/clone-url";
-import { BranchSwitcher } from "../components/branch-switcher";
+import { CloneUrl } from "@groffee/ui";
+import { BranchSwitcherWrapper as BranchSwitcher } from "../components/branch-switcher-wrapper.client";
 import { FileSearchProvider, FileSearchButton } from "../components/file-search";
 import { renderMarkdown } from "../lib/markdown";
 import { getSessionUser } from "../lib/server/auth";

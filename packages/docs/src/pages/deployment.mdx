@@ -1,0 +1,107 @@
+# Deployment
+
+Groffee runs as a single Node.js process. Here's how to deploy it.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | HTTP server port |
+| `SSH_PORT` | `2223` | SSH server port for Git-over-SSH |
+| `EXTERNAL_URL` | `http://localhost:3000` | Public-facing URL for clone URLs and links |
+| `DATA_DIR` | `./data` | Directory for database, repositories, and LFS objects |
+
+## Build
+
+```bash
+pnpm install
+pnpm approve-builds
+pnpm build
+```
+
+## Run
+
+```bash
+pnpm --filter @groffee/web start
+```
+
+The server starts:
+- HTTP on the configured `PORT` (default 3000)
+- SSH on the configured `SSH_PORT` (default 2223)
+
+## Docker
+
+The project includes a Dockerfile at the repository root:
+
+```dockerfile
+FROM node:22-slim
+
+RUN apt-get update && apt-get install -y git git-lfs && rm -rf /var/lib/apt/lists/* \
+    && git config --global safe.directory '*' \
+    && git lfs install --system
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+COPY . .
+
+RUN pnpm install --frozen-lockfile
+
+EXPOSE 3000 2223
+CMD ["pnpm", "start"]
+```
+
+Build and run the container with a volume mount to persist data:
+
+```bash
+docker build -t groffee .
+docker run -d \
+  -p 3000:3000 \
+  -p 2223:2223 \
+  -v groffee-data:/app/data \
+  -e EXTERNAL_URL=https://git.example.com \
+  groffee
+```
+
+The `-v groffee-data:/app/data` mount ensures the database, repositories, and LFS objects survive container restarts.
+
+## Reverse Proxy
+
+If running behind nginx or another reverse proxy, ensure:
+
+1. HTTP/1.1 with WebSocket upgrade headers are forwarded
+2. The SSH port (2223) is accessible
+3. Set `EXTERNAL_URL` to your public domain
+4. Request buffering is disabled for streaming git protocol
+5. `client_max_body_size` is large enough for pushes and LFS uploads
+
+Example nginx config:
+
+```nginx
+server {
+    server_name git.example.com;
+
+    client_max_body_size 512m;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+    }
+}
+```
+
+## Data Persistence
+
+Back up the `data/` directory regularly. It contains:
+- The SQLite database (`groffee.db`)
+- All Git repositories (`repositories/`)
+- Git LFS objects (`lfs-objects/`)

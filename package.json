@@ -7,7 +7,9 @@
   "scripts": {
     "start": "pnpm run build && pnpm --filter @groffee/web start",
     "dev": "pnpm --filter @groffee/web dev",
+    "dev:docs": "pnpm --filter @groffee/docs dev",
     "build": "pnpm -r build",
+    "build:docs": "pnpm --filter @groffee/docs build",
     "db:generate": "pnpm --filter @groffee/db generate",
     "db:migrate": "pnpm --filter @groffee/db migrate",
     "typecheck": "pnpm -r typecheck",
