@@ -26,13 +26,12 @@ import {
   getLastCommitsForPaths,
 } from "@groffee/git";
 import { getDiff } from "@groffee/git";
-import path from "node:path";
 import fs from "node:fs";
 import type { AppEnv } from "../types.js";
 import { logAudit, getClientIp } from "../lib/audit.js";
 import { parseLfsPointer, lfsObjectDiskPath } from "../../lib/lfs.js";
 import { getCachedActivity, setCachedActivity } from "../lib/activity-cache.js";
-import { DATA_DIR, REPOS_DIR, resolveDiskPath } from "../lib/paths.js";
+import { DATA_DIR, resolveDiskPath } from "../lib/paths.js";
 
 export const repoRoutes = new Hono<AppEnv>();
 

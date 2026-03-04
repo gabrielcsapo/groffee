@@ -12,14 +12,13 @@
  */
 import { execFileSync } from "node:child_process";
 import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { hash } from "@node-rs/argon2";
 import { db, users, repositories, issues, pullRequests, comments } from "@groffee/db";
 import { eq } from "drizzle-orm";
 import { initBareRepo } from "@groffee/git";
 
-import { DATA_DIR, REPOS_DIR, resolveDiskPath } from "./lib/paths.js";
+import { REPOS_DIR, resolveDiskPath } from "./lib/paths.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

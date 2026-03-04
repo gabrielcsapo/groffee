@@ -16,9 +16,7 @@ const sections: NavSection[] = [
   },
   {
     title: "Reference",
-    items: [
-      { label: "API Documentation", to: "/docs/api" },
-    ],
+    items: [{ label: "API Documentation", to: "/docs/api" }],
   },
 ];
 

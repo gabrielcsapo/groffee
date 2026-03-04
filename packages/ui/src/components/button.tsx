@@ -13,11 +13,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   const variantClass =
-    variant === "primary"
-      ? "btn-primary"
-      : variant === "danger"
-        ? "btn-danger"
-        : "btn-secondary";
+    variant === "primary" ? "btn-primary" : variant === "danger" ? "btn-danger" : "btn-secondary";
 
   const sizeClass = size === "sm" ? "btn-sm" : "";
 

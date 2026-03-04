@@ -80,7 +80,9 @@ async function buildIndex(pagesDir: string): Promise<SearchEntry[]> {
   for (const file of files) {
     const raw = await readFile(file, "utf-8");
     const { title, content } = stripMdx(raw);
-    const rel = relative(pagesDir, file).replace(/\.mdx$/, "").replace(/\\/g, "/");
+    const rel = relative(pagesDir, file)
+      .replace(/\.mdx$/, "")
+      .replace(/\\/g, "/");
     const section = rel.includes("/") ? rel.split("/")[0] : "docs";
 
     entries.push({

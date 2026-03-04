@@ -6,11 +6,7 @@ interface BranchSwitcherProps {
   onBranchChange: (branch: string) => void;
 }
 
-export function BranchSwitcher({
-  branches,
-  currentRef,
-  onBranchChange,
-}: BranchSwitcherProps) {
+export function BranchSwitcher({ branches, currentRef, onBranchChange }: BranchSwitcherProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 

@@ -11,8 +11,18 @@ function FileIcon({ isDir }: { isDir?: boolean }) {
     );
   }
   return (
-    <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    <svg
+      className="w-4 h-4 text-text-secondary"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+      />
     </svg>
   );
 }
@@ -21,10 +31,30 @@ const mockFiles = [
   { name: "packages", isDir: true, message: "feat: add git LFS support", time: "2 days ago" },
   { name: "scripts", isDir: true, message: "chore: update build scripts", time: "5 days ago" },
   { name: ".gitignore", isDir: false, message: "chore: ignore data directory", time: "1 week ago" },
-  { name: "Dockerfile", isDir: false, message: "feat: multi-stage Docker build", time: "3 days ago" },
-  { name: "package.json", isDir: false, message: "chore: updates to latest deps", time: "4 days ago" },
-  { name: "README.md", isDir: false, message: "docs: update installation guide", time: "1 week ago" },
-  { name: "tsconfig.base.json", isDir: false, message: "fix: strict mode for shared config", time: "2 weeks ago" },
+  {
+    name: "Dockerfile",
+    isDir: false,
+    message: "feat: multi-stage Docker build",
+    time: "3 days ago",
+  },
+  {
+    name: "package.json",
+    isDir: false,
+    message: "chore: updates to latest deps",
+    time: "4 days ago",
+  },
+  {
+    name: "README.md",
+    isDir: false,
+    message: "docs: update installation guide",
+    time: "1 week ago",
+  },
+  {
+    name: "tsconfig.base.json",
+    isDir: false,
+    message: "fix: strict mode for shared config",
+    time: "2 weeks ago",
+  },
 ];
 
 /** Wraps content in a macOS-style browser chrome frame */
@@ -42,8 +72,18 @@ function BrowserChrome({ url, children }: { url: string; children: ReactNode }) 
         {/* URL bar */}
         <div className="flex-1 flex justify-center">
           <div className="flex items-center gap-2 bg-surface rounded-md border border-border px-3 py-1 max-w-md w-full">
-            <svg className="w-3 h-3 text-text-secondary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            <svg
+              className="w-3 h-3 text-text-secondary shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+              />
             </svg>
             <span className="text-xs text-text-secondary truncate">{url}</span>
           </div>
@@ -52,9 +92,7 @@ function BrowserChrome({ url, children }: { url: string; children: ReactNode }) 
         <div className="w-[54px]" />
       </div>
       {/* Browser content */}
-      <div className="pointer-events-none select-none">
-        {children}
-      </div>
+      <div className="pointer-events-none select-none">{children}</div>
     </div>
   );
 }
@@ -105,12 +143,11 @@ function MockRepoPreview() {
         <div className="border border-border rounded-md overflow-hidden mt-3">
           <div className="divide-y divide-border">
             {mockFiles.map((file) => (
-              <div
-                key={file.name}
-                className="flex items-center gap-3 px-4 py-2 text-sm"
-              >
+              <div key={file.name} className="flex items-center gap-3 px-4 py-2 text-sm">
                 <FileIcon isDir={file.isDir} />
-                <span className={`shrink-0 ${file.isDir ? "text-primary font-medium" : "text-text-primary"}`}>
+                <span
+                  className={`shrink-0 ${file.isDir ? "text-primary font-medium" : "text-text-primary"}`}
+                >
                   {file.name}
                 </span>
                 <span className="text-text-secondary text-xs truncate flex-1">{file.message}</span>
@@ -132,9 +169,8 @@ export function Component() {
         <GroffeeLogo size={72} className="mx-auto mb-6 text-text-primary" />
         <h1 className="text-4xl font-bold text-text-primary mb-4">Groffee</h1>
         <p className="text-lg text-text-secondary mb-8 max-w-2xl mx-auto leading-relaxed">
-          A self-hosted Git platform built with React 19, Vite, and modern web
-          technologies. Manage repositories, issues, and pull requests on your own
-          infrastructure.
+          A self-hosted Git platform built with React 19, Vite, and modern web technologies. Manage
+          repositories, issues, and pull requests on your own infrastructure.
         </p>
         <div className="flex items-center justify-center gap-4">
           <Link to="/docs/getting-started" className="btn-primary hover:no-underline">
@@ -163,38 +199,67 @@ export function Component() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
         <div className="card p-6">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
-            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+            <svg
+              className="w-5 h-5 text-primary"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+              />
             </svg>
           </div>
           <h3 className="text-base font-semibold text-text-primary mb-2">Self-Hosted</h3>
           <p className="text-sm text-text-secondary leading-relaxed">
-            Run on your own servers. Full control over your data, users, and
-            repositories. No external dependencies.
+            Run on your own servers. Full control over your data, users, and repositories. No
+            external dependencies.
           </p>
         </div>
         <div className="card p-6">
           <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center mb-3">
-            <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <svg
+              className="w-5 h-5 text-success"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
             </svg>
           </div>
           <h3 className="text-base font-semibold text-text-primary mb-2">Git Protocol</h3>
           <p className="text-sm text-text-secondary leading-relaxed">
-            Smart HTTP and SSH protocol support. Clone, push, and pull with standard
-            Git tools. Git LFS included.
+            Smart HTTP and SSH protocol support. Clone, push, and pull with standard Git tools. Git
+            LFS included.
           </p>
         </div>
         <div className="card p-6">
           <div className="w-10 h-10 rounded-lg bg-merged/10 flex items-center justify-center mb-3">
-            <svg className="w-5 h-5 text-merged" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            <svg
+              className="w-5 h-5 text-merged"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
             </svg>
           </div>
           <h3 className="text-base font-semibold text-text-primary mb-2">Modern Stack</h3>
           <p className="text-sm text-text-secondary leading-relaxed">
-            React 19 with Server Components, Vite 7, Tailwind CSS 4, and SQLite via
-            Drizzle ORM.
+            React 19 with Server Components, Vite 7, Tailwind CSS 4, and SQLite via Drizzle ORM.
           </p>
         </div>
       </div>

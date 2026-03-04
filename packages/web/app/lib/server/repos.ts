@@ -20,7 +20,6 @@ import {
   initBareRepo,
   getTree,
   getBlob,
-  readBlobIfSmall,
   readSmallBlobs,
   getCommitLog,
   getCommit,
@@ -29,12 +28,11 @@ import {
   getLastCommitsForPaths,
   getDiff,
 } from "@groffee/git";
-import path from "node:path";
 import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
 import { parseLfsPointer } from "../lfs";
 import { getRequest } from "./request-context";
-import { REPOS_DIR, resolveDiskPath } from "../../api/lib/paths";
+import { resolveDiskPath } from "../../api/lib/paths";
 
 // --- Helpers ---
 

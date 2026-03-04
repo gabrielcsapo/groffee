@@ -1227,12 +1227,12 @@ export function ApiDocs() {
         <div className="card p-4 text-sm text-text-secondary mb-6 space-y-3">
           <p>
             These endpoints implement the <strong>Git LFS Batch API</strong> for uploading and
-            downloading large files. They use <Code>application/vnd.git-lfs+json</Code> content type.
-            You typically interact with these via the <Code>git lfs</Code> CLI rather than calling them
-            directly.
+            downloading large files. They use <Code>application/vnd.git-lfs+json</Code> content
+            type. You typically interact with these via the <Code>git lfs</Code> CLI rather than
+            calling them directly.
           </p>
           <p>
-            LFS objects are stored on disk at <Code>{'<DATA_DIR>/lfs-objects/'}</Code> with a
+            LFS objects are stored on disk at <Code>{"<DATA_DIR>/lfs-objects/"}</Code> with a
             sharded directory structure based on the SHA-256 OID.
           </p>
         </div>

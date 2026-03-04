@@ -4,12 +4,12 @@ Groffee runs as a single Node.js process. Here's how to deploy it.
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | HTTP server port |
-| `SSH_PORT` | `2223` | SSH server port for Git-over-SSH |
-| `EXTERNAL_URL` | `http://localhost:3000` | Public-facing URL for clone URLs and links |
-| `DATA_DIR` | `./data` | Directory for database, repositories, and LFS objects |
+| Variable       | Default                 | Description                                           |
+| -------------- | ----------------------- | ----------------------------------------------------- |
+| `PORT`         | `3000`                  | HTTP server port                                      |
+| `SSH_PORT`     | `2223`                  | SSH server port for Git-over-SSH                      |
+| `EXTERNAL_URL` | `http://localhost:3000` | Public-facing URL for clone URLs and links            |
+| `DATA_DIR`     | `./data`                | Directory for database, repositories, and LFS objects |
 
 ## Build
 
@@ -26,6 +26,7 @@ pnpm --filter @groffee/web start
 ```
 
 The server starts:
+
 - HTTP on the configured `PORT` (default 3000)
 - SSH on the configured `SSH_PORT` (default 2223)
 
@@ -102,6 +103,7 @@ server {
 ## Data Persistence
 
 Back up the `data/` directory regularly. It contains:
+
 - The SQLite database (`groffee.db`)
 - All Git repositories (`repositories/`)
 - Git LFS objects (`lfs-objects/`)

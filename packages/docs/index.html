@@ -8,8 +8,7 @@
       (function () {
         var t = localStorage.getItem("theme");
         var d =
-          t === "dark" ||
-          (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+          t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
         if (d) document.documentElement.classList.add("dark");
       })();
     </script>
@@ -22,13 +21,17 @@
           history.replaceState(null, null, redirect);
         } else {
           var l = location;
-          if (l.search[1] === '/') {
-            var decoded = l.search.slice(1).split('&').map(function (s) {
-              return s.replace(/~and~/g, '&');
-            }).join('?');
-            var path = decoded.split('?');
-            var newUrl = l.pathname.slice(0, -1) + path[0] +
-              (path[1] ? '?' + path[1] : '') + l.hash;
+          if (l.search[1] === "/") {
+            var decoded = l.search
+              .slice(1)
+              .split("&")
+              .map(function (s) {
+                return s.replace(/~and~/g, "&");
+              })
+              .join("?");
+            var path = decoded.split("?");
+            var newUrl =
+              l.pathname.slice(0, -1) + path[0] + (path[1] ? "?" + path[1] : "") + l.hash;
             history.replaceState(null, null, newUrl);
           }
         }

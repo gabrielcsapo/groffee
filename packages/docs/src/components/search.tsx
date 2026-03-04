@@ -43,7 +43,12 @@ export function SearchButton({ onClick }: { onClick: () => void }) {
       </svg>
       <span className="flex-1 text-left">Search docs...</span>
       <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium text-text-secondary bg-surface-secondary border border-border rounded">
-        <span className="text-xs">{typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent) ? "\u2318" : "Ctrl+"}</span>K
+        <span className="text-xs">
+          {typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
+            ? "\u2318"
+            : "Ctrl+"}
+        </span>
+        K
       </kbd>
     </button>
   );

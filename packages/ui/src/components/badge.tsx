@@ -13,12 +13,7 @@ const variantClasses: Record<NonNullable<BadgeProps["variant"]>, string> = {
   merged: "badge badge-merged",
 };
 
-export function Badge({
-  variant = "default",
-  className = "",
-  children,
-  ...props
-}: BadgeProps) {
+export function Badge({ variant = "default", className = "", children, ...props }: BadgeProps) {
   return (
     <span className={`${variantClasses[variant]} ${className}`.trim()} {...props}>
       {children}

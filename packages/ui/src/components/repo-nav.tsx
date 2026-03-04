@@ -14,8 +14,20 @@ interface RepoNavProps {
   }>;
 }
 
-function DefaultLink({ to, className, children }: { to: string; className?: string; children: ReactNode }) {
-  return <a href={to} className={className}>{children}</a>;
+function DefaultLink({
+  to,
+  className,
+  children,
+}: {
+  to: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <a href={to} className={className}>
+      {children}
+    </a>
+  );
 }
 
 export function RepoNav({

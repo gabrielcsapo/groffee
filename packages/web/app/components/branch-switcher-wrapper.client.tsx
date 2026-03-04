@@ -9,7 +9,11 @@ interface BranchSwitcherWrapperProps {
   basePath: string;
 }
 
-export function BranchSwitcherWrapper({ branches, currentRef, basePath }: BranchSwitcherWrapperProps) {
+export function BranchSwitcherWrapper({
+  branches,
+  currentRef,
+  basePath,
+}: BranchSwitcherWrapperProps) {
   const { navigate } = useRouter();
   return (
     <BranchSwitcher

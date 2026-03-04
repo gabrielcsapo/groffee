@@ -13,7 +13,10 @@ export default defineConfig({
   },
   plugins: [
     tailwindcss(),
-    { enforce: "pre" as const, ...mdx({ remarkPlugins: [remarkGfm], rehypePlugins: [rehypeSlug] }) },
+    {
+      enforce: "pre" as const,
+      ...mdx({ remarkPlugins: [remarkGfm], rehypePlugins: [rehypeSlug] }),
+    },
     react({ include: /\.(jsx|tsx|mdx)$/ }),
     searchIndexPlugin(),
   ],

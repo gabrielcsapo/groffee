@@ -12,11 +12,11 @@
     "lint": "oxlint .",
     "fmt": "oxfmt --write ."
   },
-  "peerDependencies": {
-    "react": "^19.0.0"
-  },
   "devDependencies": {
     "@types/react": "^19.2.14",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
   }
 }

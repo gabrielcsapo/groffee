@@ -17,7 +17,8 @@
     "fmt": "pnpm -r fmt",
     "seed": "pnpm --filter @groffee/web seed",
     "make-admin": "pnpm --filter @groffee/web make-admin",
-    "test": "pnpm --filter @groffee/web test:e2e"
+    "test": "pnpm --filter @groffee/web test:e2e",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -32,6 +33,7 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "husky": "^9.1.7",
     "oxfmt": "^0.36.0",
     "oxlint": "^1.51.0",
     "typescript": "^5.9.3"

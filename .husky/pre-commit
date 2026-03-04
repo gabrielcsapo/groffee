@@ -1,0 +1,3 @@
+pnpm -r exec oxfmt --check .
+pnpm lint
+pnpm typecheck
