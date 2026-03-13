@@ -12,22 +12,19 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function getSessionUser() {
+// Request-scoped cache: memoize session lookup per request to avoid redundant DB queries.
+// Uses a WeakMap keyed by the Request object so entries are GC'd when the request ends.
+const sessionCache = new WeakMap<Request, Promise<Awaited<ReturnType<typeof _getSessionUser>>>>();
+
+async function _getSessionUser() {
   const req = getRequest();
-  if (!req) {
-    console.log("[session] no request");
-    return null;
-  }
+  if (!req) return null;
 
   const cookieHeader = req.headers.get("Cookie") || "";
   const token = parseCookie(cookieHeader, "session");
-  if (!token) {
-    console.log("[session] no token in cookie");
-    return null;
-  }
+  if (!token) return null;
 
   const tokenHash = hashToken(token);
-  console.log("[session] looking up hash:", tokenHash.slice(0, 8) + "...");
 
   const [session] = await db
     .select()
@@ -35,13 +32,20 @@ export async function getSessionUser() {
     .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())))
     .limit(1);
 
-  if (!session) {
-    console.log("[session] no session found for hash");
-    return null;
-  }
+  if (!session) return null;
 
   const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
-
-  console.log("[session] found user:", user?.username ?? "null");
   return user ?? null;
+}
+
+export async function getSessionUser() {
+  const req = getRequest();
+  if (!req) return _getSessionUser();
+
+  let cached = sessionCache.get(req);
+  if (!cached) {
+    cached = _getSessionUser();
+    sessionCache.set(req, cached);
+  }
+  return cached;
 }

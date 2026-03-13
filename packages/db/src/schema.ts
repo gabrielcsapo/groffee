@@ -45,7 +45,10 @@ export const sessions = sqliteTable(
     expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
-  (table) => [index("sessions_token_hash_idx").on(table.tokenHash)],
+  (table) => [
+    index("sessions_token_hash_idx").on(table.tokenHash),
+    index("sessions_user_id_idx").on(table.userId),
+  ],
 );
 
 // --- Repositories ---
@@ -64,7 +67,10 @@ export const repositories = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
-  (table) => [uniqueIndex("repo_owner_name_idx").on(table.ownerId, table.name)],
+  (table) => [
+    uniqueIndex("repo_owner_name_idx").on(table.ownerId, table.name),
+    index("repos_public_updated_idx").on(table.isPublic, table.updatedAt),
+  ],
 );
 
 // --- Repository Collaborators ---
@@ -83,7 +89,10 @@ export const repoCollaborators = sqliteTable(
       .default("write"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
-  (table) => [uniqueIndex("collab_repo_user_idx").on(table.repoId, table.userId)],
+  (table) => [
+    uniqueIndex("collab_repo_user_idx").on(table.repoId, table.userId),
+    index("collab_user_idx").on(table.userId),
+  ],
 );
 
 // --- Pull Requests ---

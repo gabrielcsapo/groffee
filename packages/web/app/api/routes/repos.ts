@@ -796,23 +796,8 @@ repoRoutes.get("/:owner/:name/raw/:ref{.+}", optionalAuth, async (c) => {
   );
 
   try {
-    // Try git CLI for raw binary content
-    const refs = await listRefs(resolveDiskPath(repo.diskPath));
-    const refNames = refs.map((r) => r.name);
-
-    let gitRef = ref;
-    let gitFilePath = filePath;
-    const parts = refAndPath.split("/");
-    for (let i = parts.length - 1; i > 0; i--) {
-      const candidate = parts.slice(0, i).join("/");
-      if (refNames.includes(candidate)) {
-        gitRef = candidate;
-        gitFilePath = parts.slice(i).join("/");
-        break;
-      }
-    }
-
-    const { content } = await getBlob(resolveDiskPath(repo.diskPath), gitRef, gitFilePath);
+    // Use the already-resolved ref from DB index (no need for extra listRefs subprocess)
+    const { content } = await getBlob(resolveDiskPath(repo.diskPath), ref, filePath);
 
     // Check if the blob is an LFS pointer and serve the actual object
     const text = new TextDecoder().decode(content);
@@ -821,7 +806,7 @@ repoRoutes.get("/:owner/:name/raw/:ref{.+}", optionalAuth, async (c) => {
       const dataDir = DATA_DIR;
       const objectPath = lfsObjectDiskPath(dataDir, lfsPointer.oid);
       if (fs.existsSync(objectPath)) {
-        const ext = gitFilePath.split(".").pop()?.toLowerCase() || "";
+        const ext = filePath.split(".").pop()?.toLowerCase() || "";
         const contentType = CONTENT_TYPE_MAP[ext] || "application/octet-stream";
         const stream = fs.createReadStream(objectPath);
         return new Response(stream as unknown as ReadableStream, {
@@ -834,7 +819,7 @@ repoRoutes.get("/:owner/:name/raw/:ref{.+}", optionalAuth, async (c) => {
       }
     }
 
-    const ext = gitFilePath.split(".").pop()?.toLowerCase() || "";
+    const ext = filePath.split(".").pop()?.toLowerCase() || "";
     const contentType = CONTENT_TYPE_MAP[ext] || "application/octet-stream";
 
     return new Response(Buffer.from(content), {
@@ -859,7 +844,7 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
   const authorEmail = c.req.query("author");
 
   // Check activity cache
-  const cached = await getCachedActivity(repo.id, "activity", authorEmail || null);
+  const cached = await getCachedActivity(repo.id, "activity-v2", authorEmail || null);
   if (cached) return c.json(cached);
 
   const now = Math.floor(Date.now() / 1000);
@@ -995,10 +980,12 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
     .sort((a, b) => a.week - b.week);
 
   // Language breakdown (not per-author — it's a repo-wide stat)
+  const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
+  const defaultBranch = headBranch || repo.defaultBranch;
   const defaultRef = await db
     .select({ commitOid: gitRefs.commitOid })
     .from(gitRefs)
-    .where(and(eq(gitRefs.repoId, repo.id), eq(gitRefs.name, repo.defaultBranch)))
+    .where(and(eq(gitRefs.repoId, repo.id), eq(gitRefs.name, defaultBranch)))
     .limit(1);
 
   let languages: { language: string; count: number; percentage: number }[] = [];
@@ -1127,7 +1114,7 @@ repoRoutes.get("/:owner/:name/activity", optionalAuth, async (c) => {
   };
 
   // Cache the computed result
-  setCachedActivity(repo.id, "activity", authorEmail || null, activityResult).catch(() => {});
+  setCachedActivity(repo.id, "activity-v2", authorEmail || null, activityResult).catch(() => {});
 
   return c.json(activityResult);
 });

@@ -7,23 +7,26 @@ import {
   gitBlobs,
   gitCommitFiles,
 } from "@groffee/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { invalidateActivityCache } from "./activity-cache.js";
 import { parseLfsPointer } from "../../lib/lfs.js";
 import {
   walkTree,
-  readBlobForIndex,
+  readSmallBlobs,
   getChangedFiles,
   readCommitForIndex,
-  getCommitParents,
   listAllRefsWithOids,
   snapshotRefs,
   diffRefSnapshots,
   walkAncestry,
+  invalidateHeadCache,
 } from "@groffee/git";
+
+const MAX_BLOB_SIZE = 256 * 1024; // 256KB for indexing
 
 /**
  * Index a single commit: metadata, tree entries, blobs, changed files.
+ * Uses batch queries to avoid N+1 patterns.
  */
 async function indexCommit(repoId: string, repoPath: string, oid: string): Promise<void> {
   // Check if already indexed
@@ -81,43 +84,69 @@ async function indexCommit(repoId: string, repoPath: string, oid: string): Promi
       await db.insert(gitTreeEntries).values(batch).onConflictDoNothing();
     }
 
-    // Index blobs that we haven't seen yet
+    // Batch-check which blobs already exist instead of N individual queries
     const blobEntries = walked.entries.filter((e) => e.entryType === "blob");
-    for (const entry of blobEntries) {
-      const [existingBlob] = await db
-        .select({ id: gitBlobs.id })
-        .from(gitBlobs)
-        .where(and(eq(gitBlobs.repoId, repoId), eq(gitBlobs.oid, entry.entryOid)))
-        .limit(1);
+    if (blobEntries.length > 0) {
+      const allBlobOids = [...new Set(blobEntries.map((e) => e.entryOid))];
 
-      if (!existingBlob) {
-        const blobData = await readBlobForIndex(repoPath, entry.entryOid);
-        const isLfs =
-          !blobData.isBinary &&
-          blobData.content != null &&
-          parseLfsPointer(blobData.content) !== null;
-        await db
-          .insert(gitBlobs)
-          .values({
-            id: crypto.randomUUID(),
-            repoId,
-            oid: entry.entryOid,
-            content: blobData.content,
-            size: blobData.size,
-            isBinary: blobData.isBinary,
-            isTruncated: blobData.isTruncated,
-            isLfs,
-          })
-          .onConflictDoNothing();
+      // Batch lookup existing blob OIDs
+      const existingBlobOids = new Set<string>();
+      for (let i = 0; i < allBlobOids.length; i += 500) {
+        const batch = allBlobOids.slice(i, i + 500);
+        const rows = await db
+          .select({ oid: gitBlobs.oid })
+          .from(gitBlobs)
+          .where(and(eq(gitBlobs.repoId, repoId), inArray(gitBlobs.oid, batch)));
+        for (const row of rows) existingBlobOids.add(row.oid);
+      }
 
-        // Index into FTS5 for code search (text files only)
-        if (blobData.content && !blobData.isBinary) {
-          try {
-            db.run(
-              sql`INSERT OR REPLACE INTO code_search(repo_id, blob_oid, file_path, content) VALUES (${repoId}, ${entry.entryOid}, ${entry.entryPath}, ${blobData.content})`,
-            );
-          } catch {
-            // FTS5 insert failure is non-fatal
+      // Filter to only new blob OIDs
+      const newBlobOids = allBlobOids.filter((oid) => !existingBlobOids.has(oid));
+
+      if (newBlobOids.length > 0) {
+        // Use batch blob reader (2 git subprocesses total instead of 2N)
+        const blobContents = await readSmallBlobs(repoPath, newBlobOids, MAX_BLOB_SIZE);
+
+        // Build a map from OID to entry path for FTS indexing
+        const oidToPath = new Map<string, string>();
+        for (const entry of blobEntries) {
+          if (!oidToPath.has(entry.entryOid)) {
+            oidToPath.set(entry.entryOid, entry.entryPath);
+          }
+        }
+
+        for (const blobOid of newBlobOids) {
+          const content = blobContents.get(blobOid);
+          const isBinary = content ? isBinaryBuffer(content) : true;
+          const textContent = content && !isBinary ? content.toString("utf-8") : null;
+          const isLfs = textContent != null && parseLfsPointer(textContent) !== null;
+
+          await db
+            .insert(gitBlobs)
+            .values({
+              id: crypto.randomUUID(),
+              repoId,
+              oid: blobOid,
+              content: textContent,
+              size: content?.length ?? 0,
+              isBinary,
+              isTruncated: !content, // null content means it was too large
+              isLfs,
+            })
+            .onConflictDoNothing();
+
+          // Index into FTS5 for code search (text files only)
+          if (textContent && !isBinary) {
+            const filePath = oidToPath.get(blobOid);
+            if (filePath) {
+              try {
+                db.run(
+                  sql`INSERT OR REPLACE INTO code_search(repo_id, blob_oid, file_path, content) VALUES (${repoId}, ${blobOid}, ${filePath}, ${textContent})`,
+                );
+              } catch {
+                // FTS5 insert failure is non-fatal
+              }
+            }
           }
         }
       }
@@ -159,8 +188,18 @@ async function indexCommit(repoId: string, repoPath: string, oid: string): Promi
   }
 }
 
+/** Simple binary detection: check for null bytes in first 8KB */
+function isBinaryBuffer(buf: Buffer): boolean {
+  const len = Math.min(buf.length, 8192);
+  for (let i = 0; i < len; i++) {
+    if (buf[i] === 0) return true;
+  }
+  return false;
+}
+
 /**
  * Rebuild the commit ancestry table for a ref (first-parent chain with depth).
+ * Wrapped in a transaction to prevent read inconsistency during rebuild.
  */
 async function rebuildAncestry(
   repoId: string,
@@ -168,29 +207,33 @@ async function rebuildAncestry(
   refName: string,
   tipOid: string,
 ): Promise<void> {
-  // Clear existing ancestry for this ref
-  await db
-    .delete(gitCommitAncestry)
-    .where(and(eq(gitCommitAncestry.repoId, repoId), eq(gitCommitAncestry.refName, refName)));
-
-  // Walk first-parent chain
+  // Walk first-parent chain (this is a git operation, do it outside the transaction)
   const chain = await walkAncestry(repoPath, tipOid);
 
-  // Batch insert ancestry entries
-  for (let i = 0; i < chain.length; i += 500) {
-    const batch = chain.slice(i, i + 500).map((commitOid, j) => ({
-      id: crypto.randomUUID(),
-      repoId,
-      refName,
-      commitOid,
-      depth: i + j,
-    }));
-    await db.insert(gitCommitAncestry).values(batch);
-  }
+  // Wrap delete + inserts in a single transaction for atomicity
+  db.transaction((tx) => {
+    // Clear existing ancestry for this ref
+    tx.delete(gitCommitAncestry)
+      .where(and(eq(gitCommitAncestry.repoId, repoId), eq(gitCommitAncestry.refName, refName)))
+      .run();
+
+    // Batch insert ancestry entries
+    for (let i = 0; i < chain.length; i += 500) {
+      const batch = chain.slice(i, i + 500).map((commitOid, j) => ({
+        id: crypto.randomUUID(),
+        repoId,
+        refName,
+        commitOid,
+        depth: i + j,
+      }));
+      tx.insert(gitCommitAncestry).values(batch).run();
+    }
+  });
 }
 
 /**
  * Index a single ref incrementally. Handles creates, updates, deletes, force pushes.
+ * Uses batch commit discovery to reduce N+1 queries.
  */
 export async function indexRef(
   repoId: string,
@@ -209,65 +252,44 @@ export async function indexRef(
     return;
   }
 
-  // Walk new commits: from tip backwards, stop when we find already-indexed commits
-  const newCommitOids: string[] = [];
-  const visited = new Set<string>();
-  const queue: string[] = [newOid];
+  // Walk ancestry to discover all reachable commits, then batch-check which are new
+  const allOids = await walkAncestry(repoPath, newOid);
 
-  while (queue.length > 0) {
-    const oid = queue.shift()!;
-    if (visited.has(oid)) continue;
-    visited.add(oid);
-
-    // Already indexed?
-    const [existing] = await db
-      .select({ id: gitCommits.id })
+  // Batch lookup which OIDs are already indexed
+  const indexedOids = new Set<string>();
+  for (let i = 0; i < allOids.length; i += 500) {
+    const batch = allOids.slice(i, i + 500);
+    const rows = await db
+      .select({ oid: gitCommits.oid })
       .from(gitCommits)
-      .where(and(eq(gitCommits.repoId, repoId), eq(gitCommits.oid, oid)))
-      .limit(1);
-    if (existing) continue;
-
-    newCommitOids.push(oid);
-
-    // Enqueue parents
-    try {
-      const parents = await getCommitParents(repoPath, oid);
-      for (const parent of parents) {
-        if (!visited.has(parent)) queue.push(parent);
-      }
-    } catch {
-      break;
-    }
+      .where(and(eq(gitCommits.repoId, repoId), inArray(gitCommits.oid, batch)));
+    for (const row of rows) indexedOids.add(row.oid);
   }
 
+  // Find new commits (not yet indexed), preserve oldest-first order
+  const newCommitOids = allOids.filter((oid) => !indexedOids.has(oid)).reverse();
+
   // Index new commits oldest-first
-  for (const oid of newCommitOids.reverse()) {
+  for (const oid of newCommitOids) {
     await indexCommit(repoId, repoPath, oid);
   }
 
   // Upsert ref
   const now = new Date();
-  const [existingRef] = await db
-    .select()
-    .from(gitRefs)
-    .where(and(eq(gitRefs.repoId, repoId), eq(gitRefs.name, refName)))
-    .limit(1);
-
-  if (existingRef) {
-    await db
-      .update(gitRefs)
-      .set({ commitOid: newOid, type: refType, updatedAt: now })
-      .where(eq(gitRefs.id, existingRef.id));
-  } else {
-    await db.insert(gitRefs).values({
+  await db
+    .insert(gitRefs)
+    .values({
       id: crypto.randomUUID(),
       repoId,
       name: refName,
       type: refType,
       commitOid: newOid,
       updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [gitRefs.repoId, gitRefs.name],
+      set: { commitOid: newOid, type: refType, updatedAt: now },
     });
-  }
 
   // Rebuild ancestry for this ref
   await rebuildAncestry(repoId, repoPath, refName, newOid);
@@ -275,15 +297,18 @@ export async function indexRef(
 
 /**
  * Full reindex: clear all indexed data for a repo and re-index all refs.
+ * Deletes are wrapped in a transaction for efficiency.
  */
 export async function fullReindex(repoId: string, repoPath: string): Promise<void> {
-  // Clear all indexed data
-  await db.delete(gitRefs).where(eq(gitRefs.repoId, repoId));
-  await db.delete(gitCommits).where(eq(gitCommits.repoId, repoId));
-  await db.delete(gitTreeEntries).where(eq(gitTreeEntries.repoId, repoId));
-  await db.delete(gitBlobs).where(eq(gitBlobs.repoId, repoId));
-  await db.delete(gitCommitFiles).where(eq(gitCommitFiles.repoId, repoId));
-  await db.delete(gitCommitAncestry).where(eq(gitCommitAncestry.repoId, repoId));
+  // Clear all indexed data in a single transaction
+  db.transaction((tx) => {
+    tx.delete(gitCommitAncestry).where(eq(gitCommitAncestry.repoId, repoId)).run();
+    tx.delete(gitCommitFiles).where(eq(gitCommitFiles.repoId, repoId)).run();
+    tx.delete(gitBlobs).where(eq(gitBlobs.repoId, repoId)).run();
+    tx.delete(gitTreeEntries).where(eq(gitTreeEntries.repoId, repoId)).run();
+    tx.delete(gitCommits).where(eq(gitCommits.repoId, repoId)).run();
+    tx.delete(gitRefs).where(eq(gitRefs.repoId, repoId)).run();
+  });
 
   // Clear FTS5
   try {
@@ -325,6 +350,9 @@ export async function triggerIncrementalIndex(
 ): Promise<void> {
   // Small delay to ensure git has released locks
   await new Promise((resolve) => setTimeout(resolve, 100));
+
+  // Invalidate HEAD cache since refs may have changed
+  invalidateHeadCache(repoPath);
 
   const refsAfter = await snapshotRefs(repoPath);
   const changes = diffRefSnapshots(refsBefore, refsAfter);

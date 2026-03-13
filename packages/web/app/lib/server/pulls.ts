@@ -62,6 +62,28 @@ export async function getPullRequests(
   return { pullRequests: prsWithAuthors };
 }
 
+export async function getPullRequestCount(
+  ownerName: string,
+  repoName: string,
+  status: string = "open",
+) {
+  const currentUser = await getSessionUser();
+  const result = await findRepoForPulls(ownerName, repoName, currentUser?.id);
+  if (!result) return 0;
+
+  const [row] = await db
+    .select({ count: count() })
+    .from(pullRequests)
+    .where(
+      and(
+        eq(pullRequests.repoId, result.repo.id),
+        eq(pullRequests.status, status as "open" | "closed" | "merged"),
+      ),
+    );
+
+  return row?.count ?? 0;
+}
+
 export async function getPullRequest(ownerName: string, repoName: string, prNumber: number) {
   const currentUser = await getSessionUser();
   const result = await findRepoForPulls(ownerName, repoName, currentUser?.id);
@@ -187,33 +209,42 @@ export async function createPullRequest(
   if (data.sourceBranch === target)
     return { error: "Source and target branches must be different" };
 
-  const [maxIssue] = await db
-    .select({ maxNum: max(issues.number) })
-    .from(issues)
-    .where(eq(issues.repoId, result.repo.id));
-
-  const [maxPR] = await db
-    .select({ maxNum: max(pullRequests.number) })
-    .from(pullRequests)
-    .where(eq(pullRequests.repoId, result.repo.id));
-
-  const nextNumber = Math.max(maxIssue?.maxNum || 0, maxPR?.maxNum || 0) + 1;
-
   const now = new Date();
   const id = crypto.randomUUID();
 
-  await db.insert(pullRequests).values({
-    id,
-    number: nextNumber,
-    repoId: result.repo.id,
-    title: data.title.trim(),
-    body: data.body?.trim() || null,
-    authorId: user.id,
-    sourceBranch: data.sourceBranch,
-    targetBranch: target,
-    status: "open",
-    createdAt: now,
-    updatedAt: now,
+  // Use a transaction to prevent TOCTOU race on number assignment
+  const nextNumber = db.transaction((tx) => {
+    const [maxIssue] = tx
+      .select({ maxNum: max(issues.number) })
+      .from(issues)
+      .where(eq(issues.repoId, result.repo.id))
+      .all();
+
+    const [maxPR] = tx
+      .select({ maxNum: max(pullRequests.number) })
+      .from(pullRequests)
+      .where(eq(pullRequests.repoId, result.repo.id))
+      .all();
+
+    const num = Math.max(maxIssue?.maxNum || 0, maxPR?.maxNum || 0) + 1;
+
+    tx.insert(pullRequests)
+      .values({
+        id,
+        number: num,
+        repoId: result.repo.id,
+        title: data.title.trim(),
+        body: data.body?.trim() || null,
+        authorId: user.id,
+        sourceBranch: data.sourceBranch,
+        targetBranch: target,
+        status: "open",
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+
+    return num;
   });
 
   try {

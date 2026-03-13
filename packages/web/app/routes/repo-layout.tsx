@@ -1,21 +1,19 @@
 import { Link, Outlet } from "react-flight-router/client";
 import { getRepo } from "../lib/server/repos";
-import { getIssues } from "../lib/server/issues";
-import { getPullRequests } from "../lib/server/pulls";
+import { getIssueCount } from "../lib/server/issues";
+import { getPullRequestCount } from "../lib/server/pulls";
 import { RepoNavWrapper as RepoNav } from "../components/repo-nav-wrapper.client";
 
 export default async function RepoLayout({ params }: { params?: Record<string, string> }) {
   const { owner, repo } = params as { owner: string; repo: string };
 
-  const [repoData, issueData, prData] = await Promise.all([
+  const [repoData, openIssueCount, openPrCount] = await Promise.all([
     getRepo(owner, repo),
-    getIssues(owner, repo, "open"),
-    getPullRequests(owner, repo, "open"),
+    getIssueCount(owner, repo, "open"),
+    getPullRequestCount(owner, repo, "open"),
   ]);
 
   const repository = repoData.repository;
-  const openIssueCount = issueData.issues?.length ?? 0;
-  const openPrCount = prData.pullRequests?.length ?? 0;
 
   return (
     <>

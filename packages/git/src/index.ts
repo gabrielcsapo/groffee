@@ -1,6 +1,7 @@
 export {
   listRefs,
   resolveHead,
+  invalidateHeadCache,
   getTree,
   getBlob,
   readBlobIfSmall,

@@ -1,4 +1,5 @@
-import { db, systemLogs } from "@groffee/db";
+import { db, systemLogs, auditLogs } from "@groffee/db";
+import { sql } from "drizzle-orm";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -13,7 +14,16 @@ interface LogOptions {
   statusCode?: number;
 }
 
+const LOG_RETENTION_DAYS = 30;
+const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
 class Logger {
+  constructor() {
+    // Run cleanup on startup (deferred) and then periodically
+    setTimeout(() => this.cleanupOldLogs(), 10_000);
+    setInterval(() => this.cleanupOldLogs(), CLEANUP_INTERVAL_MS);
+  }
+
   private write(level: LogLevel, message: string, opts?: LogOptions) {
     // Write to DB (fire-and-forget)
     try {
@@ -47,6 +57,21 @@ class Logger {
       console.warn(`${prefix}${meta}${src} ${message}`);
     } else {
       console.log(`${prefix}${meta}${src} ${message}`);
+    }
+  }
+
+  /** Delete system_logs and audit_logs older than LOG_RETENTION_DAYS */
+  private cleanupOldLogs() {
+    try {
+      const cutoff = new Date(Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+      db.delete(systemLogs)
+        .where(sql`${systemLogs.createdAt} < ${cutoff}`)
+        .run();
+      db.delete(auditLogs)
+        .where(sql`${auditLogs.createdAt} < ${cutoff}`)
+        .run();
+    } catch {
+      // Non-fatal
     }
   }
 

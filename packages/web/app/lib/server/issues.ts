@@ -47,6 +47,19 @@ export async function getIssues(ownerName: string, repoName: string, status: str
   return { issues: issuesWithAuthors };
 }
 
+export async function getIssueCount(ownerName: string, repoName: string, status: string = "open") {
+  const currentUser = await getSessionUser();
+  const result = await findRepoForIssues(ownerName, repoName, currentUser?.id);
+  if (!result) return 0;
+
+  const [row] = await db
+    .select({ count: count() })
+    .from(issues)
+    .where(and(eq(issues.repoId, result.repo.id), eq(issues.status, status as "open" | "closed")));
+
+  return row?.count ?? 0;
+}
+
 export async function getIssue(ownerName: string, repoName: string, issueNumber: number) {
   const currentUser = await getSessionUser();
   const result = await findRepoForIssues(ownerName, repoName, currentUser?.id);
@@ -141,31 +154,40 @@ export async function createIssue(
 
   if (!title?.trim()) return { error: "Title is required" };
 
-  const [maxIssue] = await db
-    .select({ maxNum: max(issues.number) })
-    .from(issues)
-    .where(eq(issues.repoId, result.repo.id));
-
-  const [maxPR] = await db
-    .select({ maxNum: max(pullRequests.number) })
-    .from(pullRequests)
-    .where(eq(pullRequests.repoId, result.repo.id));
-
-  const nextNumber = Math.max(maxIssue?.maxNum || 0, maxPR?.maxNum || 0) + 1;
-
   const now = new Date();
   const id = crypto.randomUUID();
 
-  await db.insert(issues).values({
-    id,
-    number: nextNumber,
-    repoId: result.repo.id,
-    title: title.trim(),
-    body: body?.trim() || null,
-    authorId: user.id,
-    status: "open",
-    createdAt: now,
-    updatedAt: now,
+  // Use a transaction to prevent TOCTOU race on number assignment
+  const nextNumber = db.transaction((tx) => {
+    const [maxIssue] = tx
+      .select({ maxNum: max(issues.number) })
+      .from(issues)
+      .where(eq(issues.repoId, result.repo.id))
+      .all();
+
+    const [maxPR] = tx
+      .select({ maxNum: max(pullRequests.number) })
+      .from(pullRequests)
+      .where(eq(pullRequests.repoId, result.repo.id))
+      .all();
+
+    const num = Math.max(maxIssue?.maxNum || 0, maxPR?.maxNum || 0) + 1;
+
+    tx.insert(issues)
+      .values({
+        id,
+        number: num,
+        repoId: result.repo.id,
+        title: title.trim(),
+        body: body?.trim() || null,
+        authorId: user.id,
+        status: "open",
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+
+    return num;
   });
 
   try {

@@ -70,23 +70,6 @@ export async function login(
     createdAt: now,
   });
 
-  const [check] = await db
-    .select({ hash: sessions.tokenHash })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
-  console.log(
-    "[login] inserted session hash:",
-    tokenHash.slice(0, 8) + "..., verify:",
-    check ? "found" : "MISSING",
-  );
-  console.log(
-    "[login] cookie will be HttpOnly:",
-    true,
-    "token starts with:",
-    token.slice(0, 8) + "...",
-  );
-
   const req = getRequest();
   logAudit({
     userId: user.id,

@@ -31,49 +31,87 @@ function bareOpts(repoPath: string) {
   return { fs, gitdir: repoPath };
 }
 
+// In-process cache for resolveHead results (30-second TTL)
+const headCache = new Map<string, { branch: string | null; expiresAt: number }>();
+const HEAD_CACHE_TTL = 30_000;
+
 /**
  * Read the branch that HEAD points to in a bare repo.
  * Returns the branch name (e.g. "main", "master") or null if HEAD is missing/invalid.
+ * Results are cached for 30 seconds.
  */
 export async function resolveHead(repoPath: string): Promise<string | null> {
-  try {
-    const branches = await git.listBranches({ ...bareOpts(repoPath) });
-    if (branches.length === 0) return null;
+  const cached = headCache.get(repoPath);
+  if (cached && Date.now() < cached.expiresAt) return cached.branch;
 
+  try {
     // Read the HEAD file directly — it contains "ref: refs/heads/<branch>"
     const head = fs.readFileSync(`${repoPath}/HEAD`, "utf8").trim();
     const match = head.match(/^ref: refs\/heads\/(.+)$/);
-    // Only return HEAD's branch if it actually exists
-    if (match && branches.includes(match[1])) return match[1];
+    let result: string | null = null;
 
-    // HEAD points to a non-existent branch or is detached — find a match or use first branch
-    for (const branch of branches) {
-      const oid = await git.resolveRef({ ...bareOpts(repoPath), ref: branch });
-      if (oid === head) return branch;
+    if (match) {
+      // Verify the branch exists by checking if the ref file or packed-refs contains it
+      const refPath = `${repoPath}/refs/heads/${match[1]}`;
+      if (fs.existsSync(refPath)) {
+        result = match[1];
+      } else {
+        // Check packed-refs
+        try {
+          const packed = fs.readFileSync(`${repoPath}/packed-refs`, "utf8");
+          if (packed.includes(`refs/heads/${match[1]}`)) {
+            result = match[1];
+          }
+        } catch {
+          // packed-refs may not exist
+        }
+      }
     }
-    return branches[0];
+
+    if (!result) {
+      // Fallback: list branches and use first one
+      const branches = await git.listBranches({ ...bareOpts(repoPath) });
+      result = branches.length > 0 ? branches[0] : null;
+    }
+
+    headCache.set(repoPath, { branch: result, expiresAt: Date.now() + HEAD_CACHE_TTL });
+    return result;
   } catch {
     return null;
   }
 }
 
+/** Invalidate the HEAD cache for a repo (call after push) */
+export function invalidateHeadCache(repoPath: string): void {
+  headCache.delete(repoPath);
+}
+
+/**
+ * List all refs (branches + tags) with their OIDs using a single `git for-each-ref` call
+ * instead of N individual resolveRef calls.
+ */
 export async function listRefs(repoPath: string): Promise<GitRef[]> {
-  const branches = await git.listBranches({ ...bareOpts(repoPath) });
-  const tags = await git.listTags({ ...bareOpts(repoPath) });
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["for-each-ref", "--format=%(refname)\t%(objectname)", "refs/heads/", "refs/tags/"],
+      { cwd: repoPath },
+    );
 
-  const refs: GitRef[] = [];
-
-  for (const name of branches) {
-    const oid = await git.resolveRef({ ...bareOpts(repoPath), ref: name });
-    refs.push({ name, oid, type: "branch" });
+    const refs: GitRef[] = [];
+    for (const line of stdout.trim().split("\n")) {
+      if (!line) continue;
+      const [refname, oid] = line.split("\t");
+      if (refname.startsWith("refs/heads/")) {
+        refs.push({ name: refname.slice("refs/heads/".length), oid, type: "branch" });
+      } else if (refname.startsWith("refs/tags/")) {
+        refs.push({ name: refname.slice("refs/tags/".length), oid, type: "tag" });
+      }
+    }
+    return refs;
+  } catch {
+    return [];
   }
-
-  for (const name of tags) {
-    const oid = await git.resolveRef({ ...bareOpts(repoPath), ref: name });
-    refs.push({ name, oid, type: "tag" });
-  }
-
-  return refs;
 }
 
 export async function getTree(

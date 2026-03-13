@@ -901,7 +901,7 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
   if (!repo) return { error: "Repository not found" };
 
   // Check activity cache first (1-hour TTL)
-  const cached = await getCachedActivity(repo.id, "activity-v1", authorEmail ?? null);
+  const cached = await getCachedActivity(repo.id, "activity-v2", authorEmail ?? null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (cached) return cached as any;
 
@@ -915,88 +915,100 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
     ...(authorEmail ? [eq(gitCommits.authorEmail, authorEmail)] : []),
   ];
 
-  const dailyRows = await db
-    .select({
-      day: sql<number>`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`,
-      count: sql<number>`cast(count(*) as integer)`,
-    })
-    .from(gitCommits)
-    .where(and(...commitConditions))
-    .groupBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`)
-    .orderBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`);
+  // Parallelize all independent queries with Promise.all
+  const [
+    dailyRows,
+    weeklyRows,
+    contributors,
+    dailyPRRows,
+    dailyIssueRows,
+    totalRow,
+    punchcardRows,
+  ] = await Promise.all([
+    db
+      .select({
+        day: sql<number>`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`,
+        count: sql<number>`cast(count(*) as integer)`,
+      })
+      .from(gitCommits)
+      .where(and(...commitConditions))
+      .groupBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`)
+      .orderBy(sql`cast((${gitCommits.authorTimestamp} / 86400) * 86400 as integer)`),
 
-  const weeklyRows = await db
-    .select({
-      week: sql<number>`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
-      count: sql<number>`cast(count(*) as integer)`,
-    })
-    .from(gitCommits)
-    .where(and(...commitConditions))
-    .groupBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`)
-    .orderBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`);
+    db
+      .select({
+        week: sql<number>`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`,
+        count: sql<number>`cast(count(*) as integer)`,
+      })
+      .from(gitCommits)
+      .where(and(...commitConditions))
+      .groupBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`)
+      .orderBy(sql`cast((${gitCommits.authorTimestamp} / 604800) * 604800 as integer)`),
 
-  // Contributors always show all (not filtered) so the dropdown works
-  const contributors = await db
-    .select({
-      name: gitCommits.authorName,
-      email: gitCommits.authorEmail,
-      commits: sql<number>`cast(count(*) as integer)`,
-      lastCommitAt: sql<number>`cast(max(${gitCommits.authorTimestamp}) as integer)`,
-    })
-    .from(gitCommits)
-    .where(eq(gitCommits.repoId, repo.id))
-    .groupBy(gitCommits.authorEmail)
-    .orderBy(sql`count(*) desc`)
-    .limit(20);
+    // Contributors always show all (not filtered) so the dropdown works
+    db
+      .select({
+        name: gitCommits.authorName,
+        email: gitCommits.authorEmail,
+        commits: sql<number>`cast(count(*) as integer)`,
+        lastCommitAt: sql<number>`cast(max(${gitCommits.authorTimestamp}) as integer)`,
+      })
+      .from(gitCommits)
+      .where(eq(gitCommits.repoId, repo.id))
+      .groupBy(gitCommits.authorEmail)
+      .orderBy(sql`count(*) desc`)
+      .limit(20),
 
-  // Daily PR counts (by createdAt, stored as epoch seconds via mode:"timestamp")
-  const dailyPRRows = await db
-    .select({
-      day: sql<number>`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`,
-      count: sql<number>`cast(count(*) as integer)`,
-    })
-    .from(pullRequests)
-    .where(
-      and(
-        eq(pullRequests.repoId, repo.id),
-        sql`cast(${pullRequests.createdAt} as integer) >= ${oneYearAgo}`,
+    // Daily PR counts
+    db
+      .select({
+        day: sql<number>`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`,
+        count: sql<number>`cast(count(*) as integer)`,
+      })
+      .from(pullRequests)
+      .where(
+        and(
+          eq(pullRequests.repoId, repo.id),
+          sql`cast(${pullRequests.createdAt} as integer) >= ${oneYearAgo}`,
+        ),
+      )
+      .groupBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`)
+      .orderBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`),
+
+    // Daily issue counts
+    db
+      .select({
+        day: sql<number>`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`,
+        count: sql<number>`cast(count(*) as integer)`,
+      })
+      .from(issues)
+      .where(
+        and(eq(issues.repoId, repo.id), sql`cast(${issues.createdAt} as integer) >= ${oneYearAgo}`),
+      )
+      .groupBy(sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`)
+      .orderBy(sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`),
+
+    db
+      .select({ count: sql<number>`cast(count(*) as integer)` })
+      .from(gitCommits)
+      .where(eq(gitCommits.repoId, repo.id))
+      .then((rows) => rows[0]),
+
+    // Punchcard: commits grouped by day-of-week and hour-of-day
+    // Unix epoch (1970-01-01) was a Thursday (day 4). ((ts/86400)+4)%7 gives 0=Sun..6=Sat
+    db
+      .select({
+        day: sql<number>`cast(((${gitCommits.authorTimestamp} / 86400) + 4) % 7 as integer)`,
+        hour: sql<number>`cast((${gitCommits.authorTimestamp} % 86400) / 3600 as integer)`,
+        count: sql<number>`cast(count(*) as integer)`,
+      })
+      .from(gitCommits)
+      .where(and(...commitConditions))
+      .groupBy(
+        sql`cast(((${gitCommits.authorTimestamp} / 86400) + 4) % 7 as integer)`,
+        sql`cast((${gitCommits.authorTimestamp} % 86400) / 3600 as integer)`,
       ),
-    )
-    .groupBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`)
-    .orderBy(sql`cast((cast(${pullRequests.createdAt} as integer) / 86400) * 86400 as integer)`);
-
-  // Daily issue counts (by createdAt)
-  const dailyIssueRows = await db
-    .select({
-      day: sql<number>`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`,
-      count: sql<number>`cast(count(*) as integer)`,
-    })
-    .from(issues)
-    .where(
-      and(eq(issues.repoId, repo.id), sql`cast(${issues.createdAt} as integer) >= ${oneYearAgo}`),
-    )
-    .groupBy(sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`)
-    .orderBy(sql`cast((cast(${issues.createdAt} as integer) / 86400) * 86400 as integer)`);
-
-  const [totalRow] = await db
-    .select({ count: sql<number>`cast(count(*) as integer)` })
-    .from(gitCommits)
-    .where(eq(gitCommits.repoId, repo.id));
-
-  // Punchcard: commits grouped by day-of-week and hour-of-day
-  // Unix epoch (1970-01-01) was a Thursday (day 4). ((ts/86400)+4)%7 gives 0=Sun..6=Sat
-  const punchcardRows = await db
-    .select({
-      day: sql<number>`cast(((${gitCommits.authorTimestamp} / 86400) + 4) % 7 as integer)`,
-      hour: sql<number>`cast((${gitCommits.authorTimestamp} % 86400) / 3600 as integer)`,
-      count: sql<number>`cast(count(*) as integer)`,
-    })
-    .from(gitCommits)
-    .where(and(...commitConditions))
-    .groupBy(
-      sql`cast(((${gitCommits.authorTimestamp} / 86400) + 4) % 7 as integer)`,
-      sql`cast((${gitCommits.authorTimestamp} % 86400) / 3600 as integer)`,
-    );
+  ]);
 
   // File change frequency: weekly counts grouped by changeType
   const fileChangeConditions = [
@@ -1043,10 +1055,12 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
     .sort((a, b) => a.week - b.week);
 
   // Language breakdown: reuse LANGUAGE_MAP for proper language names
+  const headBranch = await resolveHead(resolveDiskPath(repo.diskPath));
+  const defaultBranch = headBranch || repo.defaultBranch;
   const defaultRef = await db
     .select({ commitOid: gitRefs.commitOid })
     .from(gitRefs)
-    .where(and(eq(gitRefs.repoId, repo.id), eq(gitRefs.name, repo.defaultBranch)))
+    .where(and(eq(gitRefs.repoId, repo.id), eq(gitRefs.name, defaultBranch)))
     .limit(1);
 
   let languages: { language: string; count: number; percentage: number }[] = [];
@@ -1163,7 +1177,7 @@ export async function getRepoActivity(ownerName: string, repoName: string, autho
   };
 
   // Store in cache (fire-and-forget)
-  setCachedActivity(repo.id, "activity-v1", authorEmail ?? null, result).catch(() => {});
+  setCachedActivity(repo.id, "activity-v2", authorEmail ?? null, result).catch(() => {});
 
   return result;
 }

@@ -474,11 +474,17 @@ export function startSshServer() {
             // Wait for stdout to fully drain before signaling exit
             let exitCode: number | null = null;
             let stdoutEnded = false;
+            let channelClosed = false;
 
             function tryClose() {
-              if (exitCode !== null && stdoutEnded) {
-                channel.exit(exitCode);
-                channel.end();
+              if (exitCode !== null && stdoutEnded && !channelClosed) {
+                channelClosed = true;
+                try {
+                  channel.exit(exitCode);
+                  channel.end();
+                } catch {
+                  // Channel may already be closed
+                }
               }
             }
 
@@ -539,6 +545,7 @@ export function startSshServer() {
             });
 
             channel.on("close", () => {
+              channelClosed = true;
               if (exitCode === null) {
                 const duration = Date.now() - startTime;
                 logger.warn(`SSH ${operationType} cancelled: ${repoPath}`, {

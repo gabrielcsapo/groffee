@@ -31,7 +31,8 @@ function formatRelativeDate(timestamp: number): string {
 export default async function Repo({ params }: { params?: Record<string, string> }) {
   const { owner, repo: repoName } = params as { owner: string; repo: string };
 
-  const repoData = await getRepo(owner, repoName);
+  // Parallelize session lookup with repo fetch to avoid waterfall
+  const [repoData, sessionUser] = await Promise.all([getRepo(owner, repoName), getSessionUser()]);
 
   if (repoData.error) {
     return (
@@ -46,12 +47,11 @@ export default async function Repo({ params }: { params?: Record<string, string>
   const repository = repoData.repository!;
   const defaultBranch = repository.defaultBranch;
 
-  const [treeData, refsData, commitsData, langData, sessionUser] = await Promise.all([
+  const [treeData, refsData, commitsData, langData] = await Promise.all([
     getRepoTree(owner, repoName, defaultBranch),
     getRepoRefs(owner, repoName),
     getRepoCommits(owner, repoName, defaultBranch, { limit: 1 }),
     getRepoLanguages(owner, repoName),
-    getSessionUser(),
   ]);
 
   const ref = treeData.ref || defaultBranch;

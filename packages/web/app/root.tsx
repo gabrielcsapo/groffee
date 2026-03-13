@@ -55,7 +55,7 @@ export default function Root() {
         </main>
         <footer className="border-t border-border mt-auto">
           <div className="max-w-[1280px] mx-auto px-6 py-6 flex items-center justify-between text-xs text-text-secondary">
-            <p>Powered by Groffee</p>
+            <p>Groffee powered by Git and Coffee</p>
             <div className="flex items-center gap-4">
               <Link
                 to="/explore"

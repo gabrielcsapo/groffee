@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { marked } from "marked";
 import DOMPurify from "isomorphic-dompurify";
 
@@ -6,9 +7,22 @@ marked.setOptions({
   breaks: false,
 });
 
+// LRU cache for rendered markdown (max 100 entries)
+const MD_CACHE_MAX = 100;
+const mdCache = new Map<string, string>();
+
 export function renderMarkdown(content: string): string {
+  const hash = createHash("sha256").update(content).digest("hex");
+  const cached = mdCache.get(hash);
+  if (cached) {
+    // Move to end for LRU behavior
+    mdCache.delete(hash);
+    mdCache.set(hash, cached);
+    return cached;
+  }
+
   const raw = marked.parse(content, { async: false }) as string;
-  return DOMPurify.sanitize(raw, {
+  const result = DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: [
       "h1",
       "h2",
@@ -68,4 +82,13 @@ export function renderMarkdown(content: string): string {
     ],
     ALLOW_DATA_ATTR: false,
   });
+
+  // Evict oldest entry if cache is full
+  if (mdCache.size >= MD_CACHE_MAX) {
+    const oldest = mdCache.keys().next().value!;
+    mdCache.delete(oldest);
+  }
+  mdCache.set(hash, result);
+
+  return result;
 }
