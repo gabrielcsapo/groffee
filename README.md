@@ -80,12 +80,12 @@ EXTERNAL_URL=https://groffee.example.com pnpm start
 
 ## Environment Variables
 
-| Variable       | Default                  | Description                                                      |
-| -------------- | ------------------------ | ---------------------------------------------------------------- |
-| `PORT`         | `3000`                   | HTTP server port                                                 |
-| `SSH_PORT`     | `2223`                   | SSH server port                                                  |
-| `DATA_DIR`     | `./data`                 | Directory for database, repositories, and LFS objects            |
-| `EXTERNAL_URL` | `http://localhost:$PORT` | Public-facing URL (required for Git LFS over SSH)                |
+| Variable       | Default                  | Description                                           |
+| -------------- | ------------------------ | ----------------------------------------------------- |
+| `PORT`         | `3000`                   | HTTP server port                                      |
+| `SSH_PORT`     | `2223`                   | SSH server port                                       |
+| `DATA_DIR`     | `./data`                 | Directory for database, repositories, and LFS objects |
+| `EXTERNAL_URL` | `http://localhost:$PORT` | Public-facing URL (required for Git LFS over SSH)     |
 
 ## Docker
 

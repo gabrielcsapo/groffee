@@ -12,9 +12,7 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio",
-    "typecheck": "tsc --noEmit",
-    "lint": "oxlint .",
-    "fmt": "oxfmt --write ."
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

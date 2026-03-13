@@ -3,6 +3,17 @@
   "version": "0.0.1",
   "private": true,
   "description": "The best way to deal with git is with a little bit of coffee",
+  "keywords": [
+    "git",
+    "server",
+    "ui"
+  ],
+  "license": "Apache-2.0",
+  "author": "Gabriel J. Csapo <gabecsapo@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gabrielcsapo/groffee.git"
+  },
   "type": "module",
   "scripts": {
     "start": "pnpm run build && pnpm --filter @groffee/web start",
@@ -13,30 +24,23 @@
     "db:generate": "pnpm --filter @groffee/db generate",
     "db:migrate": "pnpm --filter @groffee/db migrate",
     "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
-    "fmt": "pnpm -r fmt",
+    "lint": "oxlint .",
+    "fmt": "oxfmt --write .",
     "seed": "pnpm --filter @groffee/web seed",
     "make-admin": "pnpm --filter @groffee/web make-admin",
     "test": "pnpm --filter @groffee/web test:e2e",
     "prepare": "husky"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/gabrielcsapo/groffee.git"
-  },
-  "keywords": [
-    "git",
-    "server",
-    "ui"
-  ],
-  "author": "Gabriel J. Csapo <gabecsapo@gmail.com>",
-  "license": "Apache-2.0",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "husky": "^9.1.7",
-    "oxfmt": "^0.36.0",
-    "oxlint": "^1.51.0",
+    "oxfmt": "^0.40.0",
+    "oxlint": "^1.55.0",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -46,9 +50,5 @@
       "esbuild",
       "ssh2"
     ]
-  },
-  "engines": {
-    "node": ">=22.0.0",
-    "pnpm": ">=10.0.0"
   }
 }
