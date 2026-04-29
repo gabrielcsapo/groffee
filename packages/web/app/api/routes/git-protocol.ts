@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { handleInfoRefs, handleServiceRpc, snapshotRefs } from "@groffee/git";
 import { canPush, canRead } from "../lib/permissions.js";
 import { triggerIncrementalIndex } from "../lib/indexer.js";
+import { triggerPipelinesFromPush } from "../lib/pipeline-trigger.js";
 import { authenticateGitUser, authChallenge, resolveRepo } from "../lib/git-auth.js";
 import { resolveDiskPath } from "../lib/paths.js";
 
@@ -76,6 +77,12 @@ gitProtocolRoutes.post("/:owner/:repo/git-receive-pack", async (c) => {
         triggerIncrementalIndex(repo.id, resolveDiskPath(repo.diskPath), refsBefore).catch((err) =>
           console.error("Post-push indexing failed:", err),
         );
+        triggerPipelinesFromPush(
+          repo.id,
+          resolveDiskPath(repo.diskPath),
+          user.id,
+          refsBefore,
+        ).catch((err) => console.error("Post-push pipeline trigger failed:", err));
       }
     },
   );

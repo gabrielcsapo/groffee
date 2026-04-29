@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit",
     "seed": "tsx app/api/seed.ts",
     "test:lfs": "bash scripts/test-lfs.sh",
-    "test:e2e": "playwright test",
     "make-admin": "tsx app/api/make-admin.ts"
   },
   "dependencies": {
@@ -30,7 +29,9 @@
     "react-flight-router": "^0.4.4",
     "react-server-dom-webpack": "^19.2.4",
     "shiki": "^4.0.2",
-    "ssh2": "^1.17.0"
+    "ssh2": "^1.17.0",
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",

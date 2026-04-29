@@ -149,6 +149,21 @@ export const routes: RouteConfig[] = [
             component: () => import("./routes/issue-detail"),
           },
           {
+            id: "pipelines",
+            path: "pipelines",
+            component: () => import("./routes/pipelines"),
+          },
+          {
+            id: "pipeline-run",
+            path: "pipelines/runs/:runNumber",
+            component: () => import("./routes/pipeline-run"),
+          },
+          {
+            id: "pages",
+            path: "pages",
+            component: () => import("./routes/pages"),
+          },
+          {
             id: "pulls",
             path: "pulls",
             component: () => import("./routes/pulls"),

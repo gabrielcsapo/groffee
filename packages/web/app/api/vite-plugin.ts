@@ -17,6 +17,27 @@ export function apiMiddleware(): Plugin {
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? "/";
 
+        // Handle pages subdomain requests
+        const host = req.headers.host?.replace(/:\d+$/, "") || "";
+        const pagesHostname = process.env.PAGES_HOSTNAME || "pages.localhost";
+        if (host === pagesHostname) {
+          try {
+            const mod = await server.ssrLoadModule("./app/api/lib/pages-server.ts");
+            const fullUrl = `http://${req.headers.host}${url}`;
+            const response = mod.handlePagesRequest(fullUrl) as Response;
+            res.statusCode = response.status;
+            response.headers.forEach((value: string, key: string) => {
+              res.setHeader(key, value);
+            });
+            const body = await response.arrayBuffer();
+            res.end(Buffer.from(body));
+          } catch (err) {
+            res.statusCode = 500;
+            res.end("Pages error");
+          }
+          return;
+        }
+
         // Match /api/* routes
         const isApi = url.startsWith("/api/") || url === "/api";
 

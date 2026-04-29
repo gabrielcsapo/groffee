@@ -1,0 +1,73 @@
+pipelines:
+  ci:
+    on:
+      push:
+        branches: [main, master]
+      pull_request:
+        branches: [main, master]
+      manual: true
+
+    concurrency:
+      group: "ci-${{ ref }}"
+      cancel_in_progress: true
+
+    jobs:
+      lint:
+        name: Lint
+        image: node:22-slim
+        timeout: 120
+        steps:
+          - name: Install pnpm
+            run: corepack enable && corepack prepare pnpm@latest --activate
+          - name: Install dependencies
+            run: pnpm install --frozen-lockfile
+          - name: Lint
+            run: pnpm lint
+
+      typecheck:
+        name: Typecheck
+        image: node:22-slim
+        timeout: 180
+        steps:
+          - name: Install pnpm
+            run: corepack enable && corepack prepare pnpm@latest --activate
+          - name: Install dependencies
+            run: pnpm install --frozen-lockfile
+          - name: Typecheck
+            run: pnpm typecheck
+
+      build:
+        name: Build
+        image: node:22-slim
+        needs: [typecheck]
+        timeout: 300
+        steps:
+          - name: Install pnpm
+            run: corepack enable && corepack prepare pnpm@latest --activate
+          - name: Install dependencies
+            run: pnpm install --frozen-lockfile
+          - name: Build
+            run: pnpm build
+        artifacts:
+          upload:
+            - name: build-output
+              path: packages/web/dist
+
+      test:
+        name: E2E Tests
+        image: mcr.microsoft.com/playwright:v1.52.0-noble
+        needs: [build]
+        timeout: 600
+        steps:
+          - name: Install pnpm
+            run: corepack enable && corepack prepare pnpm@latest --activate
+          - name: Install dependencies
+            run: pnpm install --frozen-lockfile
+          - name: Build
+            run: pnpm build
+          - name: Run E2E tests
+            run: pnpm test
+        artifacts:
+          upload:
+            - name: test-results
+              path: test-results

@@ -430,6 +430,161 @@ export const systemLogs = sqliteTable(
 );
 
 // =====================================================
+// CI/CD Pipeline Tables
+// =====================================================
+
+// --- Pipelines (cached YAML configs per repo+ref) ---
+export const pipelines = sqliteTable(
+  "pipelines",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    ref: text("ref").notNull(),
+    configYaml: text("config_yaml").notNull(),
+    configHash: text("config_hash").notNull(),
+    parsedConfig: text("parsed_config").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("pipelines_repo_ref_idx").on(table.repoId, table.ref),
+    index("pipelines_repo_idx").on(table.repoId),
+  ],
+);
+
+// --- Pipeline Runs (each execution of a pipeline) ---
+export const pipelineRuns = sqliteTable(
+  "pipeline_runs",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    pipelineName: text("pipeline_name").notNull(),
+    number: integer("number").notNull(),
+    status: text("status", {
+      enum: ["queued", "running", "success", "failure", "cancelled", "timed_out"],
+    })
+      .notNull()
+      .default("queued"),
+    trigger: text("trigger", {
+      enum: ["push", "pull_request", "manual"],
+    }).notNull(),
+    ref: text("ref").notNull(),
+    commitOid: text("commit_oid").notNull(),
+    triggeredById: text("triggered_by_id")
+      .notNull()
+      .references(() => users.id),
+    configSnapshot: text("config_snapshot").notNull(),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    finishedAt: integer("finished_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("pipeline_runs_repo_idx").on(table.repoId),
+    index("pipeline_runs_repo_status_idx").on(table.repoId, table.status),
+    index("pipeline_runs_repo_number_idx").on(table.repoId, table.number),
+  ],
+);
+
+// --- Pipeline Jobs (jobs within a run) ---
+export const pipelineJobs = sqliteTable(
+  "pipeline_jobs",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => pipelineRuns.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    status: text("status", {
+      enum: ["queued", "running", "success", "failure", "cancelled", "skipped", "timed_out"],
+    })
+      .notNull()
+      .default("queued"),
+    sortOrder: integer("sort_order").notNull(),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    finishedAt: integer("finished_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [index("pipeline_jobs_run_idx").on(table.runId)],
+);
+
+// --- Pipeline Steps (steps within a job) ---
+export const pipelineSteps = sqliteTable(
+  "pipeline_steps",
+  {
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => pipelineJobs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    command: text("command"),
+    uses: text("uses"),
+    withConfig: text("with_config"),
+    status: text("status", {
+      enum: ["queued", "running", "success", "failure", "cancelled", "skipped"],
+    })
+      .notNull()
+      .default("queued"),
+    exitCode: integer("exit_code"),
+    logPath: text("log_path"),
+    sortOrder: integer("sort_order").notNull(),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    finishedAt: integer("finished_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [index("pipeline_steps_job_idx").on(table.jobId)],
+);
+
+// --- Pipeline Artifacts (build artifacts) ---
+export const pipelineArtifacts = sqliteTable(
+  "pipeline_artifacts",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => pipelineRuns.id, { onDelete: "cascade" }),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => pipelineJobs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    diskPath: text("disk_path").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [index("pipeline_artifacts_run_idx").on(table.runId)],
+);
+
+// --- Pages Deployments ---
+export const pagesDeployments = sqliteTable(
+  "pages_deployments",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    runId: text("run_id").references(() => pipelineRuns.id, { onDelete: "set null" }),
+    commitOid: text("commit_oid").notNull(),
+    diskPath: text("disk_path").notNull(),
+    status: text("status", {
+      enum: ["active", "superseded", "failed"],
+    })
+      .notNull()
+      .default("active"),
+    deployedById: text("deployed_by_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("pages_deploy_repo_idx").on(table.repoId),
+    index("pages_deploy_repo_status_idx").on(table.repoId, table.status),
+  ],
+);
+
+// =====================================================
 // LFS Objects
 // =====================================================
 
