@@ -7,6 +7,7 @@ import { requestStorage } from "./app/lib/server/request-context";
 import { app as apiApp } from "./app/api/app";
 import { startSshServer } from "./app/api/ssh-server";
 import { backfillIndexes } from "./app/api/lib/backfill";
+import { isPagesRequest, handlePagesRequest } from "./app/api/lib/pages-server";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -36,6 +37,14 @@ async function main() {
   });
 
   const app = new Hono();
+
+  // Pages subdomain middleware (must be first)
+  app.use("*", async (c, next) => {
+    if (isPagesRequest(c.req.header("host"))) {
+      return handlePagesRequest(c.req.url);
+    }
+    return next();
+  });
 
   // API routes (mounted before flight router catch-all)
   app.route("/", apiApp);

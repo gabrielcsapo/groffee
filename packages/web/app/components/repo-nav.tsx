@@ -8,9 +8,17 @@ interface RepoNavProps {
   openIssueCount?: number;
   openPrCount?: number;
   isOwner?: boolean;
+  latestRunStatus?: string | null;
 }
 
-export function RepoNav({ owner, repo, openIssueCount, openPrCount, isOwner }: RepoNavProps) {
+export function RepoNav({
+  owner,
+  repo,
+  openIssueCount,
+  openPrCount,
+  isOwner,
+  latestRunStatus,
+}: RepoNavProps) {
   const location = useLocation();
   const path = location.pathname;
 
@@ -62,6 +70,29 @@ export function RepoNav({ owner, repo, openIssueCount, openPrCount, isOwner }: R
           <path d="M18 9v3c0 3-3 6-6 6" strokeWidth={2} />
         </svg>
       ),
+    },
+    {
+      label: "Pipelines",
+      href: `/${owner}/${repo}/pipelines`,
+      active: path.startsWith(`/${owner}/${repo}/pipelines`),
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M13 10V3L4 14h7v7l9-11h-7z"
+          />
+        </svg>
+      ),
+      statusDot:
+        latestRunStatus === "success"
+          ? "bg-green-500"
+          : latestRunStatus === "failure"
+            ? "bg-red-500"
+            : latestRunStatus === "running"
+              ? "bg-blue-500"
+              : undefined,
     },
     {
       label: "Activity",
@@ -119,6 +150,9 @@ export function RepoNav({ owner, repo, openIssueCount, openPrCount, isOwner }: R
         >
           {tab.icon}
           {tab.label}
+          {"statusDot" in tab && (tab as any).statusDot && (
+            <span className={`w-2 h-2 rounded-full ${(tab as any).statusDot}`} />
+          )}
           {tab.count != null && tab.count > 0 && (
             <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-surface-secondary text-text-secondary font-normal">
               {tab.count}

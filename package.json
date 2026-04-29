@@ -28,8 +28,12 @@
     "fmt": "oxfmt --write .",
     "seed": "pnpm --filter @groffee/web seed",
     "make-admin": "pnpm --filter @groffee/web make-admin",
-    "test": "pnpm --filter @groffee/web test:e2e",
+    "test": "playwright test",
     "prepare": "husky"
+  },
+  "dependencies": {
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
@@ -49,6 +53,9 @@
       "cpu-features",
       "esbuild",
       "ssh2"
-    ]
+    ],
+    "overrides": {
+      "jsdom": "^24.0.0"
+    }
   }
 }

@@ -9,6 +9,7 @@ interface RepoNavWrapperProps {
   openIssueCount?: number;
   openPrCount?: number;
   isOwner?: boolean;
+  latestRunStatus?: string | null;
 }
 
 export function RepoNavWrapper(props: RepoNavWrapperProps) {

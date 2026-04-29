@@ -13,6 +13,8 @@ import { sshKeyRoutes } from "./routes/ssh-keys.js";
 import { collaboratorRoutes } from "./routes/collaborators.js";
 import { searchRoutes } from "./routes/search.js";
 import { tokenRoutes } from "./routes/tokens.js";
+import { pipelineRoutes } from "./routes/pipelines.js";
+import { pagesRoutes } from "./routes/pages.js";
 import { requestId } from "./middleware/request-id.js";
 import { requestLogger } from "./middleware/request-logger.js";
 
@@ -67,6 +69,8 @@ app.route("/api/user/tokens", tokenRoutes);
 app.route("/api/repos", collaboratorRoutes);
 app.route("/api/repos", searchRoutes);
 app.route("/api", searchRoutes);
+app.route("/api/repos", pipelineRoutes);
+app.route("/api/repos", pagesRoutes);
 
 // Git LFS routes (must be before git protocol routes)
 app.route("/", gitLfsRoutes);

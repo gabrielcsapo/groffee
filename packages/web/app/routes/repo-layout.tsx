@@ -2,6 +2,7 @@ import { Link, Outlet } from "react-flight-router/client";
 import { getRepo } from "../lib/server/repos";
 import { getIssueCount } from "../lib/server/issues";
 import { getPullRequestCount } from "../lib/server/pulls";
+import { getLatestRunStatus } from "../lib/server/pipelines";
 import { RepoNavWrapper as RepoNav } from "../components/repo-nav-wrapper.client";
 
 export default async function RepoLayout({ params }: { params?: Record<string, string> }) {
@@ -14,6 +15,9 @@ export default async function RepoLayout({ params }: { params?: Record<string, s
   ]);
 
   const repository = repoData.repository;
+
+  // Fetch latest pipeline run status (non-blocking — uses repo id)
+  const latestRun = repository ? await getLatestRunStatus(repository.id) : null;
 
   return (
     <>
@@ -62,6 +66,7 @@ export default async function RepoLayout({ params }: { params?: Record<string, s
           openIssueCount={openIssueCount}
           openPrCount={openPrCount}
           isOwner={repository?.isOwner ?? false}
+          latestRunStatus={latestRun?.status ?? null}
         />
       </div>
       <Outlet />

@@ -20,6 +20,7 @@ import { canPush, canRead } from "./lib/permissions.js";
 import { createEphemeralLfsToken } from "./lib/git-auth.js";
 import { snapshotRefs } from "@groffee/git";
 import { triggerIncrementalIndex } from "./lib/indexer.js";
+import { triggerPipelinesFromPush } from "./lib/pipeline-trigger.js";
 import { logger } from "./lib/logger.js";
 import { logAudit } from "./lib/audit.js";
 import path from "node:path";
@@ -540,6 +541,19 @@ export function startSshServer() {
                       source: "ssh",
                       metadata: { error: err.message, repoPath },
                     }),
+                );
+                triggerPipelinesFromPush(
+                  repo.id,
+                  resolveDiskPath(repo.diskPath),
+                  authenticatedUser!.userId,
+                  refsBefore,
+                ).catch((err) =>
+                  logger.error("Post-push SSH pipeline trigger failed", {
+                    requestId: connectionId,
+                    userId: authenticatedUser!.userId,
+                    source: "ssh",
+                    metadata: { error: err.message, repoPath },
+                  }),
                 );
               }
             });

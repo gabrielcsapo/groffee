@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { logAudit, getClientIp } from "../lib/audit.js";
 import { resolveDiskPath } from "../lib/paths.js";
+import { triggerPipelines } from "../lib/pipeline-trigger.js";
 import type { AppEnv } from "../types.js";
 
 const execFileAsync = promisify(execFile);
@@ -232,6 +233,20 @@ pullRoutes.post("/:owner/:repo/pulls", requireAuth, async (c) => {
     metadata: { title, sourceBranch, targetBranch, repoName: c.req.param("repo") },
     ipAddress: getClientIp(c.req.raw.headers),
   }).catch(console.error);
+
+  // Trigger CI/CD pipelines for PR creation
+  const diskPath = resolveDiskPath(result.repo.diskPath);
+  const sourceRefObj = refs.find((r) => r.name === sourceBranch);
+  if (sourceRefObj?.oid) {
+    triggerPipelines({
+      repoId: result.repo.id,
+      repoPath: diskPath,
+      ref: `refs/heads/${sourceBranch}`,
+      commitOid: sourceRefObj.oid,
+      trigger: "pull_request",
+      triggeredById: user.id,
+    }).catch(console.error);
+  }
 
   return c.json({ pullRequest: { id, number: nextNumber, title, author: user.username } });
 });
