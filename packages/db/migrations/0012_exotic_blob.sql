@@ -1,0 +1,1 @@
+CREATE INDEX `git_refs_repo_updated_idx` ON `git_refs` (`repo_id`,`updated_at`);

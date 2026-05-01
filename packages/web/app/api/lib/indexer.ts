@@ -252,6 +252,26 @@ export async function indexRef(
     return;
   }
 
+  // Upsert the ref FIRST so updatedAt reflects the actual push time even if
+  // the heavier ancestry/commit indexing below fails or is skipped. This keeps
+  // the landing-page "last activity" surface accurate independent of indexer
+  // health.
+  const now = new Date();
+  await db
+    .insert(gitRefs)
+    .values({
+      id: crypto.randomUUID(),
+      repoId,
+      name: refName,
+      type: refType,
+      commitOid: newOid,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [gitRefs.repoId, gitRefs.name],
+      set: { commitOid: newOid, type: refType, updatedAt: now },
+    });
+
   // Walk ancestry to discover all reachable commits, then batch-check which are new
   const allOids = await walkAncestry(repoPath, newOid);
 
@@ -273,23 +293,6 @@ export async function indexRef(
   for (const oid of newCommitOids) {
     await indexCommit(repoId, repoPath, oid);
   }
-
-  // Upsert ref
-  const now = new Date();
-  await db
-    .insert(gitRefs)
-    .values({
-      id: crypto.randomUUID(),
-      repoId,
-      name: refName,
-      type: refType,
-      commitOid: newOid,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [gitRefs.repoId, gitRefs.name],
-      set: { commitOid: newOid, type: refType, updatedAt: now },
-    });
 
   // Rebuild ancestry for this ref
   await rebuildAncestry(repoId, repoPath, refName, newOid);

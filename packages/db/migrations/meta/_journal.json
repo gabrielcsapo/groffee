@@ -85,6 +85,13 @@
       "when": 1775484060971,
       "tag": "0011_sloppy_centennial",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1777501813943,
+      "tag": "0012_exotic_blob",
+      "breakpoints": true
     }
   ]
 }

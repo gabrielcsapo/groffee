@@ -2,7 +2,8 @@
 
 import { db, repositories, users, issues, pullRequests, comments, editHistory } from "@groffee/db";
 import { eq, and, desc, max, count, inArray, sql } from "drizzle-orm";
-import { listRefs, getDiff } from "@groffee/git";
+import { listRefs, getDiff, snapshotRefs } from "@groffee/git";
+import { triggerIncrementalIndex } from "../../api/lib/indexer";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getSessionUser } from "./session";
@@ -384,6 +385,10 @@ export async function mergePullRequest(ownerName: string, repoName: string, prNu
   if (!pr) return { error: "Pull request not found" };
   if (pr.status !== "open") return { error: "Pull request is not open" };
 
+  const repoDiskPath = resolveDiskPath(result.repo.diskPath);
+  // Snapshot refs before mutating so the indexer can diff afterward.
+  const refsBefore = await snapshotRefs(repoDiskPath);
+
   try {
     const { stdout: mergeBase } = await execFileAsync(
       "git",
@@ -442,6 +447,13 @@ export async function mergePullRequest(ownerName: string, repoName: string, prNu
         { cwd: resolveDiskPath(result.repo.diskPath) },
       );
     }
+
+    // Index the merge: bumps gitRefs.updatedAt for the target branch and
+    // indexes the new merge commit. Fire-and-forget; failure should not
+    // fail the merge.
+    triggerIncrementalIndex(result.repo.id, repoDiskPath, refsBefore).catch((err) =>
+      console.error(`Post-merge indexing failed for repo ${result.repo.id}:`, err),
+    );
 
     const now = new Date();
     await db

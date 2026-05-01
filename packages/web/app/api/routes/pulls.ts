@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { db, repositories, users, pullRequests, comments, editHistory } from "@groffee/db";
 import { eq, and, desc, max, count, inArray, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
-import { listRefs, getDiff } from "@groffee/git";
+import { listRefs, getDiff, snapshotRefs } from "@groffee/git";
+import { triggerIncrementalIndex } from "../lib/indexer.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { logAudit, getClientIp } from "../lib/audit.js";
@@ -359,6 +360,10 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
   if (!pr) return c.json({ error: "Pull request not found" }, 404);
   if (pr.status !== "open") return c.json({ error: "Pull request is not open" }, 400);
 
+  const repoDiskPath = resolveDiskPath(result.repo.diskPath);
+  // Snapshot refs before mutating so the indexer can diff afterward.
+  const refsBefore = await snapshotRefs(repoDiskPath);
+
   // Perform merge in bare repo using git
   try {
     // Use a temp environment to do the merge
@@ -423,6 +428,13 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
         { cwd: resolveDiskPath(result.repo.diskPath) },
       );
     }
+
+    // Index the merge: bumps gitRefs.updatedAt for the target branch and
+    // indexes the new merge commit. Fire-and-forget; failure should not
+    // fail the merge.
+    triggerIncrementalIndex(result.repo.id, repoDiskPath, refsBefore).catch((err) =>
+      console.error(`Post-merge indexing failed for repo ${result.repo.id}:`, err),
+    );
 
     // Update PR status
     const now = new Date();

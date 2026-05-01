@@ -101,6 +101,14 @@ export async function getPublicRepos(opts: { limit?: number; offset?: number; q?
     ? and(eq(repositories.isPublic, true), like(repositories.name, `%${q}%`))
     : eq(repositories.isPublic, true);
 
+  // Sort by last push activity (max gitRefs.updatedAt) so the list reflects
+  // real repo activity, not just row mutations. Fall back to the repo's own
+  // updatedAt for repos that have never received a push.
+  const lastActivity = sql<number>`COALESCE(
+    (SELECT MAX(${gitRefs.updatedAt}) FROM ${gitRefs} WHERE ${gitRefs.repoId} = ${repositories.id}),
+    ${repositories.updatedAt}
+  )`;
+
   const repos = await db
     .select({
       id: repositories.id,
@@ -108,21 +116,23 @@ export async function getPublicRepos(opts: { limit?: number; offset?: number; q?
       description: repositories.description,
       isPublic: repositories.isPublic,
       ownerId: repositories.ownerId,
-      updatedAt: repositories.updatedAt,
+      updatedAt: lastActivity,
       createdAt: repositories.createdAt,
     })
     .from(repositories)
     .where(condition)
-    .orderBy(desc(repositories.updatedAt))
+    .orderBy(desc(lastActivity))
     .limit(limit)
     .offset(offset);
 
   // Attach owner usernames (single batch query)
   const ownerMap = await batchLoadUsers(repos.map((r) => r.ownerId));
 
+  // lastActivity comes back as raw Unix seconds (the SQL subquery bypasses
+  // Drizzle's timestamp decoding). Normalize to ISO for the client.
   const result = repos.map((r) => ({
     ...r,
-    updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
+    updatedAt: new Date((r.updatedAt as unknown as number) * 1000).toISOString(),
     createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
     owner: ownerMap.get(r.ownerId) || "unknown",
   }));

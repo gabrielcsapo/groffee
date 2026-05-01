@@ -212,7 +212,10 @@ export const gitRefs = sqliteTable(
     commitOid: text("commit_oid").notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
-  (table) => [uniqueIndex("git_refs_repo_name_idx").on(table.repoId, table.name)],
+  (table) => [
+    uniqueIndex("git_refs_repo_name_idx").on(table.repoId, table.name),
+    index("git_refs_repo_updated_idx").on(table.repoId, table.updatedAt),
+  ],
 );
 
 // --- Git Commits (deduplicated by OID per repo) ---
