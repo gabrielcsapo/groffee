@@ -1,0 +1,56 @@
+# Database Schema
+
+Groffee uses SQLite via [Drizzle ORM](https://orm.drizzle.team/) and [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) in WAL mode. The schema is defined in `packages/db/src/schema/` and migrations are tracked in `packages/db/migrations/`.
+
+## Core Tables
+
+| Table           | Purpose                                                       |
+| --------------- | ------------------------------------------------------------- |
+| `users`         | Account records: username, email, hashed password, role.      |
+| `sessions`      | Browser session tokens, cookie-based auth.                    |
+| `ssh_keys`      | Public keys registered to a user, used for Git-over-SSH auth. |
+| `tokens`        | Personal access tokens for API and Git HTTP authentication.   |
+| `repositories`  | Repository metadata: owner, name, visibility, description.    |
+| `collaborators` | Per-repo permissions for users other than the owner.          |
+
+## Collaboration
+
+| Table           | Purpose                                                       |
+| --------------- | ------------------------------------------------------------- |
+| `pull_requests` | Source/target refs, state (open/merged/closed), author.       |
+| `issues`        | Issue title, body, state, author, labels.                     |
+| `comments`      | Polymorphic comments on PRs and issues.                       |
+| `edit_history`  | Append-only history of edits to PR/issue bodies and comments. |
+
+## Git Content Index
+
+The `repositories/` directory is the source of truth for git data. Tables in this group are a denormalized read index, populated on push:
+
+| Table          | Purpose                                                             |
+| -------------- | ------------------------------------------------------------------- |
+| `refs`         | Branch/tag refs per repo, pointing at a commit OID.                 |
+| `commits`      | Commit cache: OID, parent, author, committer, message.              |
+| `tree_entries` | Flattened tree entries for fast file listings without git-cat-file. |
+| `blobs`        | Blob metadata (size, mode, OID) — content is not stored here.       |
+
+## LFS
+
+| Table         | Purpose                                                                        |
+| ------------- | ------------------------------------------------------------------------------ |
+| `lfs_objects` | Content-addressed pointer records for objects under `<DATA_DIR>/lfs-objects/`. |
+
+## Audit & System
+
+| Table         | Purpose                                                               |
+| ------------- | --------------------------------------------------------------------- |
+| `audit_logs`  | Append-only record of security-relevant events (logins, key changes). |
+| `system_logs` | Operational logs surfaced in the admin UI.                            |
+
+## Migrations
+
+```bash
+pnpm db:generate    # diff schema → new migration file
+pnpm db:migrate     # apply pending migrations
+```
+
+Migrations are checked into git and applied in order at startup. There is no down-migration support — rollbacks are forward-only fixes.

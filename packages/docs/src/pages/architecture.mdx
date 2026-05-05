@@ -1,3 +1,5 @@
+import { MockDiffView } from "../components/mocks";
+
 # Architecture
 
 Groffee is a monorepo built with pnpm workspaces. The application runs as a single Node.js process that serves the web UI, API, and SSH server.
@@ -27,6 +29,12 @@ Git operations layer using **isomorphic-git** for reading operations and the Git
 ### @groffee/ui
 
 Shared UI component library and Tailwind theme. Router-agnostic components that work in both the main app and this documentation site.
+
+## What a Diff Looks Like
+
+Diffs and pull-request file views are rendered server-side from the git read layer. No JavaScript bundle ships the diff parsing logic — by the time the client sees the page, the unified diff is already laid out:
+
+<MockDiffView />
 
 ## Rendering Model
 

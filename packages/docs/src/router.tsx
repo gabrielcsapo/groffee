@@ -37,7 +37,12 @@ export const router = createBrowserRouter(
         },
         mdxRoute("getting-started", () => import("./pages/getting-started.mdx")),
         mdxRoute("architecture", () => import("./pages/architecture.mdx")),
+        mdxRoute("configuration", () => import("./pages/configuration.mdx")),
         mdxRoute("deployment", () => import("./pages/deployment.mdx")),
+        mdxRoute("cli", () => import("./pages/cli.mdx")),
+        mdxRoute("ssh", () => import("./pages/ssh.mdx")),
+        mdxRoute("git-lfs", () => import("./pages/git-lfs.mdx")),
+        mdxRoute("database", () => import("./pages/database.mdx")),
         {
           path: "api",
           lazy: () => import("./pages/api"),

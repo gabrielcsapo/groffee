@@ -1,0 +1,52 @@
+# Git LFS
+
+Groffee supports the Git Large File Storage (LFS) protocol over HTTP. LFS objects are stored content-addressed under `<DATA_DIR>/lfs-objects/`.
+
+## Server Setup
+
+LFS is enabled by default — there is nothing to configure on the server side beyond ensuring `DATA_DIR` is writable. The `git-lfs` system package only needs to be installed inside the deployment container so that operations like `git lfs install --system` succeed; the Groffee Node process implements the LFS batch and transfer protocols itself.
+
+## Client Setup
+
+Install Git LFS once per machine:
+
+```bash
+git lfs install
+```
+
+Then in a repository, declare which file patterns should be tracked:
+
+```bash
+git lfs track "*.psd"
+git lfs track "*.zip"
+git add .gitattributes
+git commit -m "track binary assets with LFS"
+```
+
+Push as normal — `git push` will upload LFS objects to Groffee in a separate batch request before the ref update.
+
+## Transport
+
+LFS uses the HTTP API for both upload and download, even when the repo itself was cloned over SSH. Authentication uses the same credentials as the regular HTTP smart protocol: a personal access token in place of a password.
+
+```bash
+git clone git@git.example.com:owner/repo.git
+# When pulling LFS objects:
+# Username: <your-username>
+# Password: <personal-access-token>
+```
+
+## Storage Layout
+
+```
+data/lfs-objects/
+└── <oid[0:2]>/
+    └── <oid[2:4]>/
+        └── <oid>          # raw object content
+```
+
+The first two levels are sharded by the SHA-256 OID prefix to keep directory sizes manageable.
+
+## Garbage Collection
+
+There is no automatic GC. Orphaned LFS objects (uploaded but never referenced) accumulate over time. Manual cleanup tooling is on the roadmap.

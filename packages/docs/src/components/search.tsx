@@ -8,14 +8,16 @@ interface SearchResult {
   title: string;
   path: string;
   section: string;
+  content: string;
   match: Record<string, string[]>;
+  terms: string[];
 }
 
 function useSearchIndex() {
   return useMemo(() => {
     const index = new MiniSearch({
       fields: ["title", "content"],
-      storeFields: ["title", "path", "section"],
+      storeFields: ["title", "path", "section", "content"],
       searchOptions: {
         boost: { title: 2 },
         prefix: true,
@@ -25,6 +27,33 @@ function useSearchIndex() {
     index.addAll(searchData);
     return index;
   }, []);
+}
+
+/** Slice ~120 chars around the first occurrence of any matched term. */
+function snippetFor(
+  content: string,
+  terms: string[],
+): { before: string; hit: string; after: string } | null {
+  if (!content || terms.length === 0) return null;
+  const lower = content.toLowerCase();
+  let earliestIdx = -1;
+  let hitTerm = "";
+  for (const term of terms) {
+    const idx = lower.indexOf(term.toLowerCase());
+    if (idx !== -1 && (earliestIdx === -1 || idx < earliestIdx)) {
+      earliestIdx = idx;
+      hitTerm = content.slice(idx, idx + term.length);
+    }
+  }
+  if (earliestIdx === -1) return null;
+  const radius = 60;
+  const start = Math.max(0, earliestIdx - radius);
+  const end = Math.min(content.length, earliestIdx + hitTerm.length + radius);
+  return {
+    before: (start > 0 ? "…" : "") + content.slice(start, earliestIdx),
+    hit: hitTerm,
+    after: content.slice(earliestIdx + hitTerm.length, end) + (end < content.length ? "…" : ""),
+  };
 }
 
 export function SearchButton({ onClick }: { onClick: () => void }) {
@@ -42,14 +71,9 @@ export function SearchButton({ onClick }: { onClick: () => void }) {
         />
       </svg>
       <span className="flex-1 text-left">Search docs...</span>
-      <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium text-text-secondary bg-surface-secondary border border-border rounded">
-        <span className="text-xs">
-          {typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
-            ? "\u2318"
-            : "Ctrl+"}
-        </span>
-        K
-      </kbd>
+      <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-medium text-text-secondary">
+        <kbd className="px-1.5 py-0.5 bg-surface-secondary border border-border rounded">/</kbd>
+      </span>
     </button>
   );
 }
@@ -150,36 +174,51 @@ export function SearchModal({ open, onClose }: { open: boolean; onClose: () => v
                 No results found for "{query}"
               </div>
             ) : (
-              results.map((result, i) => (
-                <button
-                  key={result.id}
-                  onClick={() => goTo(result)}
-                  onMouseEnter={() => setActiveIndex(i)}
-                  className={`w-full text-left px-4 py-2.5 flex items-center gap-3 ${
-                    i === activeIndex ? "bg-primary/10" : "hover:bg-surface-secondary"
-                  }`}
-                >
-                  <svg
-                    className="w-4 h-4 text-text-secondary shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+              results.map((result, i) => {
+                const snippet = snippetFor(result.content, result.terms ?? []);
+                return (
+                  <button
+                    key={result.id}
+                    onClick={() => goTo(result)}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    className={`w-full text-left px-4 py-2.5 flex items-start gap-3 ${
+                      i === activeIndex ? "bg-primary/10" : "hover:bg-surface-secondary"
+                    }`}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-text-primary truncate">
-                      {result.title}
+                    <svg
+                      className="w-4 h-4 text-text-secondary shrink-0 mt-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-text-primary truncate">
+                        {result.title}
+                      </div>
+                      {snippet ? (
+                        <div className="text-xs text-text-secondary mt-0.5 line-clamp-2">
+                          {snippet.before}
+                          <mark className="bg-primary/20 text-text-primary rounded-sm px-0.5">
+                            {snippet.hit}
+                          </mark>
+                          {snippet.after}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-text-secondary capitalize">
+                          {result.section}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-xs text-text-secondary capitalize">{result.section}</div>
-                  </div>
-                </button>
-              ))
+                  </button>
+                );
+              })
             )}
           </div>
         )}
@@ -202,6 +241,16 @@ export function Search() {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setOpen((o) => !o);
+        return;
+      }
+      // `/` opens search, but only when the user isn't already typing into an input.
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        const editable = target?.isContentEditable;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || editable) return;
+        e.preventDefault();
+        setOpen(true);
       }
     }
     document.addEventListener("keydown", handleKeyDown);

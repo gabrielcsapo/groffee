@@ -24,15 +24,16 @@ export default function Root() {
       <body className="flex flex-col min-h-screen">
         <ScrollRestoration />
         <header className="bg-header-bg sticky top-0 z-30 pb-px shadow-sm">
-          <nav className="max-w-[1280px] mx-auto px-4 h-16 flex items-center gap-4">
+          <nav className="max-w-[1280px] mx-auto px-4 h-16 flex items-center gap-6">
             <Link
               to="/"
-              className="text-white hover:no-underline flex items-center shrink-0 hover:opacity-80 transition-opacity"
+              className="text-white hover:no-underline flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity"
             >
               <GroffeeLogo size={32} className="text-white" />
+              <span className="hidden sm:inline font-semibold text-sm">Groffee</span>
             </Link>
             <HeaderSearch />
-            <div className="flex items-center gap-1">
+            <div className="ml-auto flex items-center gap-1">
               <Link
                 to="/explore"
                 className="text-white/70 text-xs font-medium hover:text-white hover:no-underline px-2 py-1.5 rounded-md hover:bg-white/10 transition-colors"
@@ -43,9 +44,10 @@ export default function Root() {
                 to="/docs"
                 className="text-white/70 text-xs font-medium hover:text-white hover:no-underline px-2 py-1.5 rounded-md hover:bg-white/10 transition-colors"
               >
-                API
+                Docs
               </Link>
             </div>
+            <div className="h-6 w-px bg-white/10" aria-hidden="true" />
             <UserNav />
           </nav>
         </header>
@@ -67,7 +69,7 @@ export default function Root() {
                 to="/docs"
                 className="text-text-secondary hover:text-text-primary hover:no-underline"
               >
-                API Docs
+                Docs
               </Link>
               <span>Self-hosted git platform</span>
             </div>

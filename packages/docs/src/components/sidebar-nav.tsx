@@ -1,24 +1,5 @@
 import { NavLink } from "react-router";
-
-interface NavSection {
-  title: string;
-  items: { label: string; to: string }[];
-}
-
-const sections: NavSection[] = [
-  {
-    title: "Guide",
-    items: [
-      { label: "Getting Started", to: "/docs/getting-started" },
-      { label: "Architecture", to: "/docs/architecture" },
-      { label: "Deployment", to: "/docs/deployment" },
-    ],
-  },
-  {
-    title: "Reference",
-    items: [{ label: "API Documentation", to: "/docs/api" }],
-  },
-];
+import { sections } from "../nav-data";
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   return (

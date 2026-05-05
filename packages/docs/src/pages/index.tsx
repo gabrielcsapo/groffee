@@ -1,176 +1,43 @@
-import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { GroffeeLogo, RepoNav, BranchSwitcher, Badge, CloneUrl } from "@groffee/ui";
+import { GroffeeLogo } from "@groffee/ui";
+import { MockRepoPreview, MockIssueList } from "../components/mocks";
 
-function FileIcon({ isDir }: { isDir?: boolean }) {
-  if (isDir) {
-    return (
-      <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      className="w-4 h-4 text-text-secondary"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-      />
-    </svg>
-  );
+interface Comparison {
+  groffee: string;
+  others: string;
 }
 
-const mockFiles = [
-  { name: "packages", isDir: true, message: "feat: add git LFS support", time: "2 days ago" },
-  { name: "scripts", isDir: true, message: "chore: update build scripts", time: "5 days ago" },
-  { name: ".gitignore", isDir: false, message: "chore: ignore data directory", time: "1 week ago" },
+const comparisons: Comparison[] = [
   {
-    name: "Dockerfile",
-    isDir: false,
-    message: "feat: multi-stage Docker build",
-    time: "3 days ago",
+    groffee: "A single Node process serves the web app, API, Git smart-HTTP, and SSH.",
+    others: "Multiple services (web, sidecar, queue, SSH daemon) wired together with config.",
   },
   {
-    name: "package.json",
-    isDir: false,
-    message: "chore: updates to latest deps",
-    time: "4 days ago",
+    groffee: "Bring your own host. SQLite + a directory of bare repos is the entire data layer.",
+    others: "Database server, object store, and external session/cache services to run separately.",
   },
   {
-    name: "README.md",
-    isDir: false,
-    message: "docs: update installation guide",
-    time: "1 week ago",
+    groffee:
+      "Built on React Server Components — pages render server-side from the git layer directly.",
+    others: "Heavy client bundles, REST round-trips, or template engines that haven't aged well.",
   },
   {
-    name: "tsconfig.base.json",
-    isDir: false,
-    message: "fix: strict mode for shared config",
-    time: "2 weeks ago",
+    groffee: "No cloud account, no telemetry, no licensing dance. It's MIT-style open source.",
+    others: "Vendor lock-in, paid seats, or telemetry baked into the binary.",
   },
 ];
-
-/** Wraps content in a macOS-style browser chrome frame */
-function BrowserChrome({ url, children }: { url: string; children: ReactNode }) {
-  return (
-    <div className="rounded-xl border border-border overflow-hidden shadow-lg bg-surface">
-      {/* Title bar */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-surface-secondary border-b border-border">
-        {/* Traffic lights */}
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-          <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
-          <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-        </div>
-        {/* URL bar */}
-        <div className="flex-1 flex justify-center">
-          <div className="flex items-center gap-2 bg-surface rounded-md border border-border px-3 py-1 max-w-md w-full">
-            <svg
-              className="w-3 h-3 text-text-secondary shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-              />
-            </svg>
-            <span className="text-xs text-text-secondary truncate">{url}</span>
-          </div>
-        </div>
-        {/* Spacer to balance traffic lights */}
-        <div className="w-[54px]" />
-      </div>
-      {/* Browser content */}
-      <div className="pointer-events-none select-none">{children}</div>
-    </div>
-  );
-}
-
-function MockRepoPreview() {
-  return (
-    <BrowserChrome url="groffee.example.com/gabrielcsapo/groffee">
-      {/* App header bar */}
-      <div className="bg-header-bg px-4 h-10 flex items-center gap-2">
-        <GroffeeLogo size={18} className="text-white" />
-        <span className="text-white text-xs font-semibold">Groffee</span>
-      </div>
-
-      <div className="p-4">
-        {/* Repo header */}
-        <div className="mb-3">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm text-text-secondary">gabrielcsapo</span>
-            <span className="text-text-secondary">/</span>
-            <span className="text-sm font-semibold text-primary">groffee</span>
-            <Badge variant="public">Public</Badge>
-          </div>
-          <p className="text-xs text-text-secondary mb-3">
-            A self-hosted Git platform built with React 19, Vite, and modern web technologies.
-          </p>
-          <RepoNav
-            owner="gabrielcsapo"
-            repo="groffee"
-            currentPath="/gabrielcsapo/groffee"
-            openIssueCount={3}
-            openPrCount={1}
-          />
-        </div>
-
-        {/* Branch & clone row */}
-        <div className="py-3 border-b border-border flex items-center gap-3 flex-wrap mb-0">
-          <BranchSwitcher
-            branches={[{ name: "main" }, { name: "develop" }, { name: "feat/lfs-support" }]}
-            currentRef="main"
-            onBranchChange={() => {}}
-          />
-          <div className="flex-1 min-w-0 max-w-xs ml-auto">
-            <CloneUrl path="/gabrielcsapo/groffee.git" />
-          </div>
-        </div>
-
-        {/* File tree */}
-        <div className="border border-border rounded-md overflow-hidden mt-3">
-          <div className="divide-y divide-border">
-            {mockFiles.map((file) => (
-              <div key={file.name} className="flex items-center gap-3 px-4 py-2 text-sm">
-                <FileIcon isDir={file.isDir} />
-                <span
-                  className={`shrink-0 ${file.isDir ? "text-primary font-medium" : "text-text-primary"}`}
-                >
-                  {file.name}
-                </span>
-                <span className="text-text-secondary text-xs truncate flex-1">{file.message}</span>
-                <span className="text-text-secondary text-xs shrink-0">{file.time}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </BrowserChrome>
-  );
-}
 
 export function Component() {
   return (
     <div className="py-12 not-prose">
-      {/* Hero */}
       <div className="text-center mb-16">
         <GroffeeLogo size={72} className="mx-auto mb-6 text-text-primary" />
         <h1 className="text-4xl font-bold text-text-primary mb-4">Groffee</h1>
-        <p className="text-lg text-text-secondary mb-8 max-w-2xl mx-auto leading-relaxed">
-          A self-hosted Git platform built with React 19, Vite, and modern web technologies. Manage
-          repositories, issues, and pull requests on your own infrastructure.
+        <p className="text-lg text-text-secondary mb-2 max-w-2xl mx-auto leading-relaxed">
+          The best way to deal with git is with a little bit of coffee.
+        </p>
+        <p className="text-sm text-text-secondary mb-8 max-w-2xl mx-auto">
+          Self-hosted git platform. Built with React 19, Vite, and modern web technologies.
         </p>
         <div className="flex items-center justify-center gap-4">
           <Link to="/docs/getting-started" className="btn-primary hover:no-underline">
@@ -182,7 +49,6 @@ export function Component() {
         </div>
       </div>
 
-      {/* Mock app preview */}
       <div className="mb-16">
         <h2 className="text-lg font-semibold text-text-primary mb-2 text-center">
           See it in action
@@ -195,7 +61,35 @@ export function Component() {
         </div>
       </div>
 
-      {/* Features grid */}
+      <div className="mb-16">
+        <h2 className="text-lg font-semibold text-text-primary mb-2 text-center">Why Groffee?</h2>
+        <p className="text-sm text-text-secondary mb-6 text-center max-w-2xl mx-auto">
+          Self-hosted git platforms tend to either bury you in operational complexity or lock you
+          into a SaaS bill. Groffee picks a different lane.
+        </p>
+        <div className="max-w-3xl mx-auto card divide-y divide-border">
+          {comparisons.map((c, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border"
+            >
+              <div className="p-4">
+                <div className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">
+                  Groffee
+                </div>
+                <p className="text-sm text-text-primary leading-relaxed">{c.groffee}</p>
+              </div>
+              <div className="p-4 bg-surface-secondary/30">
+                <div className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                  Typical alternatives
+                </div>
+                <p className="text-sm text-text-secondary leading-relaxed">{c.others}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
         <div className="card p-6">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
@@ -264,7 +158,18 @@ export function Component() {
         </div>
       </div>
 
-      {/* Quick links */}
+      <div className="mb-16">
+        <h2 className="text-lg font-semibold text-text-primary mb-2 text-center">
+          Issues, the way you'd expect
+        </h2>
+        <p className="text-sm text-text-secondary mb-6 text-center">
+          Tracking, labels, and comments — without a separate service.
+        </p>
+        <div className="max-w-3xl mx-auto">
+          <MockIssueList />
+        </div>
+      </div>
+
       <div className="border-t border-border pt-8">
         <h2 className="text-lg font-semibold text-text-primary mb-4">Quick Links</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

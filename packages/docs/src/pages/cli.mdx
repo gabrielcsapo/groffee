@@ -1,0 +1,50 @@
+# CLI & Scripts
+
+Groffee is a Node application — there is no separate `groffee` binary. Operations are exposed as `pnpm` scripts at the monorepo root.
+
+## Common Scripts
+
+```bash
+pnpm dev              # Start the dev server (web + API + SSH on a single port)
+pnpm dev:docs         # Start the documentation site on port 3001
+pnpm build            # Build all packages for production
+pnpm start            # Build and run production server
+pnpm typecheck        # Type-check the entire workspace
+pnpm lint             # Run oxlint
+pnpm fmt              # Format with oxfmt
+pnpm test             # Run Playwright e2e tests
+```
+
+## Database
+
+Drizzle Kit is used for schema migrations.
+
+```bash
+pnpm db:generate      # Generate a new migration from schema changes
+pnpm db:migrate       # Apply pending migrations
+```
+
+Migrations live in `packages/db/migrations/` and are versioned in git.
+
+## Admin Operations
+
+```bash
+pnpm seed             # Seed the database with sample data (dev only)
+pnpm make-admin       # Promote an existing user to admin
+```
+
+`make-admin` takes a username as an argument:
+
+```bash
+pnpm make-admin alice
+```
+
+## Filtered Builds
+
+The monorepo uses pnpm workspaces. To run scripts in a single package:
+
+```bash
+pnpm --filter @groffee/web dev
+pnpm --filter @groffee/db generate
+pnpm --filter @groffee/docs build
+```

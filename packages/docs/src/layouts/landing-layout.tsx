@@ -1,6 +1,7 @@
 import { Link, Outlet } from "react-router";
 import { GroffeeLogo } from "@groffee/ui";
 import { ThemeToggle } from "../components/theme-toggle";
+import { GitHubLink } from "../components/github-link";
 
 export function LandingLayout() {
   return (
@@ -22,8 +23,9 @@ export function LandingLayout() {
               to="/docs/api"
               className="text-white/70 text-xs font-medium hover:text-white hover:no-underline px-2 py-1.5 rounded-md hover:bg-white/10"
             >
-              API
+              API Reference
             </Link>
+            <GitHubLink />
             <ThemeToggle />
           </div>
         </div>

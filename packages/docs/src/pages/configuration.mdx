@@ -1,0 +1,34 @@
+# Configuration
+
+Groffee is configured through environment variables. There is no separate config file — all settings are read from the process environment at startup.
+
+## Environment Variables
+
+| Variable       | Default                 | Description                                                                      |
+| -------------- | ----------------------- | -------------------------------------------------------------------------------- |
+| `PORT`         | `3000`                  | HTTP server port.                                                                |
+| `SSH_PORT`     | `2223`                  | SSH server port for Git-over-SSH.                                                |
+| `EXTERNAL_URL` | `http://localhost:3000` | Public-facing URL for clone URLs and links shown in the UI.                      |
+| `DATA_DIR`     | `./data`                | Directory for the SQLite database, repositories, and LFS objects.                |
+| `NODE_ENV`     | `development`           | Set to `production` in deployed environments to enable build-time optimizations. |
+
+## Data Directory Layout
+
+`DATA_DIR` (default `./data`) holds all runtime state:
+
+```
+data/
+├── groffee.db         # SQLite database (with WAL companion files)
+├── repositories/      # Bare Git repositories, organized by owner/repo.git
+└── lfs-objects/       # Git LFS object storage, content-addressed
+```
+
+This directory is the only thing you need to back up. The database is in WAL mode, so a hot file copy is safe but not atomic — prefer `sqlite3 groffee.db ".backup data/backup.db"` for a consistent snapshot, then archive the `repositories/` and `lfs-objects/` trees.
+
+## SSH Server
+
+The SSH server runs on `SSH_PORT` and authenticates using SSH keys registered through the web UI. The host key is generated on first boot and stored at `<DATA_DIR>/ssh-host-key`. To rotate it, stop the server, delete the file, and restart — clients will see a host-key change warning the next time they connect.
+
+## Reverse Proxy Considerations
+
+When running behind a reverse proxy, set `EXTERNAL_URL` to the public origin (e.g. `https://git.example.com`). Clone URLs and absolute links in the UI use this value. See the [Deployment](/docs/deployment) guide for nginx examples.

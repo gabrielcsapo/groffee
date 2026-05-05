@@ -376,7 +376,10 @@ git push -u origin main`}
 
             {/* README */}
             {readmeHtml && readmeFileName && (
-              <div className="border border-border rounded-lg overflow-hidden bg-surface mt-4">
+              <div
+                id="readme"
+                className="border border-border rounded-lg overflow-hidden bg-surface mt-4 scroll-mt-20"
+              >
                 <div className="flex items-center gap-2 px-4 py-2 bg-surface-secondary border-b border-border">
                   <svg
                     className="w-4 h-4 text-text-secondary"

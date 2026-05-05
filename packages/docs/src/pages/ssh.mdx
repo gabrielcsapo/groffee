@@ -1,0 +1,52 @@
+# SSH
+
+Groffee includes a built-in SSH server for Git operations. It runs in the same Node process as the web server.
+
+## Configuration
+
+The SSH server listens on `SSH_PORT` (default `2223`). The host key is generated on first boot and persisted at `<DATA_DIR>/ssh-host-key`. See [Configuration](/docs/configuration) for environment variables.
+
+## Adding a Key
+
+Users add SSH keys through the web UI under **Settings → SSH Keys**. The public key is matched against incoming connections — the username portion of the URL (`git@host:owner/repo.git`) is informational only; authentication is by key fingerprint.
+
+## Cloning Over SSH
+
+```bash
+git clone ssh://git@git.example.com:2223/owner/repo.git
+```
+
+Or with a `~/.ssh/config` entry:
+
+```text
+Host git.example.com
+  Port 2223
+  User git
+  IdentityFile ~/.ssh/id_ed25519
+```
+
+Then:
+
+```bash
+git clone git@git.example.com:owner/repo.git
+```
+
+## Supported Operations
+
+- `git-receive-pack` (push)
+- `git-upload-pack` (fetch / clone)
+- `git-upload-archive` is not supported
+
+LFS over SSH is not supported. LFS uploads and downloads always use the HTTP API regardless of how the rest of the repo was cloned. See [Git LFS](/docs/git-lfs).
+
+## Host-key Rotation
+
+To rotate the host key:
+
+```bash
+# Stop the server, then:
+rm <DATA_DIR>/ssh-host-key
+# Restart — a fresh key is generated.
+```
+
+Clients will see a host-key change warning on next connect; they need to remove the old entry from `~/.ssh/known_hosts`.
