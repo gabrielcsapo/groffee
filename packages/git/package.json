@@ -10,10 +10,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "isomorphic-git": "^1.37.4"
+    "isomorphic-git": "^1.37.6"
   },
   "devDependencies": {
-    "@types/node": "^25.5.2",
-    "typescript": "^6.0.2"
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
   }
 }
