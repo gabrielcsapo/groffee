@@ -21,8 +21,10 @@ import {
   pagesDeployments,
   repositories,
   users,
+  repoSecrets,
 } from "@groffee/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
+import { decryptSecret } from "./secret-crypto.js";
 import {
   PIPELINE_WORKSPACES_DIR,
   PIPELINE_LOGS_DIR,
@@ -31,8 +33,8 @@ import {
   PAGES_MAX_DEPLOYMENTS,
   DATA_DIR,
 } from "./paths.js";
-import type { JobConfig, PipelineConfig } from "./pipeline-config.js";
-import { resolveJobOrder } from "./pipeline-config.js";
+import type { JobConfig, PipelineConfig, MatrixValues } from "./pipeline-config.js";
+import { resolveJobOrder, interpolateTemplate } from "./pipeline-config.js";
 import { resolveDiskPath } from "./paths.js";
 import { readFileSync } from "node:fs";
 import crypto from "node:crypto";
@@ -182,65 +184,113 @@ export async function executeRun(runId: string, signal: AbortSignal): Promise<vo
     const jobOrder = resolveJobOrder(config.jobs);
     let runFailed = false;
 
+    // Group DB rows by jobKey. With matrix expansion, one jobKey may map to
+    // multiple rows (one per cell). The base name (jobConfig.name || jobKey)
+    // matches the `name` prefix on each cell row; matrix rows have
+    // ` (k=v, ...)` appended.
+    const rowsByJobKey = new Map<string, typeof jobs>();
+    for (const jobKey of jobOrder) {
+      const jc = config.jobs[jobKey];
+      const baseName = jc.name || jobKey;
+      const matched = jobs.filter((j) => j.name === baseName || j.name.startsWith(`${baseName} (`));
+      rowsByJobKey.set(jobKey, matched);
+    }
+
     for (const jobKey of jobOrder) {
       if (signal.aborted) {
-        await markRunCancelled(runId);
+        await markRunStopped(runId, abortStatus(signal));
         return;
       }
 
       const jobConfig = config.jobs[jobKey];
-      const jobRecord = jobs.find((j) => j.name === (jobConfig.name || jobKey));
-      if (!jobRecord) continue;
+      const cellRows = rowsByJobKey.get(jobKey) || [];
+      if (cellRows.length === 0) continue;
 
-      // Check if dependencies succeeded
+      // Check if dependencies succeeded — `needs: build` is satisfied only
+      // when EVERY cell of `build` is in `success`. If any cell of a needed
+      // job didn't succeed, all cells of this job are skipped.
+      let depsOk = true;
       if (jobConfig.needs) {
-        const depJobs = jobs.filter((j) =>
-          jobConfig.needs!.some((n) => j.name === (config.jobs[n]?.name || n)),
-        );
-        const allSucceeded = depJobs.every((j) => j.status === "success");
-        if (!allSucceeded) {
+        for (const depKey of jobConfig.needs) {
+          const depRows = rowsByJobKey.get(depKey) || [];
+          if (depRows.length === 0 || !depRows.every((j) => j.status === "success")) {
+            depsOk = false;
+            break;
+          }
+        }
+      }
+
+      for (const jobRecord of cellRows) {
+        // Already terminal (e.g. partial-rerun carve-forward) — count toward
+        // the run's overall failure flag but don't re-execute.
+        if (
+          jobRecord.status === "success" ||
+          jobRecord.status === "skipped" ||
+          jobRecord.status === "cancelled"
+        ) {
+          if (jobRecord.status !== "success") runFailed = true;
+          continue;
+        }
+
+        if (!depsOk) {
           await db
             .update(pipelineJobs)
             .set({ status: "skipped", finishedAt: new Date() })
             .where(eq(pipelineJobs.id, jobRecord.id));
+          // Reflect in our in-memory copy so downstream jobs see "skipped"
+          // and treat this job as failed for needs resolution.
+          jobRecord.status = "skipped";
           continue;
         }
-      }
 
-      // Execute job
-      const jobSuccess = await executeJob(
-        jobRecord.id,
-        jobKey,
-        jobConfig,
-        (config.env || {}) as Record<string, string>,
-        workspaceDir,
-        logsDir,
-        runId,
-        signal,
-        owner?.username || "unknown",
-        repo.name,
-        run.commitOid,
-      );
+        // Decode matrix values for this cell (null on non-matrix jobs).
+        let matrixValues: MatrixValues | null = null;
+        if (jobRecord.matrixValues) {
+          try {
+            matrixValues = JSON.parse(jobRecord.matrixValues) as MatrixValues;
+          } catch {
+            matrixValues = null;
+          }
+        }
 
-      // Reload job status
-      const [updatedJob] = await db
-        .select()
-        .from(pipelineJobs)
-        .where(eq(pipelineJobs.id, jobRecord.id))
-        .limit(1);
-      if (updatedJob) {
-        const idx = jobs.findIndex((j) => j.id === jobRecord.id);
-        if (idx >= 0) jobs[idx] = updatedJob;
-      }
+        const jobSuccess = await executeJob(
+          jobRecord.id,
+          jobKey,
+          jobConfig,
+          (config.env || {}) as Record<string, string>,
+          workspaceDir,
+          logsDir,
+          runId,
+          signal,
+          owner?.username || "unknown",
+          repo.name,
+          run.commitOid,
+          repo.id,
+          matrixValues,
+        );
 
-      if (!jobSuccess) {
-        runFailed = true;
-        // Skip remaining jobs that depend on this one (they'll be skipped in the loop)
+        // Reload job status
+        const [updatedJob] = await db
+          .select()
+          .from(pipelineJobs)
+          .where(eq(pipelineJobs.id, jobRecord.id))
+          .limit(1);
+        if (updatedJob) {
+          const idx = jobs.findIndex((j) => j.id === jobRecord.id);
+          if (idx >= 0) jobs[idx] = updatedJob;
+          // Keep grouped view in sync too.
+          const groupIdx = cellRows.findIndex((j) => j.id === jobRecord.id);
+          if (groupIdx >= 0) cellRows[groupIdx] = updatedJob;
+        }
+
+        if (!jobSuccess) {
+          runFailed = true;
+        }
       }
     }
 
     // Mark run complete
-    const finalStatus = signal.aborted ? "cancelled" : runFailed ? "failure" : "success";
+    const finalStatus = signal.aborted ? abortStatus(signal) : runFailed ? "failure" : "success";
     await db
       .update(pipelineRuns)
       .set({ status: finalStatus, finishedAt: new Date() })
@@ -263,6 +313,57 @@ export async function executeRun(runId: string, signal: AbortSignal): Promise<vo
   }
 }
 
+/**
+ * Load + decrypt all repo-scoped secrets, returning a name→plaintext map plus
+ * the IDs we read so the caller can bump `lastUsedAt` in a single batch.
+ *
+ * Decryption errors do NOT propagate — a corrupted secret skips that single
+ * entry rather than failing the whole job. We log a warning so it shows up in
+ * server logs (NOT the job log; secret names are sensitive enough that we
+ * don't want them in user-visible build output even on error).
+ */
+async function loadRepoSecrets(
+  repoId: string,
+): Promise<{ env: Record<string, string>; ids: string[] }> {
+  const rows = await db
+    .select({
+      id: repoSecrets.id,
+      name: repoSecrets.name,
+      ciphertext: repoSecrets.ciphertext,
+    })
+    .from(repoSecrets)
+    .where(eq(repoSecrets.repoId, repoId));
+
+  const env: Record<string, string> = {};
+  const ids: string[] = [];
+  for (const row of rows) {
+    try {
+      // The DB column is `blob({mode:"buffer"})` so we get a Buffer back.
+      env[row.name] = decryptSecret(row.ciphertext as Buffer);
+      ids.push(row.id);
+    } catch (err) {
+      console.warn(
+        `[pipelines] failed to decrypt secret ${row.name} for repo ${repoId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+  return { env, ids };
+}
+
+async function bumpSecretLastUsed(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    await db
+      .update(repoSecrets)
+      .set({ lastUsedAt: new Date() })
+      .where(inArray(repoSecrets.id, ids));
+  } catch (err) {
+    console.warn("[pipelines] failed to bump secret lastUsedAt:", err);
+  }
+}
+
 async function executeJob(
   jobId: string,
   jobKey: string,
@@ -275,7 +376,15 @@ async function executeJob(
   ownerUsername: string,
   repoName: string,
   commitOid: string,
+  repoId: string,
+  matrixValues: MatrixValues | null,
 ): Promise<boolean> {
+  // Resolve matrix template substitutions for the job's image (steps are
+  // resolved per-step below since each step has its own `command`).
+  const resolvedImage =
+    matrixValues && jobConfig.image
+      ? interpolateTemplate(jobConfig.image, { matrix: matrixValues })
+      : jobConfig.image;
   const jobLogsDir = resolve(logsDir, jobId);
   mkdirSync(jobLogsDir, { recursive: true });
 
@@ -283,6 +392,12 @@ async function executeJob(
     .update(pipelineJobs)
     .set({ status: "running", startedAt: new Date() })
     .where(eq(pipelineJobs.id, jobId));
+
+  // Load + decrypt repo secrets ONCE per job. We never log values, and the
+  // `secretIds` list lets us bump lastUsedAt in a single update at the end.
+  // SECURITY: The plaintext map lives only in this function's stack; it is
+  // passed to docker exec/run via -e but never written to a step log file.
+  const { env: secretEnv, ids: secretIds } = await loadRepoSecrets(repoId);
 
   // Load steps
   const steps = await db
@@ -297,14 +412,22 @@ async function executeJob(
   // for the whole job so state (installed binaries, env modifications) persists
   // across steps. Each step then runs via `docker exec` in this container.
   let jobContainerName: string | undefined;
-  const jobUsesDocker = jobConfig.image && isDockerAvailable();
+  const jobUsesDocker = resolvedImage && isDockerAvailable();
   if (jobUsesDocker) {
     jobContainerName = `groffee-job-${jobId.replace(/-/g, "").slice(0, 24)}`;
     const startResult = await startJobContainer(
       jobContainerName,
-      jobConfig.image!,
+      resolvedImage!,
       workspaceDir,
-      { ...pipelineEnv, ...((jobConfig.env || {}) as Record<string, string>) },
+      // Order matters: secrets first so a colliding pipeline.env / job.env
+      // wins and we never accidentally leak a secret value into a non-secret
+      // env var name. (Also: pipeline.env is committed in YAML, so a name
+      // collision is the user's signal that the YAML overrides the secret.)
+      {
+        ...secretEnv,
+        ...pipelineEnv,
+        ...((jobConfig.env || {}) as Record<string, string>),
+      },
       runId,
       commitOid,
       ownerUsername,
@@ -380,11 +503,20 @@ async function executeJob(
           logFullPath,
         );
       } else if (step.command) {
-        // Regular shell command (optionally in Docker container)
+        // Regular shell command (optionally in Docker container).
+        // Apply matrix substitutions to the command text so e.g.
+        // `npm run test --node=${{ matrix.node }}` resolves per-cell.
+        const resolvedCommand = matrixValues
+          ? interpolateTemplate(step.command, { matrix: matrixValues })
+          : step.command;
         stepSuccess = await executeStep(
-          step.command,
+          resolvedCommand,
           workspaceDir,
-          { ...pipelineEnv, ...((jobConfig.env || {}) as Record<string, string>) },
+          {
+            ...secretEnv,
+            ...pipelineEnv,
+            ...((jobConfig.env || {}) as Record<string, string>),
+          },
           logFullPath,
           jobConfig.timeout * 1000,
           signal,
@@ -437,6 +569,9 @@ async function executeJob(
       finishedAt: new Date(),
     })
     .where(eq(pipelineJobs.id, jobId));
+
+  // Single batched update so we don't fan out into N writes per job.
+  await bumpSecretLastUsed(secretIds);
 
   return jobSuccess;
 }
@@ -516,10 +651,30 @@ async function startJobContainer(
     });
     return { success: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    appendLog(setupLogPath, `Failed: ${message}\n`);
-    return { success: false, error: message };
+    // Node's execFileSync error message includes the full argv (which contains
+    // -e KEY=VAL entries — i.e. plaintext secrets). Scrub it before writing
+    // to the user-visible log AND before returning to the caller.
+    const raw = err instanceof Error ? err.message : String(err);
+    const scrubbed = scrubDockerArgsFromMessage(raw);
+    appendLog(setupLogPath, `Failed: ${scrubbed}\n`);
+    return { success: false, error: scrubbed };
   }
+}
+
+/**
+ * Best-effort sanitizer for error messages produced by Node's `execFileSync`
+ * when invoking docker. Removes any `-e NAME=VALUE` arg, replacing it with
+ * `-e NAME=***`. Also removes anything after the start of `tail -f`/the image
+ * argv tail, since the error formatter sometimes splices the full argv into
+ * the message.
+ *
+ * This is defense-in-depth — the calling code already avoids logging the env
+ * map directly, but Node sometimes leaks it via error.message.
+ */
+function scrubDockerArgsFromMessage(message: string): string {
+  return message
+    .replace(/(-e\s+)([A-Za-z_][A-Za-z0-9_]*)=([^\s'"\\]*)/g, "$1$2=***")
+    .replace(/(--env\s+)([A-Za-z_][A-Za-z0-9_]*)=([^\s'"\\]*)/g, "$1$2=***");
 }
 
 function executeStep(
@@ -598,13 +753,9 @@ function executeStep(
     };
     signal.addEventListener("abort", onAbort, { once: true });
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      appendFileSync(logPath, chunk);
-    });
-
-    child.stderr?.on("data", (chunk: Buffer) => {
-      appendFileSync(logPath, chunk);
-    });
+    const writeLine = createLinePrefixer(logPath);
+    child.stdout?.on("data", writeLine);
+    child.stderr?.on("data", writeLine);
 
     child.on("close", (code) => {
       signal.removeEventListener("abort", onAbort);
@@ -720,7 +871,7 @@ async function collectArtifacts(
   runId: string,
   jobId: string,
   _jobKey: string,
-  uploads: Array<{ name: string; path: string }>,
+  uploads: Array<{ name: string; path: string; retention_days?: number }>,
   workspaceDir: string,
 ): Promise<void> {
   for (const upload of uploads) {
@@ -742,6 +893,12 @@ async function collectArtifacts(
       // Calculate total size
       const totalSize = getDirSize(artifactDir);
 
+      const createdAt = new Date();
+      const retentionUntil =
+        typeof upload.retention_days === "number" && upload.retention_days > 0
+          ? new Date(createdAt.getTime() + upload.retention_days * 86_400_000)
+          : null;
+
       await db.insert(pipelineArtifacts).values({
         id: crypto.randomUUID(),
         runId,
@@ -749,7 +906,8 @@ async function collectArtifacts(
         name: upload.name,
         diskPath: relative(PIPELINE_ARTIFACTS_DIR, artifactDir),
         sizeBytes: totalSize,
-        createdAt: new Date(),
+        retentionUntil,
+        createdAt,
       });
     } catch (err) {
       console.error(`Failed to collect artifact "${upload.name}":`, err);
@@ -775,19 +933,85 @@ function getDirSize(dirPath: string): number {
   return totalSize;
 }
 
+/**
+ * Append text to a log file with an ISO-8601 millisecond timestamp prefix on
+ * each line. Format: `2026-05-05T19:34:21.123Z\tcontent\n`.
+ *
+ * The READ side splits on the first TAB, so the content can contain any
+ * bytes (ANSI escapes, more tabs, etc.) without ambiguity.
+ */
 function appendLog(logPath: string, message: string): void {
   try {
     mkdirSync(resolve(logPath, ".."), { recursive: true });
-    appendFileSync(logPath, message);
+    appendFileSync(logPath, prefixTimestamps(message));
   } catch {
     // Best effort
   }
 }
 
-async function markRunCancelled(runId: string): Promise<void> {
+/**
+ * Per-stream line buffer for `executeStep`. The runner gets `data` chunks
+ * that may split a line in the middle, so we hold the partial tail until a
+ * `\n` arrives. Multiple chunks delivered in the same tick still get one
+ * timestamp per line (at flush time), which is good enough for ms accuracy.
+ */
+function createLinePrefixer(logPath: string): (chunk: Buffer) => void {
+  let pending = "";
+  return (chunk: Buffer) => {
+    pending += chunk.toString("utf-8");
+    let nl: number;
+    let out = "";
+    while ((nl = pending.indexOf("\n")) !== -1) {
+      const line = pending.slice(0, nl);
+      pending = pending.slice(nl + 1);
+      out += `${new Date().toISOString()}\t${line}\n`;
+    }
+    if (out.length > 0) {
+      try {
+        appendFileSync(logPath, out);
+      } catch {
+        // Best effort
+      }
+    }
+  };
+}
+
+function prefixTimestamps(message: string): string {
+  if (!message) return "";
+  // Split keeping behavior consistent with line-prefixer: complete lines end
+  // in `\n` and get a prefix; a trailing partial line (no `\n`) also gets a
+  // prefix and a synthetic newline so the on-disk format stays uniform.
+  const ts = new Date().toISOString();
+  const out: string[] = [];
+  let start = 0;
+  for (let i = 0; i < message.length; i++) {
+    if (message.charCodeAt(i) === 10 /* \n */) {
+      out.push(`${ts}\t${message.slice(start, i)}\n`);
+      start = i + 1;
+    }
+  }
+  if (start < message.length) {
+    out.push(`${ts}\t${message.slice(start)}\n`);
+  }
+  return out.join("");
+}
+
+async function markRunStopped(runId: string, status: "cancelled" | "timed_out"): Promise<void> {
   const now = new Date();
-  await db
-    .update(pipelineRuns)
-    .set({ status: "cancelled", finishedAt: now })
-    .where(eq(pipelineRuns.id, runId));
+  await db.update(pipelineRuns).set({ status, finishedAt: now }).where(eq(pipelineRuns.id, runId));
+}
+
+/**
+ * Map an aborted signal back to a terminal run status.
+ *
+ * The queue aborts with `new Error("timeout")` when the run-level deadline
+ * fires; user/concurrency cancels use the default reason. We branch on the
+ * reason message rather than the reason identity since AbortController.abort()
+ * wraps non-Error reasons.
+ */
+function abortStatus(signal: AbortSignal): "cancelled" | "timed_out" {
+  const reason = signal.reason;
+  if (reason instanceof Error && reason.message === "timeout") return "timed_out";
+  if (typeof reason === "string" && reason === "timeout") return "timed_out";
+  return "cancelled";
 }

@@ -16,6 +16,15 @@ export interface DiffHunk {
   newStart: number;
   newLines: number;
   lines: string[];
+  /**
+   * Optional, parallel to `lines` — syntax-highlighted HTML for the
+   * portion of each line AFTER the leading +/-/space prefix character.
+   * Populated by the web layer (Shiki); the git package itself never
+   * sets this. `null` entries mean the line was not highlighted (e.g.
+   * unsupported language, oversized diff). Length, when present,
+   * always equals `lines.length`.
+   */
+  highlightedLines?: (string | null)[];
 }
 
 export async function getDiff(

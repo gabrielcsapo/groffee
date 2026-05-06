@@ -1,9 +1,31 @@
 import { getIssues } from "../lib/server/issues";
 import { IssuesList } from "./issues.client";
 
-export default async function Issues({ params }: { params?: Record<string, string> }) {
-  const { owner, repo } = params as { owner: string; repo: string };
-  const data = await getIssues(owner, repo, "open");
+export async function loader({ request }: { request: Request }) {
+  const url = new URL(request.url);
+  const status = url.searchParams.get("status") || "open";
+  return { status };
+}
 
-  return <IssuesList owner={owner} repo={repo} initialIssues={data.issues || []} />;
+export default async function Issues({
+  params,
+  loaderData,
+}: {
+  params?: Record<string, string>;
+  loaderData?: { status: string };
+}) {
+  const { owner, repo } = params as { owner: string; repo: string };
+  const status = loaderData?.status || "open";
+  const data = await getIssues(owner, repo, status);
+
+  return (
+    <IssuesList
+      owner={owner}
+      repo={repo}
+      initialStatus={status}
+      initialIssues={data.issues || []}
+      initialNextCursor={data.nextCursor || null}
+      initialHasMore={data.hasMore ?? false}
+    />
+  );
 }

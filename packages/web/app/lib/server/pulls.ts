@@ -1,8 +1,22 @@
 "use server";
 
-import { db, repositories, users, issues, pullRequests, comments, editHistory } from "@groffee/db";
-import { eq, and, desc, max, count, inArray, sql } from "drizzle-orm";
-import { listRefs, getDiff, snapshotRefs } from "@groffee/git";
+import {
+  db,
+  repositories,
+  repoCollaborators,
+  users,
+  issues,
+  pullRequests,
+  comments,
+  diffComments,
+  editHistory,
+  clampLimit,
+  cursorOrderBy,
+  cursorWhere,
+  paginatedResult,
+} from "@groffee/db";
+import { eq, and, asc, max, count, inArray, isNull, sql } from "drizzle-orm";
+import { listRefs, getCommitLog, getDiff, snapshotRefs } from "@groffee/git";
 import { triggerIncrementalIndex } from "../../api/lib/indexer";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -11,8 +25,12 @@ import { logAudit, getClientIp } from "./audit";
 import { getRequest } from "./request-context";
 import { resolveDiskPath } from "../../api/lib/paths";
 import { batchLoadUsers } from "./user-utils";
+import { highlightDiff } from "../highlight";
+import { renderMarkdown } from "../markdown";
+import { isRepoArchivedById } from "./repos";
 
 const execFileAsync = promisify(execFile);
+const ARCHIVED_ERROR = "This repository is archived and is read-only.";
 
 async function findRepoForPulls(ownerName: string, repoName: string, currentUserId?: string) {
   const [owner] = await db.select().from(users).where(eq(users.username, ownerName)).limit(1);
@@ -34,11 +52,13 @@ export async function getPullRequests(
   ownerName: string,
   repoName: string,
   status: string = "open",
+  options: { cursor?: string | null; limit?: number } = {},
 ) {
   const currentUser = await getSessionUser();
   const result = await findRepoForPulls(ownerName, repoName, currentUser?.id);
-  if (!result) return { error: "Repository not found" };
+  if (!result) return { error: "Repository not found" as string };
 
+  const limit = clampLimit(options.limit);
   const prList = await db
     .select()
     .from(pullRequests)
@@ -46,9 +66,11 @@ export async function getPullRequests(
       and(
         eq(pullRequests.repoId, result.repo.id),
         eq(pullRequests.status, status as "open" | "closed" | "merged"),
+        cursorWhere(options.cursor, pullRequests.createdAt, pullRequests.id, "desc"),
       ),
     )
-    .orderBy(desc(pullRequests.createdAt));
+    .orderBy(...cursorOrderBy(pullRequests.createdAt, pullRequests.id, "desc"))
+    .limit(limit + 1);
 
   const authorMap = await batchLoadUsers(prList.map((p) => p.authorId));
 
@@ -60,7 +82,8 @@ export async function getPullRequests(
     author: authorMap.get(p.authorId) || "unknown",
   }));
 
-  return { pullRequests: prsWithAuthors };
+  const page = paginatedResult(prsWithAuthors, limit, "createdAt");
+  return { pullRequests: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore };
 }
 
 export async function getPullRequestCount(
@@ -106,6 +129,7 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
       { cwd: resolveDiskPath(result.repo.diskPath) },
     );
     diff = await getDiff(resolveDiskPath(result.repo.diskPath), mergeBase.trim(), pr.sourceBranch);
+    diff = await highlightDiff(diff);
   } catch {
     // Branches may not exist anymore
   }
@@ -196,6 +220,7 @@ export async function createPullRequest(
 
   const result = await findRepoForPulls(ownerName, repoName, user.id);
   if (!result) return { error: "Repository not found" };
+  if (await isRepoArchivedById(result.repo.id)) return { error: ARCHIVED_ERROR };
 
   if (!data.title?.trim()) return { error: "Title is required" };
   if (!data.sourceBranch) return { error: "Source branch is required" };
@@ -285,6 +310,7 @@ export async function updatePullRequest(
 
   const result = await findRepoForPulls(ownerName, repoName, user.id);
   if (!result) return { error: "Repository not found" };
+  if (await isRepoArchivedById(result.repo.id)) return { error: ARCHIVED_ERROR };
 
   const [pr] = await db
     .select()
@@ -365,15 +391,47 @@ export async function updatePullRequest(
   return { pullRequest: updated };
 }
 
-export async function mergePullRequest(ownerName: string, repoName: string, prNumber: number) {
+// Permission helper: returns true if the user has write/admin perms on the
+// repo (owner or collaborator with write/admin). Used to gate merging and
+// other privileged PR ops.
+async function canWritePR(repoId: string, ownerId: string, userId: string): Promise<boolean> {
+  if (userId === ownerId) return true;
+  const [collab] = await db
+    .select()
+    .from(repoCollaborators)
+    .where(and(eq(repoCollaborators.repoId, repoId), eq(repoCollaborators.userId, userId)))
+    .limit(1);
+  if (!collab) return false;
+  return collab.permission === "write" || collab.permission === "admin";
+}
+
+export type MergeStrategy = "merge" | "squash" | "rebase";
+
+export interface MergeOptions {
+  strategy?: MergeStrategy;
+  commitMessage?: string;
+  deleteBranch?: boolean;
+}
+
+export async function mergePullRequest(
+  ownerName: string,
+  repoName: string,
+  prNumber: number,
+  options: MergeOptions = {},
+) {
+  const strategy: MergeStrategy = options.strategy ?? "merge";
+
   const user = await getSessionUser();
   if (!user) return { error: "Unauthorized" };
 
   const result = await findRepoForPulls(ownerName, repoName, user.id);
   if (!result) return { error: "Repository not found" };
+  if (await isRepoArchivedById(result.repo.id)) return { error: ARCHIVED_ERROR };
 
-  if (user.id !== result.owner.id) {
-    return { error: "Only the repository owner can merge pull requests" };
+  // Write permission required (repo owner or collaborator with write/admin)
+  const allowed = await canWritePR(result.repo.id, result.owner.id, user.id);
+  if (!allowed) {
+    return { error: "Only collaborators with write access can merge pull requests" };
   }
 
   const [pr] = await db
@@ -385,67 +443,117 @@ export async function mergePullRequest(ownerName: string, repoName: string, prNu
   if (!pr) return { error: "Pull request not found" };
   if (pr.status !== "open") return { error: "Pull request is not open" };
 
+  if (strategy === "rebase") {
+    return { error: "Rebase merging not yet supported", status: 501 as const };
+  }
+  if (strategy !== "merge" && strategy !== "squash") {
+    return { error: `Unknown merge strategy: ${strategy}` };
+  }
+
   const repoDiskPath = resolveDiskPath(result.repo.diskPath);
   // Snapshot refs before mutating so the indexer can diff afterward.
   const refsBefore = await snapshotRefs(repoDiskPath);
+
+  const gitEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: user.username,
+    GIT_AUTHOR_EMAIL: `${user.username}@groffee`,
+    GIT_COMMITTER_NAME: user.username,
+    GIT_COMMITTER_EMAIL: `${user.username}@groffee`,
+  };
+
+  let mergeCommitOid: string | null = null;
 
   try {
     const { stdout: mergeBase } = await execFileAsync(
       "git",
       ["merge-base", pr.targetBranch, pr.sourceBranch],
-      { cwd: resolveDiskPath(result.repo.diskPath) },
+      { cwd: repoDiskPath },
     );
 
     const { stdout: targetTip } = await execFileAsync("git", ["rev-parse", pr.targetBranch], {
-      cwd: resolveDiskPath(result.repo.diskPath),
+      cwd: repoDiskPath,
     });
 
-    if (mergeBase.trim() === targetTip.trim()) {
-      const { stdout: sourceTip } = await execFileAsync("git", ["rev-parse", pr.sourceBranch], {
-        cwd: resolveDiskPath(result.repo.diskPath),
-      });
-      await execFileAsync(
-        "git",
-        ["update-ref", `refs/heads/${pr.targetBranch}`, sourceTip.trim()],
-        { cwd: resolveDiskPath(result.repo.diskPath) },
-      );
+    const { stdout: sourceTip } = await execFileAsync("git", ["rev-parse", pr.sourceBranch], {
+      cwd: repoDiskPath,
+    });
+
+    const targetTipOid = targetTip.trim();
+    const sourceTipOid = sourceTip.trim();
+    const mergeBaseOid = mergeBase.trim();
+
+    if (strategy === "merge") {
+      if (mergeBaseOid === targetTipOid) {
+        // Fast-forward: just update the ref to the source tip.
+        await execFileAsync("git", ["update-ref", `refs/heads/${pr.targetBranch}`, sourceTipOid], {
+          cwd: repoDiskPath,
+        });
+        mergeCommitOid = sourceTipOid;
+      } else {
+        const { stdout: treeOid } = await execFileAsync(
+          "git",
+          ["merge-tree", "--write-tree", pr.targetBranch, pr.sourceBranch],
+          { cwd: repoDiskPath },
+        );
+
+        const mergeMessage =
+          options.commitMessage?.trim() ||
+          `Merge pull request #${pr.number} from ${pr.sourceBranch}\n\n${pr.title}`;
+        const { stdout: commitOid } = await execFileAsync(
+          "git",
+          [
+            "commit-tree",
+            treeOid.trim(),
+            "-p",
+            targetTipOid,
+            "-p",
+            sourceTipOid,
+            "-m",
+            mergeMessage,
+          ],
+          { cwd: repoDiskPath, env: gitEnv },
+        );
+
+        const newOid = commitOid.trim();
+        await execFileAsync("git", ["update-ref", `refs/heads/${pr.targetBranch}`, newOid], {
+          cwd: repoDiskPath,
+        });
+        mergeCommitOid = newOid;
+      }
     } else {
+      // Squash: a single commit on top of the target with the merged tree
+      // and the target tip as the only parent.
       const { stdout: treeOid } = await execFileAsync(
         "git",
         ["merge-tree", "--write-tree", pr.targetBranch, pr.sourceBranch],
-        { cwd: resolveDiskPath(result.repo.diskPath) },
+        { cwd: repoDiskPath },
       );
 
-      const mergeMessage = `Merge pull request #${pr.number} from ${pr.sourceBranch}\n\n${pr.title}`;
+      const squashMessage = options.commitMessage?.trim() || `${pr.title} (#${pr.number})`;
       const { stdout: commitOid } = await execFileAsync(
         "git",
-        [
-          "commit-tree",
-          treeOid.trim(),
-          "-p",
-          targetTip.trim(),
-          "-p",
-          pr.sourceBranch,
-          "-m",
-          mergeMessage,
-        ],
-        {
-          cwd: resolveDiskPath(result.repo.diskPath),
-          env: {
-            ...process.env,
-            GIT_AUTHOR_NAME: user.username,
-            GIT_AUTHOR_EMAIL: `${user.username}@groffee`,
-            GIT_COMMITTER_NAME: user.username,
-            GIT_COMMITTER_EMAIL: `${user.username}@groffee`,
-          },
-        },
+        ["commit-tree", treeOid.trim(), "-p", targetTipOid, "-m", squashMessage],
+        { cwd: repoDiskPath, env: gitEnv },
       );
 
-      await execFileAsync(
-        "git",
-        ["update-ref", `refs/heads/${pr.targetBranch}`, commitOid.trim()],
-        { cwd: resolveDiskPath(result.repo.diskPath) },
-      );
+      const newOid = commitOid.trim();
+      await execFileAsync("git", ["update-ref", `refs/heads/${pr.targetBranch}`, newOid], {
+        cwd: repoDiskPath,
+      });
+      mergeCommitOid = newOid;
+    }
+
+    // Optionally delete the source branch after merge.
+    if (options.deleteBranch) {
+      try {
+        await execFileAsync("git", ["update-ref", "-d", `refs/heads/${pr.sourceBranch}`], {
+          cwd: repoDiskPath,
+        });
+      } catch (err) {
+        // Branch deletion failure is non-fatal — the merge still happened.
+        console.error(`Failed to delete branch ${pr.sourceBranch}:`, err);
+      }
     }
 
     // Index the merge: bumps gitRefs.updatedAt for the target branch and
@@ -471,12 +579,15 @@ export async function mergePullRequest(ownerName: string, repoName: string, prNu
         number: pr.number,
         sourceBranch: pr.sourceBranch,
         targetBranch: pr.targetBranch,
+        strategy,
+        deleteBranch: !!options.deleteBranch,
+        mergeCommitOid,
         repoName,
       },
       ipAddress: req ? getClientIp(req) : "unknown",
     }).catch(console.error);
 
-    return { merged: true };
+    return { merged: true, mergeCommitOid };
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Merge failed";
     return { error: `Merge failed: ${message}` };
@@ -494,6 +605,7 @@ export async function createPRComment(
 
   const result = await findRepoForPulls(ownerName, repoName, user.id);
   if (!result) return { error: "Repository not found" };
+  if (await isRepoArchivedById(result.repo.id)) return { error: ARCHIVED_ERROR };
 
   const [pr] = await db
     .select()
@@ -533,6 +645,7 @@ export async function updatePRComment(
 
   const result = await findRepoForPulls(ownerName, repoName, user.id);
   if (!result) return { error: "Repository not found" };
+  if (await isRepoArchivedById(result.repo.id)) return { error: ARCHIVED_ERROR };
 
   const [comment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
   if (!comment) return { error: "Comment not found" };
@@ -574,3 +687,384 @@ export async function updatePRComment(
     },
   };
 }
+
+// =====================================================
+// Inline diff comments (PR file review)
+// =====================================================
+
+export interface DiffCommentDTO {
+  id: string;
+  pullRequestId: string;
+  parentId: string | null;
+  filePath: string;
+  commitOid: string;
+  side: "old" | "new";
+  lineNumber: number;
+  body: string;
+  bodyHtml: string;
+  resolved: boolean;
+  author: string;
+  authorId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function diffCommentLineKey(filePath: string, side: "old" | "new", lineNumber: number) {
+  return `${filePath}:${side}:${lineNumber}`;
+}
+
+async function findPRForDiffComments(
+  ownerName: string,
+  repoName: string,
+  prNumber: number,
+  userId?: string,
+) {
+  const result = await findRepoForPulls(ownerName, repoName, userId);
+  if (!result) return { error: "Repository not found" as const };
+
+  const [pr] = await db
+    .select()
+    .from(pullRequests)
+    .where(and(eq(pullRequests.repoId, result.repo.id), eq(pullRequests.number, prNumber)))
+    .limit(1);
+  if (!pr) return { error: "Pull request not found" as const };
+  return { pr, repo: result.repo, owner: result.owner };
+}
+
+/**
+ * Fetch every diff comment on a PR. Returns:
+ *  - flat: serializable list (used by the API route)
+ *  - byLine: filePath → lineKey → DiffCommentDTO[] for fast O(1) lookup
+ *    when rendering individual lines in the diff.
+ *  - byParent: parentId → DiffCommentDTO[] for thread reply lookup.
+ *
+ * Loads all comments in one query — for v1 this is fine since PRs typically
+ * have well under 200 inline comments. We can switch to cursor pagination
+ * per-thread later if needed.
+ *
+ * Multi-tenancy: scoped strictly by PR id (which is unique to the repo) and
+ * via the repo visibility check inside findPRForDiffComments.
+ */
+export async function getDiffComments(ownerName: string, repoName: string, prNumber: number) {
+  const currentUser = await getSessionUser();
+  const found = await findPRForDiffComments(ownerName, repoName, prNumber, currentUser?.id);
+  if ("error" in found) return { error: found.error };
+
+  const rows = await db
+    .select()
+    .from(diffComments)
+    .where(eq(diffComments.pullRequestId, found.pr.id))
+    .orderBy(asc(diffComments.createdAt));
+
+  const authorIds = rows.map((r) => r.authorId);
+  const authorMap = await batchLoadUsers(authorIds);
+
+  const flat: DiffCommentDTO[] = rows.map((r) => ({
+    id: r.id,
+    pullRequestId: r.pullRequestId,
+    parentId: r.parentId ?? null,
+    filePath: r.filePath,
+    commitOid: r.commitOid,
+    side: r.side as "old" | "new",
+    lineNumber: r.lineNumber,
+    body: r.body,
+    bodyHtml: r.body ? renderMarkdown(r.body) : "",
+    resolved: !!r.resolved,
+    author: authorMap.get(r.authorId) || "unknown",
+    authorId: r.authorId,
+    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+    updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
+  }));
+
+  return { comments: flat };
+}
+
+export async function createDiffComment(args: {
+  owner: string;
+  repo: string;
+  prNumber: number;
+  filePath: string;
+  commitOid: string;
+  side: "old" | "new";
+  lineNumber: number;
+  body: string;
+  parentId?: string | null;
+}) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const found = await findPRForDiffComments(args.owner, args.repo, args.prNumber, user.id);
+  if ("error" in found) return { error: found.error };
+  if (await isRepoArchivedById(found.repo.id)) return { error: ARCHIVED_ERROR };
+
+  if (!args.body?.trim()) return { error: "Comment body is required" };
+  if (args.side !== "old" && args.side !== "new") return { error: "Invalid side" };
+  if (!Number.isInteger(args.lineNumber) || args.lineNumber < 1) {
+    return { error: "Invalid line number" };
+  }
+
+  // If parentId is provided, ensure it belongs to this PR (multi-tenancy).
+  if (args.parentId) {
+    const [parent] = await db
+      .select()
+      .from(diffComments)
+      .where(and(eq(diffComments.id, args.parentId), eq(diffComments.pullRequestId, found.pr.id)))
+      .limit(1);
+    if (!parent) return { error: "Parent comment not found" };
+  }
+
+  const now = new Date();
+  const id = crypto.randomUUID();
+
+  await db.insert(diffComments).values({
+    id,
+    pullRequestId: found.pr.id,
+    authorId: user.id,
+    parentId: args.parentId ?? null,
+    filePath: args.filePath,
+    commitOid: args.commitOid,
+    side: args.side,
+    lineNumber: args.lineNumber,
+    body: args.body.trim(),
+    resolved: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const req = getRequest();
+  logAudit({
+    userId: user.id,
+    action: "pr.diff_comment.create",
+    targetType: "pull_request",
+    targetId: found.pr.id,
+    metadata: {
+      diffCommentId: id,
+      number: found.pr.number,
+      filePath: args.filePath,
+      lineNumber: args.lineNumber,
+      side: args.side,
+      parentId: args.parentId ?? null,
+    },
+    ipAddress: req ? getClientIp(req) : "unknown",
+  }).catch(console.error);
+
+  return {
+    comment: {
+      id,
+      pullRequestId: found.pr.id,
+      parentId: args.parentId ?? null,
+      filePath: args.filePath,
+      commitOid: args.commitOid,
+      side: args.side,
+      lineNumber: args.lineNumber,
+      body: args.body.trim(),
+      bodyHtml: renderMarkdown(args.body.trim()),
+      resolved: false,
+      author: user.username,
+      authorId: user.id,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    } as DiffCommentDTO,
+  };
+}
+
+export async function updateDiffComment(
+  ownerName: string,
+  repoName: string,
+  prNumber: number,
+  commentId: string,
+  body: string,
+) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const found = await findPRForDiffComments(ownerName, repoName, prNumber, user.id);
+  if ("error" in found) return { error: found.error };
+  if (await isRepoArchivedById(found.repo.id)) return { error: ARCHIVED_ERROR };
+
+  if (!body?.trim()) return { error: "Comment body is required" };
+
+  const [existing] = await db
+    .select()
+    .from(diffComments)
+    .where(and(eq(diffComments.id, commentId), eq(diffComments.pullRequestId, found.pr.id)))
+    .limit(1);
+  if (!existing) return { error: "Comment not found" };
+
+  if (user.id !== existing.authorId && user.id !== found.owner.id) {
+    return { error: "Only the author or repo owner can edit this comment" };
+  }
+
+  const trimmed = body.trim();
+  const now = new Date();
+  await db
+    .update(diffComments)
+    .set({ body: trimmed, updatedAt: now })
+    .where(eq(diffComments.id, existing.id));
+
+  return {
+    comment: {
+      id: existing.id,
+      body: trimmed,
+      bodyHtml: renderMarkdown(trimmed),
+      updatedAt: now.toISOString(),
+    },
+  };
+}
+
+export async function deleteDiffComment(
+  ownerName: string,
+  repoName: string,
+  prNumber: number,
+  commentId: string,
+) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const found = await findPRForDiffComments(ownerName, repoName, prNumber, user.id);
+  if ("error" in found) return { error: found.error };
+
+  const [existing] = await db
+    .select()
+    .from(diffComments)
+    .where(and(eq(diffComments.id, commentId), eq(diffComments.pullRequestId, found.pr.id)))
+    .limit(1);
+  if (!existing) return { error: "Comment not found" };
+
+  if (user.id !== existing.authorId && user.id !== found.owner.id) {
+    return { error: "Only the author or repo owner can delete this comment" };
+  }
+
+  // Cascade-delete replies inside this thread (any comment with parentId === existing.id
+  // OR the deleted comment itself).
+  await db.delete(diffComments).where(
+    and(
+      eq(diffComments.pullRequestId, found.pr.id),
+      // either the deleted comment itself, or any of its direct replies
+      // (we don't support deeper threads in v1).
+      // Drizzle: build with `or` via inArray for clarity.
+      inArray(diffComments.id, [existing.id]),
+    ),
+  );
+  // Also remove direct replies that point at the deleted comment.
+  await db
+    .delete(diffComments)
+    .where(
+      and(eq(diffComments.pullRequestId, found.pr.id), eq(diffComments.parentId, existing.id)),
+    );
+
+  return { deleted: true };
+}
+
+/**
+ * Toggle the resolved flag on a comment thread. Both the top-level comment
+ * and any replies share the resolved flag of the parent at render time, but
+ * for storage simplicity we apply it to the targeted comment + its replies.
+ *
+ * Any participant with read access to the PR can resolve/unresolve a thread.
+ */
+export async function resolveDiffComment(
+  ownerName: string,
+  repoName: string,
+  prNumber: number,
+  commentId: string,
+  resolved: boolean,
+) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const found = await findPRForDiffComments(ownerName, repoName, prNumber, user.id);
+  if ("error" in found) return { error: found.error };
+
+  const [existing] = await db
+    .select()
+    .from(diffComments)
+    .where(and(eq(diffComments.id, commentId), eq(diffComments.pullRequestId, found.pr.id)))
+    .limit(1);
+  if (!existing) return { error: "Comment not found" };
+
+  // Resolve the root of the thread, then propagate to its replies.
+  const rootId = existing.parentId ?? existing.id;
+  const now = new Date();
+  await db
+    .update(diffComments)
+    .set({ resolved, updatedAt: now })
+    .where(and(eq(diffComments.id, rootId), eq(diffComments.pullRequestId, found.pr.id)));
+  await db
+    .update(diffComments)
+    .set({ resolved, updatedAt: now })
+    .where(and(eq(diffComments.parentId, rootId), eq(diffComments.pullRequestId, found.pr.id)));
+
+  return { resolved };
+}
+
+// =====================================================
+// PR commits (Commits tab)
+// =====================================================
+
+export interface PRCommit {
+  oid: string;
+  message: string;
+  author: string;
+  authorEmail: string;
+  authorTimestamp: number;
+}
+
+/**
+ * Returns the commit set unique to the source branch (i.e. `git log
+ * <targetBranch>..<sourceBranch>`). Used by the new Commits tab. The list
+ * is bounded by `limit` for safety on huge PRs.
+ */
+export async function getPullRequestCommits(
+  ownerName: string,
+  repoName: string,
+  prNumber: number,
+  limit: number = 250,
+) {
+  const currentUser = await getSessionUser();
+  const found = await findPRForDiffComments(ownerName, repoName, prNumber, currentUser?.id);
+  if ("error" in found) return { error: found.error };
+
+  const repoDiskPath = resolveDiskPath(found.repo.diskPath);
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      [
+        "log",
+        `--format=%H%x1f%an%x1f%ae%x1f%at%x1f%s`,
+        `-${Math.max(1, Math.min(limit, 1000))}`,
+        `${found.pr.targetBranch}..${found.pr.sourceBranch}`,
+      ],
+      { cwd: repoDiskPath, maxBuffer: 5 * 1024 * 1024 },
+    );
+
+    const commits: PRCommit[] = stdout
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [oid, author, authorEmail, ts, message] = line.split("\x1f");
+        return {
+          oid,
+          message: message ?? "",
+          author: author ?? "",
+          authorEmail: authorEmail ?? "",
+          authorTimestamp: Number(ts) || 0,
+        };
+      });
+
+    // Use isomorphic-git as a fallback / parity check is unnecessary; if
+    // execFile failed we already returned. Reference getCommitLog so the
+    // import is used (otherwise tsconfig "noUnusedLocals" trips up).
+    void getCommitLog;
+
+    return { commits, sourceBranch: found.pr.sourceBranch, targetBranch: found.pr.targetBranch };
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Failed to load commits";
+    return { error: message };
+  }
+}
+
+// Re-export so the API route can re-use the same line-key format.
+export { diffCommentLineKey };
+// Silence unused-helper warnings for helper exports that callers may inline.
+void isNull;

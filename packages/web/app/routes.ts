@@ -84,6 +84,11 @@ export const routes: RouteConfig[] = [
         component: () => import("./routes/admin-users"),
       },
       {
+        id: "invite",
+        path: "invite/:token",
+        component: () => import("./routes/invite"),
+      },
+      {
         id: "user-profile",
         path: ":owner",
         component: () => import("./routes/user-profile"),
@@ -109,9 +114,24 @@ export const routes: RouteConfig[] = [
             component: () => import("./routes/repo-blob"),
           },
           {
+            id: "repo-edit",
+            path: "edit/:splat*",
+            component: () => import("./routes/repo-edit"),
+          },
+          {
+            id: "repo-new-file",
+            path: "new/:splat*",
+            component: () => import("./routes/repo-new-file"),
+          },
+          {
             id: "repo-commits",
             path: "commits/:ref",
             component: () => import("./routes/repo-commits"),
+          },
+          {
+            id: "repo-tags",
+            path: "tags",
+            component: () => import("./routes/repo-tags"),
           },
           {
             id: "repo-commit",
@@ -154,6 +174,11 @@ export const routes: RouteConfig[] = [
             component: () => import("./routes/pipelines"),
           },
           {
+            id: "pipeline-config",
+            path: "pipelines/config",
+            component: () => import("./routes/pipeline-config"),
+          },
+          {
             id: "pipeline-run",
             path: "pipelines/runs/:runNumber",
             component: () => import("./routes/pipeline-run"),
@@ -181,6 +206,11 @@ export const routes: RouteConfig[] = [
           {
             id: "pull-detail-files",
             path: "pull/:number/files-changed",
+            component: () => import("./routes/pull-detail"),
+          },
+          {
+            id: "pull-detail-commits",
+            path: "pull/:number/commits",
             component: () => import("./routes/pull-detail"),
           },
         ],

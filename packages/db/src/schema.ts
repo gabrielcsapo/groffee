@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, uniqueIndex, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, blob, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 
 // --- Users ---
 export const users = sqliteTable("users", {
@@ -8,7 +8,19 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   displayName: text("display_name"),
   bio: text("bio"),
+  // SHA-256 OID of the avatar image stored in the `uploads` content-addressed
+  // store (`/api/uploads/<oid>`). Null means render the username-initial
+  // monogram fallback. We store the OID rather than the uploads.id row id so
+  // de-duped re-uploads of the same image stay consistent across users.
+  avatarUploadId: text("avatar_upload_id"),
+  website: text("website"),
+  location: text("location"),
   isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+  // When true the user cannot log in or perform actions. Set by admins via
+  // the CLI (`disable-user`) for moderation. Existing sessions remain valid
+  // until expiry — auth checks for new sessions / actions reject disabled
+  // accounts.
+  disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
@@ -63,13 +75,53 @@ export const repositories = sqliteTable(
     description: text("description"),
     defaultBranch: text("default_branch").notNull().default("main"),
     isPublic: integer("is_public", { mode: "boolean" }).notNull().default(true),
+    // When true, the repo is read-only: pushes (HTTP/SSH), issue/PR/comment
+    // create/update, edit-in-browser, secret CRUD, and invite generation all
+    // 403. Reads stay open. Set via the settings UI by the owner.
+    isArchived: integer("is_archived", { mode: "boolean" }).notNull().default(false),
+    editPolicy: text("edit_policy", { enum: ["direct", "pull_request"] })
+      .notNull()
+      .default("direct"),
     diskPath: text("disk_path").notNull(),
+    // Cached on-disk size in bytes (sum of git data dir). Recomputed on
+    // demand by the admin CLI (`recompute-storage`). Null = never measured.
+    diskUsageBytes: integer("disk_usage_bytes"),
+    // Wall-clock time of the last successful FTS5 reindex for this repo.
+    // Used by the admin dashboard / repo-settings to flag stale code search
+    // (HEAD ref newer than this). Null = never indexed yet.
+    lastIndexedAt: integer("last_indexed_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
   },
   (table) => [
     uniqueIndex("repo_owner_name_idx").on(table.ownerId, table.name),
     index("repos_public_updated_idx").on(table.isPublic, table.updatedAt),
+  ],
+);
+
+// --- Repository Deploy Keys ---
+// Per-repo SSH public keys used by external systems (CI, deploy scripts) to
+// fetch (read-only) or push (when readOnly = false) without going through a
+// user account. Keyed by fingerprint per repo so the same public key can be
+// registered against multiple repos. The SSH server checks this table after
+// the user-key lookup miss.
+export const deployKeys = sqliteTable(
+  "deploy_keys",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    publicKey: text("public_key").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    readOnly: integer("read_only", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("deploy_keys_repo_idx").on(table.repoId),
+    uniqueIndex("deploy_keys_repo_fingerprint_idx").on(table.repoId, table.fingerprint),
+    index("deploy_keys_fingerprint_idx").on(table.fingerprint),
   ],
 );
 
@@ -92,6 +144,37 @@ export const repoCollaborators = sqliteTable(
   (table) => [
     uniqueIndex("collab_repo_user_idx").on(table.repoId, table.userId),
     index("collab_user_idx").on(table.userId),
+  ],
+);
+
+// --- Repository Invite Links ---
+// Tokenized invite links that any logged-in user can redeem to be added as a
+// collaborator at the specified permission. `usedAt`/`usedById` are set both
+// when redeemed AND when revoked (revoke = mark dead without inserting a
+// collaborator row). `expiresAt` null means it never expires until used or
+// revoked.
+export const repoInvites = sqliteTable(
+  "repo_invites",
+  {
+    id: text("id").primaryKey(),
+    token: text("token").notNull(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    permission: text("permission", { enum: ["read", "write", "admin"] })
+      .notNull()
+      .default("write"),
+    createdById: text("created_by_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }),
+    usedAt: integer("used_at", { mode: "timestamp" }),
+    usedById: text("used_by_id").references(() => users.id),
+  },
+  (table) => [
+    uniqueIndex("repo_invites_token_idx").on(table.token),
+    index("repo_invites_repo_idx").on(table.repoId),
   ],
 );
 
@@ -167,6 +250,46 @@ export const comments = sqliteTable(
   (table) => [
     index("comments_issue_idx").on(table.issueId),
     index("comments_pr_idx").on(table.pullRequestId),
+  ],
+);
+
+// --- Diff (Inline) Comments on Pull Request files ---
+// Inline review comments that are anchored to a specific line in a diff for a
+// pull request. Threaded via parentId (top-level comments have parentId = null).
+// Kept separate from `comments` so the conversation tab and the files tab have
+// independent threading models without accidental cross-contamination.
+export const diffComments = sqliteTable(
+  "diff_comments",
+  {
+    id: text("id").primaryKey(),
+    pullRequestId: text("pull_request_id")
+      .notNull()
+      .references(() => pullRequests.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id),
+    parentId: text("parent_id"),
+    filePath: text("file_path").notNull(),
+    commitOid: text("commit_oid").notNull(),
+    side: text("side", { enum: ["old", "new"] }).notNull(),
+    lineNumber: integer("line_number").notNull(),
+    body: text("body").notNull(),
+    resolved: integer("resolved", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("diff_comments_pr_file_line_side_idx").on(
+      table.pullRequestId,
+      table.filePath,
+      table.lineNumber,
+      table.side,
+    ),
+    index("diff_comments_pr_parent_created_idx").on(
+      table.pullRequestId,
+      table.parentId,
+      table.createdAt,
+    ),
   ],
 );
 
@@ -507,6 +630,12 @@ export const pipelineJobs = sqliteTable(
       .notNull()
       .default("queued"),
     sortOrder: integer("sort_order").notNull(),
+    // Matrix expansion — present on jobs created from a `matrix:` block in
+    // YAML. Stored as JSON-encoded `Record<string, string|number|boolean>`.
+    // Null on jobs without a matrix. The display name on these rows includes
+    // a parenthesized `(key=value, key=value)` suffix; the unsuffixed prefix
+    // is used by the runner / DAG renderer to group sibling cells together.
+    matrixValues: text("matrix_values"),
     startedAt: integer("started_at", { mode: "timestamp" }),
     finishedAt: integer("finished_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
@@ -555,9 +684,44 @@ export const pipelineArtifacts = sqliteTable(
     name: text("name").notNull(),
     diskPath: text("disk_path").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
+    // When set, the artifact-retention sweeper deletes the on-disk dir + DB row
+    // after this timestamp. Null = keep until the run/repo is deleted.
+    retentionUntil: integer("retention_until", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
-  (table) => [index("pipeline_artifacts_run_idx").on(table.runId)],
+  (table) => [
+    index("pipeline_artifacts_run_idx").on(table.runId),
+    index("pipeline_artifacts_retention_idx").on(table.retentionUntil),
+  ],
+);
+
+// --- Repository Pipeline Secrets ---
+// Encrypted repo-scoped key/value pairs injected as env vars for pipeline runs.
+// Ciphertext is AES-256-GCM with packed [12-byte iv][16-byte tag][ct].
+// The plaintext NEVER leaves this row + the runner's per-step env. List/read
+// API responses MUST omit `ciphertext` (return only the metadata columns).
+export const repoSecrets = sqliteTable(
+  "repo_secrets",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    // Validated against /^[A-Z][A-Z0-9_]*$/ at write time so it's a safe shell
+    // env var name (no special chars, no leading digit).
+    name: text("name").notNull(),
+    ciphertext: blob("ciphertext", { mode: "buffer" }).notNull(),
+    createdById: text("created_by_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("repo_secrets_repo_name_idx").on(table.repoId, table.name),
+    index("repo_secrets_repo_idx").on(table.repoId),
+  ],
 );
 
 // --- Pages Deployments ---
@@ -605,5 +769,28 @@ export const lfsObjects = sqliteTable(
   (table) => [
     uniqueIndex("lfs_objects_repo_oid_idx").on(table.repoId, table.oid),
     index("lfs_objects_repo_idx").on(table.repoId),
+  ],
+);
+
+// =====================================================
+// User Uploads (markdown attachments, content-addressed)
+// =====================================================
+
+export const uploads = sqliteTable(
+  "uploads",
+  {
+    id: text("id").primaryKey(),
+    oid: text("oid").notNull(),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    uploadedById: text("uploaded_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("uploads_oid_idx").on(table.oid),
+    index("uploads_user_created_idx").on(table.uploadedById, table.createdAt),
   ],
 );

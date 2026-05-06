@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { handleInfoRefs, handleServiceRpc, snapshotRefs } from "@groffee/git";
-import { canPush, canRead } from "../lib/permissions.js";
+import { canPush, canRead, isRepoArchived } from "../lib/permissions.js";
 import { triggerIncrementalIndex } from "../lib/indexer.js";
 import { triggerPipelinesFromPush } from "../lib/pipeline-trigger.js";
 import { authenticateGitUser, authChallenge, resolveRepo } from "../lib/git-auth.js";
@@ -24,6 +24,7 @@ gitProtocolRoutes.get("/:owner/:repo/info/refs", async (c) => {
     const user = await authenticateGitUser(c.req.header("Authorization") ?? null);
     if (!user) return authChallenge();
 
+    if (await isRepoArchived(repo.id)) return c.text("repository archived", 403);
     const allowed = await canPush(user.id, repo.id);
     if (!allowed) return c.text("Permission denied", 403);
   } else if (!repo.isPublic) {
@@ -62,6 +63,7 @@ gitProtocolRoutes.post("/:owner/:repo/git-receive-pack", async (c) => {
   const user = await authenticateGitUser(c.req.header("Authorization") ?? null);
   if (!user) return authChallenge();
 
+  if (await isRepoArchived(repo.id)) return c.text("repository archived", 403);
   const allowed = await canPush(user.id, repo.id);
   if (!allowed) return c.text("Permission denied", 403);
 

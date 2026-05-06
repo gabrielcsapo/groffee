@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Link, useSearchParams, useRouter } from "react-flight-router/client";
+import { Link, useSearchParams } from "react-flight-router/client";
 import { getRepoCommits } from "../lib/server/repos";
+import { BranchSwitcherWrapper as BranchSwitcher } from "../components/branch-switcher-wrapper.client";
 
 interface Commit {
   oid: string;
@@ -34,6 +35,7 @@ export function CommitsList({
   repo,
   currentRef,
   branches,
+  tags = [],
   authors,
   initialCommits,
   initialAuthorFilter = "",
@@ -41,13 +43,13 @@ export function CommitsList({
   owner: string;
   repo: string;
   currentRef: string;
-  branches: string[];
+  branches: { name: string }[];
+  tags?: { name: string }[];
   authors: Author[];
   initialCommits: Commit[];
   initialAuthorFilter?: string;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { navigate } = useRouter();
   const authorFilter = searchParams.get("author") || "";
   const [commits, setCommits] = useState<Commit[]>(initialCommits);
   const [loading, setLoading] = useState(false);
@@ -115,37 +117,14 @@ export function CommitsList({
     <div className="max-w-6xl mx-auto mt-6">
       {/* Filters row */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        {/* Branch selector */}
-        <div className="flex items-center gap-2">
-          <svg
-            className="w-4 h-4 text-text-secondary"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-            />
-          </svg>
-          <select
-            value={currentRef}
-            onChange={(e) => {
-              const newRef = e.target.value;
-              const params = authorFilter ? `?author=${encodeURIComponent(authorFilter)}` : "";
-              navigate(`/${owner}/${repo}/commits/${newRef}${params}`);
-            }}
-            className="text-sm border border-border rounded-md px-3 py-1.5 bg-surface text-text-primary font-medium"
-          >
-            {branches.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Branch / tag picker */}
+        <BranchSwitcher
+          branches={branches}
+          tags={tags}
+          currentRef={currentRef}
+          basePath={`/${owner}/${repo}`}
+          mode="commits"
+        />
 
         {/* Author filter */}
         {authors.length > 0 && (

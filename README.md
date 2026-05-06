@@ -30,6 +30,20 @@ pnpm dev
 
 The first registered user is automatically promoted to admin.
 
+## Admin CLI
+
+For host-level operations (password resets, recomputing storage, rebuilding the search index) use the admin CLI:
+
+```bash
+pnpm admin reset-password <username> <new-password>
+pnpm admin make-admin <username>
+pnpm admin disable-user <username> [--enable]
+pnpm admin recompute-storage
+pnpm admin reindex-search [<owner/repo>]
+```
+
+Every CLI action is recorded in the audit log under `admin.cli.*` (attributed to the `system` user when present, otherwise the first admin).
+
 ## Git LFS
 
 Groffee supports the Git LFS Batch API for storing large files outside the Git repository.

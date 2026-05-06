@@ -6,10 +6,14 @@ import { timeAgo } from "../lib/time";
 import { getEditHistory } from "../lib/server/search";
 import { getSessionUser } from "../lib/server/auth";
 import { updateIssue, createIssueComment, updateIssueComment } from "../lib/server/issues";
+import { previewMarkdown } from "../lib/server/markdown-preview";
+import { MarkdownEditor } from "../components/markdown-editor.client";
+import { MarkdownCopyButtons } from "../components/markdown-copy-buttons.client";
 
 interface Comment {
   id: string;
   body: string;
+  bodyHtml?: string;
   author: string;
   authorId?: string;
   createdAt: string;
@@ -96,15 +100,18 @@ export function IssueDetailView({
   repo,
   issueNumber,
   initialIssue,
+  initialIssueBodyHtml,
   initialComments,
 }: {
   owner: string;
   repo: string;
   issueNumber: string;
   initialIssue: Issue | null;
+  initialIssueBodyHtml?: string;
   initialComments: Comment[];
 }) {
   const [issue, setIssue] = useState<Issue | null>(initialIssue);
+  const [issueBodyHtml, setIssueBodyHtml] = useState<string>(initialIssueBodyHtml || "");
   const [commentsList, setCommentsList] = useState<Comment[]>(initialComments);
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -158,13 +165,20 @@ export function IssueDetailView({
       body: editBody,
     });
     if (!result.error) {
+      const trimmed = editBody.trim();
       setIssue({
         ...issue,
         title: editTitle.trim(),
-        body: editBody.trim() || null,
+        body: trimmed || null,
         editCount: (issue.editCount || 0) + 1,
         lastEditedAt: new Date().toISOString(),
       });
+      try {
+        const { html } = await previewMarkdown(trimmed);
+        setIssueBodyHtml(html);
+      } catch {
+        setIssueBodyHtml("");
+      }
       setEditing(false);
     }
     setEditSaving(false);
@@ -188,12 +202,21 @@ export function IssueDetailView({
     );
 
     if (!result.error) {
+      const trimmed = editCommentBody.trim();
+      let html = "";
+      try {
+        const r = await previewMarkdown(trimmed);
+        html = r.html;
+      } catch {
+        html = "";
+      }
       setCommentsList(
         commentsList.map((c) =>
           c.id === comment.id
             ? {
                 ...c,
-                body: editCommentBody.trim(),
+                body: trimmed,
+                bodyHtml: html,
                 editCount: (c.editCount || 0) + 1,
                 lastEditedAt: new Date().toISOString(),
               }
@@ -230,7 +253,14 @@ export function IssueDetailView({
     const result = await createIssueComment(owner, repo, Number(issueNumber), newComment);
 
     if (!result.error && result.comment) {
-      setCommentsList([...commentsList, result.comment]);
+      let html = "";
+      try {
+        const r = await previewMarkdown(result.comment.body || "");
+        html = r.html;
+      } catch {
+        html = "";
+      }
+      setCommentsList([...commentsList, { ...result.comment, bodyHtml: html }]);
       setNewComment("");
     }
     setSubmitting(false);
@@ -307,7 +337,7 @@ export function IssueDetailView({
 
       {/* Issue body */}
       <div className="border border-border rounded-lg mb-4">
-        <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm font-medium text-text-primary flex items-center justify-between">
+        <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm font-medium text-text-primary flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
           <span className="flex items-center">
             <Link to={`/${issue.author}`} className="hover:underline">
               {issue.author}
@@ -329,13 +359,14 @@ export function IssueDetailView({
         </div>
         {editing ? (
           <div className="p-4">
-            <textarea
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-              rows={8}
-              className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
-              placeholder="Issue description..."
-            />
+            <div className="mb-3">
+              <MarkdownEditor
+                value={editBody}
+                onChange={setEditBody}
+                minRows={8}
+                placeholder="Issue description..."
+              />
+            </div>
             <div className="flex items-center gap-2 justify-end">
               <button
                 onClick={() => setEditing(false)}
@@ -352,11 +383,20 @@ export function IssueDetailView({
               </button>
             </div>
           </div>
+        ) : issue.body ? (
+          issueBodyHtml ? (
+            <MarkdownCopyButtons
+              className="markdown-body px-4 py-3 text-sm text-text-primary"
+              html={issueBodyHtml}
+            />
+          ) : (
+            <div className="px-4 py-3 text-sm text-text-primary whitespace-pre-wrap">
+              {issue.body}
+            </div>
+          )
         ) : (
-          <div className="px-4 py-3 text-sm text-text-primary whitespace-pre-wrap">
-            {issue.body || (
-              <span className="text-text-secondary italic">No description provided.</span>
-            )}
+          <div className="px-4 py-3 text-sm text-text-primary">
+            <span className="text-text-secondary italic">No description provided.</span>
           </div>
         )}
       </div>
@@ -374,7 +414,7 @@ export function IssueDetailView({
       {commentsList.map((comment) => (
         <div key={comment.id}>
           <div className="border border-border rounded-lg mb-2">
-            <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm flex items-center justify-between">
+            <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
               <span className="flex items-center">
                 <Link
                   to={`/${comment.author}`}
@@ -402,12 +442,13 @@ export function IssueDetailView({
             </div>
             {editingCommentId === comment.id ? (
               <div className="p-4">
-                <textarea
-                  value={editCommentBody}
-                  onChange={(e) => setEditCommentBody(e.target.value)}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
-                />
+                <div className="mb-3">
+                  <MarkdownEditor
+                    value={editCommentBody}
+                    onChange={setEditCommentBody}
+                    minRows={4}
+                  />
+                </div>
                 <div className="flex items-center gap-2 justify-end">
                   <button
                     onClick={() => setEditingCommentId(null)}
@@ -424,6 +465,11 @@ export function IssueDetailView({
                   </button>
                 </div>
               </div>
+            ) : comment.bodyHtml ? (
+              <MarkdownCopyButtons
+                className="markdown-body px-4 py-3 text-sm text-text-primary"
+                html={comment.bodyHtml}
+              />
             ) : (
               <div className="px-4 py-3 text-sm text-text-primary whitespace-pre-wrap">
                 {comment.body}
@@ -446,13 +492,14 @@ export function IssueDetailView({
       {user && (
         <div className="bg-surface border border-border rounded-lg p-4">
           <form onSubmit={handleComment}>
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              rows={4}
-              placeholder="Leave a comment..."
-              className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
-            />
+            <div className="mb-3">
+              <MarkdownEditor
+                value={newComment}
+                onChange={setNewComment}
+                minRows={4}
+                placeholder="Leave a comment..."
+              />
+            </div>
             <div className="flex items-center justify-between">
               {(user.username === issue.author || user.username === owner) && (
                 <button

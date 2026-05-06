@@ -394,9 +394,96 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
           </p>
         </div>
       ) : (
-        <div className="flex gap-6">
-          {/* Sidebar */}
-          <nav className="w-52 shrink-0">
+        <div className="flex flex-col md:flex-row gap-6">
+          {/* Mobile-only horizontal tabs + collapsible Languages */}
+          <div className="md:hidden flex flex-col gap-3">
+            <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-thin">
+              {TABS.map((tab) => {
+                const count = counts[tab.key];
+                const isActive = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => handleTabChange(tab.key)}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap shrink-0 ${
+                      isActive
+                        ? "border-primary text-text-primary"
+                        : "border-transparent text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    {tab.label}
+                    {count !== null && count > 0 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-surface-secondary text-text-secondary">
+                        {count.toLocaleString()}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {activeTab === "code" && langCounts.length > 0 && (
+              <details className="border border-border rounded-lg bg-surface group">
+                <summary className="px-3 py-2 text-xs font-semibold text-text-primary cursor-pointer flex items-center justify-between">
+                  <span>
+                    Languages
+                    {selectedLang && (
+                      <span className="ml-2 text-text-link font-normal">
+                        ({langDisplayName(selectedLang)})
+                      </span>
+                    )}
+                  </span>
+                  <svg
+                    className="w-4 h-4 transition-transform group-open:rotate-180"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </summary>
+                <div className="border-t border-border max-h-60 overflow-y-auto">
+                  {selectedLang && (
+                    <button
+                      type="button"
+                      onClick={() => handleLangFilter(null)}
+                      className="w-full px-3 py-2 text-xs text-text-link hover:bg-surface-secondary border-b border-border text-left"
+                    >
+                      Clear filter
+                    </button>
+                  )}
+                  {langCounts.map((lang) => {
+                    const isActive = selectedLang === lang.ext;
+                    return (
+                      <button
+                        key={lang.ext}
+                        type="button"
+                        onClick={() => handleLangFilter(isActive ? null : lang.ext)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left ${
+                          isActive
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "text-text-secondary hover:bg-surface-secondary"
+                        }`}
+                      >
+                        <span className="flex-1 truncate">{langDisplayName(lang.ext)}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-surface-secondary">
+                          {lang.count.toLocaleString()}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </details>
+            )}
+          </div>
+
+          {/* Desktop sidebar (md+) */}
+          <nav className="hidden md:block w-52 shrink-0">
             <div className="border border-border rounded-lg overflow-hidden bg-surface">
               {TABS.map((tab, i) => {
                 const count = counts[tab.key];
