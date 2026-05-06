@@ -7,11 +7,14 @@ import {
   getRepoCommits,
   getRepoLanguages,
 } from "../lib/server/repos";
+import { getRepoEditContext } from "../lib/server/repo-edit";
 import { CloneUrl } from "@groffee/ui";
 import { BranchSwitcherWrapper as BranchSwitcher } from "../components/branch-switcher-wrapper.client";
 import { FileSearchProvider, FileSearchButton } from "../components/file-search";
 import { renderMarkdown } from "../lib/markdown";
 import { getSessionUser } from "../lib/server/auth";
+import { RepoAboutSidebar } from "../components/repo-about-sidebar";
+import { MarkdownCopyButtons } from "../components/markdown-copy-buttons.client";
 
 function formatRelativeDate(timestamp: number): string {
   const seconds = Math.floor(Date.now() / 1000 - timestamp);
@@ -47,12 +50,14 @@ export default async function Repo({ params }: { params?: Record<string, string>
   const repository = repoData.repository!;
   const defaultBranch = repository.defaultBranch;
 
-  const [treeData, refsData, commitsData, langData] = await Promise.all([
+  const [treeData, refsData, commitsData, langData, editCtx] = await Promise.all([
     getRepoTree(owner, repoName, defaultBranch),
     getRepoRefs(owner, repoName),
     getRepoCommits(owner, repoName, defaultBranch, { limit: 1 }),
     getRepoLanguages(owner, repoName),
+    getRepoEditContext(owner, repoName),
   ]);
+  const canWrite = "canWrite" in editCtx ? editCtx.canWrite : false;
 
   const ref = treeData.ref || defaultBranch;
   const entries = treeData.entries || [];
@@ -92,17 +97,19 @@ export default async function Repo({ params }: { params?: Record<string, string>
   return (
     <FileSearchProvider owner={owner} repo={repoName} currentRef={ref}>
       <div className="max-w-6xl mx-auto mt-8">
-        <div className="flex gap-8">
+        <div className="flex flex-col xl:flex-row gap-8">
           {/* Main content */}
           <div className="flex-1 min-w-0">
             {/* Actions bar */}
             {branches.length > 0 && (
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3 flex-wrap">
                   <BranchSwitcher
                     branches={branches}
+                    tags={tags}
                     currentRef={ref}
                     basePath={`/${owner}/${repoName}`}
+                    mode="tree"
                   />
                   <Link
                     to={`/${owner}/${repoName}/commits/${ref}`}
@@ -119,7 +126,10 @@ export default async function Repo({ params }: { params?: Record<string, string>
                     {branches.length} branch{branches.length !== 1 ? "es" : ""}
                   </Link>
                   {tags.length > 0 && (
-                    <span className="flex items-center gap-1 text-sm text-text-secondary">
+                    <Link
+                      to={`/${owner}/${repoName}/tags`}
+                      className="flex items-center gap-1 text-sm text-text-secondary hover:text-text-link hover:no-underline"
+                    >
                       <svg
                         className="w-4 h-4"
                         fill="none"
@@ -134,11 +144,18 @@ export default async function Repo({ params }: { params?: Record<string, string>
                         />
                       </svg>
                       {tags.length} tag{tags.length !== 1 ? "s" : ""}
-                    </span>
+                    </Link>
                   )}
                 </div>
-                <div className="w-56">
-                  <FileSearchButton />
+                <div className="flex items-center gap-3">
+                  {canWrite && (
+                    <Link to={`/${owner}/${repoName}/new/${ref}`} className="btn-secondary btn-sm">
+                      Add file
+                    </Link>
+                  )}
+                  <div className="w-56">
+                    <FileSearchButton />
+                  </div>
                 </div>
               </div>
             )}
@@ -158,7 +175,7 @@ export default async function Repo({ params }: { params?: Record<string, string>
                       </Link>
                       <Link
                         to={`/${owner}/${repoName}/commit/${latestCommit.oid}`}
-                        className="text-text-secondary hover:text-text-link hover:underline truncate"
+                        className="text-text-secondary hover:text-text-link hover:underline truncate hidden sm:inline"
                       >
                         {latestCommit.message.split("\n")[0]}
                       </Link>
@@ -258,7 +275,10 @@ export default async function Repo({ params }: { params?: Record<string, string>
                               )}
                             </Link>
                           </td>
-                          <td className="py-2 px-4 truncate max-w-xs">
+                          {/* Last-commit message — hidden on small screens to
+                              keep the row from wrapping; the file name and the
+                              age remain visible. */}
+                          <td className="py-2 px-4 truncate max-w-xs hidden sm:table-cell">
                             {entry.lastCommit && (
                               <Link
                                 to={`/${owner}/${repoName}/commit/${entry.lastCommit.oid}`}
@@ -396,118 +416,22 @@ git push -u origin main`}
                   </svg>
                   <span className="text-sm font-medium text-text-primary">{readmeFileName}</span>
                 </div>
-                <div
-                  className="markdown-body px-6 py-5"
-                  dangerouslySetInnerHTML={{ __html: readmeHtml }}
-                />
+                <MarkdownCopyButtons className="markdown-body px-6 py-5" html={readmeHtml} />
               </div>
             )}
           </div>
 
-          {/* Sidebar */}
-          <div className="w-64 flex-shrink-0 hidden lg:block">
-            {/* About section */}
-            <div className="border-b border-border pb-4 mb-4">
-              <h3 className="text-base font-semibold text-text-primary mb-2">About</h3>
-              {repository.description ? (
-                <p className="text-sm text-text-secondary mb-3">{repository.description}</p>
-              ) : (
-                <p className="text-sm text-text-tertiary italic mb-3">No description provided</p>
-              )}
-              <div className="space-y-2.5 text-sm">
-                {readmeFileName && (
-                  <a
-                    href="#readme"
-                    className="flex items-center gap-2 text-text-secondary hover:text-text-link"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                      />
-                    </svg>
-                    Readme
-                  </a>
-                )}
-                {licenseEntry && (
-                  <Link
-                    to={`/${owner}/${repoName}/blob/${ref}/${licenseEntry.path}`}
-                    className="flex items-center gap-2 text-text-secondary hover:text-text-link"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"
-                      />
-                    </svg>
-                    License
-                  </Link>
-                )}
-                <Link
-                  to={`/${owner}/${repoName}/activity`}
-                  className="flex items-center gap-2 text-text-secondary hover:text-text-link"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                    />
-                  </svg>
-                  Activity
-                </Link>
-              </div>
-            </div>
-
-            {/* Clone section */}
-            <div className="border-b border-border pb-4 mb-4">
-              <h3 className="text-sm font-semibold text-text-primary mb-2">Clone</h3>
-              <CloneUrl path={clonePath} />
-            </div>
-
-            {/* Languages */}
-            {languages.length > 0 && (
-              <div>
-                <h3 className="text-base font-semibold text-text-primary mb-3">Languages</h3>
-                {/* Color bar */}
-                <div
-                  className="flex w-full rounded-full overflow-hidden mb-3"
-                  style={{ height: "10px" }}
-                >
-                  {languages.map((lang) => (
-                    <div
-                      key={lang.name}
-                      style={{
-                        width: `${lang.percentage}%`,
-                        minWidth: "3px",
-                        height: "100%",
-                        backgroundColor: lang.color,
-                      }}
-                      title={`${lang.name} ${lang.percentage}%`}
-                    />
-                  ))}
-                </div>
-                {/* Legend */}
-                <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
-                  {languages.map((lang) => (
-                    <div key={lang.name} className="flex items-center gap-1.5">
-                      <span
-                        className="w-3 h-3 rounded-full inline-block flex-shrink-0"
-                        style={{ backgroundColor: lang.color }}
-                      />
-                      <span className="text-text-primary font-medium">{lang.name}</span>
-                      <span className="text-text-secondary">{lang.percentage}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <RepoAboutSidebar
+            owner={owner}
+            repo={repoName}
+            description={repository.description}
+            readmePath={readmeEntry?.path ?? null}
+            licensePath={licenseEntry?.path ?? null}
+            readmeAnchor
+            gitRef={ref}
+            languages={languages}
+            hasLfs={hasLfs}
+          />
         </div>
       </div>
     </FileSearchProvider>

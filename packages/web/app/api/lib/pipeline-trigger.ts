@@ -14,6 +14,9 @@ import {
   matchesTrigger,
   resolveJobOrder,
   interpolateTemplate,
+  expandMatrix,
+  matrixCellLabel,
+  type MatrixValues,
 } from "./pipeline-config.js";
 import { enqueueRun } from "./pipeline-queue.js";
 import { logAudit } from "./audit.js";
@@ -113,35 +116,57 @@ export async function triggerPipelines(params: {
       createdAt: now,
     });
 
-    // Create job and step records
+    // Create job and step records.
+    //
+    // Matrix expansion: a job with `matrix:` fans into N child rows, one per
+    // cartesian cell. Display name = `<base> (k1=v1, k2=v2)`. Sibling cells
+    // share an integer `sortOrder` cluster — base index * 1000 + cell index —
+    // so they list together while staying sortable.
+    //
+    // `needs` between matrix jobs and other jobs targets the parent jobKey;
+    // the runner satisfies the dependency only when ALL matrix cells of that
+    // jobKey have succeeded (see pipeline-runner.ts).
     const jobOrder = resolveJobOrder(pipelineConfig.jobs);
     for (let jobIdx = 0; jobIdx < jobOrder.length; jobIdx++) {
       const jobKey = jobOrder[jobIdx];
       const jobConfig = pipelineConfig.jobs[jobKey];
-      const jobId = crypto.randomUUID();
+      const baseName = jobConfig.name || jobKey;
 
-      await db.insert(pipelineJobs).values({
-        id: jobId,
-        runId,
-        name: jobConfig.name || jobKey,
-        status: "queued",
-        sortOrder: jobIdx,
-        createdAt: now,
-      });
+      // Determine the list of "cells" — non-matrix jobs are a single cell with
+      // null matrixValues, matrix jobs explode into the cartesian product.
+      const cells: Array<{ values: MatrixValues | null; label: string | null }> = jobConfig.matrix
+        ? expandMatrix(jobConfig.matrix).map((v) => ({ values: v, label: matrixCellLabel(v) }))
+        : [{ values: null, label: null }];
 
-      for (let stepIdx = 0; stepIdx < jobConfig.steps.length; stepIdx++) {
-        const stepConfig = jobConfig.steps[stepIdx];
-        await db.insert(pipelineSteps).values({
-          id: crypto.randomUUID(),
-          jobId,
-          name: stepConfig.name,
-          command: stepConfig.run || null,
-          uses: stepConfig.uses || null,
-          withConfig: stepConfig.with ? JSON.stringify(stepConfig.with) : null,
+      for (let cellIdx = 0; cellIdx < cells.length; cellIdx++) {
+        const cell = cells[cellIdx];
+        const jobId = crypto.randomUUID();
+        const displayName = cell.label ? `${baseName} (${cell.label})` : baseName;
+
+        await db.insert(pipelineJobs).values({
+          id: jobId,
+          runId,
+          name: displayName,
           status: "queued",
-          sortOrder: stepIdx,
+          sortOrder: jobIdx * 1000 + cellIdx,
+          matrixValues: cell.values ? JSON.stringify(cell.values) : null,
           createdAt: now,
         });
+
+        for (let stepIdx = 0; stepIdx < jobConfig.steps.length; stepIdx++) {
+          const stepConfig = jobConfig.steps[stepIdx];
+          await db.insert(pipelineSteps).values({
+            id: crypto.randomUUID(),
+            jobId,
+            name: stepConfig.name,
+            command: stepConfig.run || null,
+            uses: stepConfig.uses || null,
+            withConfig: stepConfig.with ? JSON.stringify(stepConfig.with) : null,
+            status: "queued",
+            sortOrder: stepIdx,
+            createdAt: now,
+          });
+        }
       }
     }
 

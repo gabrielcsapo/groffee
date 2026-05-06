@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getTokens, createToken, revokeToken } from "../lib/server/tokens";
 import { SettingsNav } from "../components/settings-nav.client";
+import { useConfirmDialog } from "../components/confirm-dialog.client";
 
 interface Token {
   id: string;
@@ -44,6 +45,7 @@ export default function SettingsTokensClient() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [newToken, setNewToken] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
 
   useEffect(() => {
     getTokens()
@@ -95,6 +97,12 @@ export default function SettingsTokensClient() {
   }
 
   async function handleDelete(id: string) {
+    const confirmed = await confirm({
+      title: "Revoke token?",
+      message: "Any system or script using this token will stop working. This cannot be undone.",
+    });
+    if (!confirmed) return;
+
     setError("");
     setMessage("");
     setNewToken(null);
@@ -171,10 +179,15 @@ export default function SettingsTokensClient() {
         <div className="bg-surface border border-border rounded-lg mb-6">
           {tokens.map((token, i) => {
             const scopes: string[] = JSON.parse(token.scopes);
+            // A token is expired when the optional expiresAt has passed; we
+            // still let the user revoke it (the row stays in the DB until
+            // they do so, but auth checks reject it). Surface this clearly so
+            // they don't waste time re-using a dead token.
+            const isExpired = !!token.expiresAt && new Date(token.expiresAt).getTime() < Date.now();
             return (
               <div
                 key={token.id}
-                className={`flex items-center justify-between px-4 py-3 ${i > 0 ? "border-t border-border" : ""}`}
+                className={`flex items-start sm:items-center justify-between gap-3 px-4 py-3 ${i > 0 ? "border-t border-border" : ""}`}
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -182,6 +195,15 @@ export default function SettingsTokensClient() {
                     <code className="text-xs font-mono text-text-secondary">
                       {token.tokenPrefix}...
                     </code>
+                    {isExpired ? (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-danger-bg border border-danger/30 text-danger font-medium">
+                        Expired
+                      </span>
+                    ) : (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-diff-add-bg border border-success/30 text-success font-medium">
+                        Active
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {scopes.map((scope) => (
@@ -195,21 +217,20 @@ export default function SettingsTokensClient() {
                     <span className="text-xs text-text-secondary">
                       Created {timeAgo(token.createdAt)}
                     </span>
-                    {token.lastUsedAt && (
-                      <span className="text-xs text-text-secondary">
-                        Last used {timeAgo(token.lastUsedAt)}
-                      </span>
-                    )}
+                    <span className="text-xs text-text-secondary">
+                      {token.lastUsedAt ? `Last used ${timeAgo(token.lastUsedAt)}` : "Never used"}
+                    </span>
                     {token.expiresAt && (
                       <span className="text-xs text-text-secondary">
-                        Expires {new Date(token.expiresAt).toLocaleDateString()}
+                        {isExpired ? "Expired" : "Expires"}{" "}
+                        {new Date(token.expiresAt).toLocaleDateString()}
                       </span>
                     )}
                   </div>
                 </div>
                 <button
                   onClick={() => handleDelete(token.id)}
-                  className="btn-danger btn-sm ml-4 shrink-0"
+                  className="btn-danger btn-sm shrink-0"
                 >
                   Revoke
                 </button>
@@ -315,6 +336,7 @@ export default function SettingsTokensClient() {
           </div>
         </div>
       </div>
+      {dialog}
     </div>
   );
 }

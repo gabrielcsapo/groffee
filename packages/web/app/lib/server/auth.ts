@@ -51,6 +51,10 @@ export async function login(
 
   const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
   if (!user) return { error: "Invalid credentials" };
+  // Disabled accounts cannot create new sessions. Returning the same
+  // "Invalid credentials" message would be more secure-by-obscurity, but the
+  // user needs to know to contact an admin — pick honesty over symmetry.
+  if (user.disabled) return { error: "This account has been disabled." };
 
   const valid = await verify(user.passwordHash, password);
   if (!valid) return { error: "Invalid credentials" };

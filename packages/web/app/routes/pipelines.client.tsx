@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-flight-router/client";
 import { getPipelineRuns, dispatchPipeline } from "../lib/server/pipelines";
+import { LoadMore } from "../components/load-more.client";
 
 interface PipelineRun {
   id: string;
@@ -60,44 +61,123 @@ function formatTime(iso: string): string {
 export function PipelinesView({
   owner,
   repo,
+  initialStatus,
+  initialRef,
+  initialTrigger,
+  initialActor,
   initialRuns,
+  initialNextCursor,
+  initialHasMore,
   hasConfig,
   configYaml,
   configError,
+  canEditConfig = false,
+  refOptions,
+  actorOptions,
 }: {
   owner: string;
   repo: string;
+  initialStatus: string;
+  initialRef: string;
+  initialTrigger: string;
+  initialActor: string;
   initialRuns: PipelineRun[];
+  initialNextCursor: string | null;
+  initialHasMore: boolean;
   hasConfig: boolean;
   configYaml: string | null;
   configError: string | null;
+  canEditConfig?: boolean;
+  refOptions: string[];
+  actorOptions: string[];
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFilter = searchParams.get("status") || "";
+  const refFilter = searchParams.get("ref") || "";
+  const triggerFilter = searchParams.get("trigger") || "";
+  const actorFilter = searchParams.get("actor") || "";
   const [runs, setRuns] = useState<PipelineRun[]>(initialRuns);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
+  const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
   const [showDispatch, setShowDispatch] = useState(false);
   const [dispatchRef, setDispatchRef] = useState("main");
   const [dispatching, setDispatching] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
 
+  // All filter values are URL-driven. We pack them into the same options
+  // object the server action accepts, so refresh + loadMore + filter-change
+  // all stay in sync.
+  const filterOptions = {
+    ref: refFilter || undefined,
+    trigger: (triggerFilter || undefined) as "push" | "pull_request" | "manual" | undefined,
+    actor: actorFilter || undefined,
+  };
+
+  // Refresh just the first page (for live polling). Doesn't disturb already-
+  // loaded older pages — we replace the freshest N rows.
   const refreshRuns = useCallback(() => {
-    getPipelineRuns(owner, repo, statusFilter || undefined).then((data) => {
-      if (data.runs) setRuns(data.runs);
+    getPipelineRuns(owner, repo, statusFilter || undefined, filterOptions).then((data) => {
+      if (data.runs) {
+        setRuns(data.runs);
+        setNextCursor(data.nextCursor || null);
+        setHasMore(data.hasMore ?? false);
+      }
     });
-  }, [owner, repo, statusFilter]);
+    // filterOptions is a fresh object each render; the underlying primitives
+    // are tracked individually so this is correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [owner, repo, statusFilter, refFilter, triggerFilter, actorFilter]);
 
   useEffect(() => {
-    if (statusFilter) {
-      setLoading(true);
-      getPipelineRuns(owner, repo, statusFilter).then((data) => {
-        setRuns(data.runs || []);
-        setLoading(false);
-      });
-    } else {
+    if (
+      statusFilter === initialStatus &&
+      refFilter === initialRef &&
+      triggerFilter === initialTrigger &&
+      actorFilter === initialActor
+    ) {
       setRuns(initialRuns);
+      setNextCursor(initialNextCursor);
+      setHasMore(initialHasMore);
+      return;
     }
-  }, [statusFilter, owner, repo, initialRuns]);
+    setLoading(true);
+    getPipelineRuns(owner, repo, statusFilter || undefined, filterOptions).then((data) => {
+      setRuns(data.runs || []);
+      setNextCursor(data.nextCursor || null);
+      setHasMore(data.hasMore ?? false);
+      setLoading(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    statusFilter,
+    refFilter,
+    triggerFilter,
+    actorFilter,
+    initialStatus,
+    initialRef,
+    initialTrigger,
+    initialActor,
+    owner,
+    repo,
+    initialRuns,
+    initialNextCursor,
+    initialHasMore,
+  ]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    const data = await getPipelineRuns(owner, repo, statusFilter || undefined, {
+      ...filterOptions,
+      cursor: nextCursor,
+    });
+    if (!data.error && data.runs) {
+      setRuns((prev) => [...prev, ...(data.runs as PipelineRun[])]);
+      setNextCursor(data.nextCursor || null);
+      setHasMore(data.hasMore ?? false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [owner, repo, statusFilter, refFilter, triggerFilter, actorFilter, nextCursor]);
 
   // Auto-refresh if any runs are in progress
   useEffect(() => {
@@ -136,6 +216,14 @@ export function PipelinesView({
             >
               {showConfig ? "Hide Config" : "View Config"}
             </button>
+          )}
+          {canEditConfig && (
+            <Link
+              to={`/${owner}/${repo}/pipelines/config`}
+              className="px-3 py-1.5 text-sm border border-border rounded-md text-text-secondary hover:text-text-primary hover:border-border-hover hover:no-underline"
+            >
+              {hasConfig ? "Edit Config" : "Add Config"}
+            </Link>
           )}
           <button
             onClick={() => setShowDispatch(!showDispatch)}
@@ -193,29 +281,105 @@ export function PipelinesView({
         </div>
       )}
 
-      {/* Status filter */}
-      <div className="flex gap-1 mb-4">
-        {filterButtons.map((btn) => (
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-4 items-center">
+        <div className="flex gap-1">
+          {filterButtons.map((btn) => (
+            <button
+              key={btn.value}
+              onClick={() => {
+                const params = new URLSearchParams(searchParams);
+                if (btn.value) {
+                  params.set("status", btn.value);
+                } else {
+                  params.delete("status");
+                }
+                setSearchParams(params);
+              }}
+              className={`px-3 py-1 text-sm rounded-md ${
+                statusFilter === btn.value
+                  ? "bg-primary text-white"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
+              }`}
+            >
+              {btn.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Ref / branch filter — alphabetized list capped at 100 (server-side) */}
+        <select
+          aria-label="Filter by branch"
+          value={refFilter}
+          onChange={(e) => {
+            const params = new URLSearchParams(searchParams);
+            if (e.target.value) params.set("ref", e.target.value);
+            else params.delete("ref");
+            setSearchParams(params);
+          }}
+          className="px-2 py-1 text-sm border border-border rounded-md bg-surface-primary text-text-primary"
+        >
+          <option value="">All branches</option>
+          {refOptions.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+
+        {/* Trigger filter — fixed enum */}
+        <select
+          aria-label="Filter by trigger"
+          value={triggerFilter}
+          onChange={(e) => {
+            const params = new URLSearchParams(searchParams);
+            if (e.target.value) params.set("trigger", e.target.value);
+            else params.delete("trigger");
+            setSearchParams(params);
+          }}
+          className="px-2 py-1 text-sm border border-border rounded-md bg-surface-primary text-text-primary"
+        >
+          <option value="">All triggers</option>
+          <option value="push">push</option>
+          <option value="pull_request">pull_request</option>
+          <option value="manual">manual</option>
+        </select>
+
+        {/* Actor filter — alphabetized usernames capped at 100 (server-side) */}
+        <select
+          aria-label="Filter by actor"
+          value={actorFilter}
+          onChange={(e) => {
+            const params = new URLSearchParams(searchParams);
+            if (e.target.value) params.set("actor", e.target.value);
+            else params.delete("actor");
+            setSearchParams(params);
+          }}
+          className="px-2 py-1 text-sm border border-border rounded-md bg-surface-primary text-text-primary"
+        >
+          <option value="">All actors</option>
+          {actorOptions.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
+
+        {(refFilter || triggerFilter || actorFilter) && (
           <button
-            key={btn.value}
+            type="button"
             onClick={() => {
               const params = new URLSearchParams(searchParams);
-              if (btn.value) {
-                params.set("status", btn.value);
-              } else {
-                params.delete("status");
-              }
+              params.delete("ref");
+              params.delete("trigger");
+              params.delete("actor");
               setSearchParams(params);
             }}
-            className={`px-3 py-1 text-sm rounded-md ${
-              statusFilter === btn.value
-                ? "bg-primary text-white"
-                : "text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
-            }`}
+            className="px-2 py-1 text-xs text-text-secondary hover:text-text-primary"
           >
-            {btn.label}
+            Clear filters
           </button>
-        ))}
+        )}
       </div>
 
       {!hasConfig && runs.length === 0 && (
@@ -254,41 +418,46 @@ export function PipelinesView({
           ))}
         </div>
       ) : runs.length > 0 ? (
-        <div className="border border-border rounded-lg overflow-hidden">
-          {runs.map((run, idx) => (
-            <Link
-              key={run.id}
-              to={`/${owner}/${repo}/pipelines/runs/${run.number}`}
-              className={`flex items-center gap-4 px-4 py-3 hover:bg-surface-secondary hover:no-underline ${
-                idx > 0 ? "border-t border-border" : ""
-              }`}
-            >
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[run.status] || ""}`}
+        <>
+          <div className="border border-border rounded-lg overflow-hidden">
+            {runs.map((run, idx) => (
+              <Link
+                key={run.id}
+                to={`/${owner}/${repo}/pipelines/runs/${run.number}`}
+                className={`flex items-center gap-4 px-4 py-3 hover:bg-surface-secondary hover:no-underline ${
+                  idx > 0 ? "border-t border-border" : ""
+                }`}
               >
-                <span>{STATUS_ICONS[run.status] || ""}</span>
-                {run.status}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-text-primary text-sm">{run.pipelineName}</span>
-                  <span className="text-text-tertiary text-xs">#{run.number}</span>
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[run.status] || ""}`}
+                >
+                  <span>{STATUS_ICONS[run.status] || ""}</span>
+                  {run.status}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-text-primary text-sm">
+                      {run.pipelineName}
+                    </span>
+                    <span className="text-text-tertiary text-xs">#{run.number}</span>
+                  </div>
+                  <div className="text-xs text-text-secondary mt-0.5">
+                    {run.trigger} on <span className="font-mono">{run.ref}</span>
+                    {" \u00B7 "}
+                    <span className="font-mono">{run.commitOid.slice(0, 7)}</span>
+                    {" \u00B7 by "}
+                    {run.triggeredBy}
+                  </div>
                 </div>
-                <div className="text-xs text-text-secondary mt-0.5">
-                  {run.trigger} on <span className="font-mono">{run.ref}</span>
-                  {" \u00B7 "}
-                  <span className="font-mono">{run.commitOid.slice(0, 7)}</span>
-                  {" \u00B7 by "}
-                  {run.triggeredBy}
+                <div className="text-right text-xs text-text-secondary">
+                  <div>{formatTime(run.createdAt)}</div>
+                  <div>{formatDuration(run.startedAt, run.finishedAt)}</div>
                 </div>
-              </div>
-              <div className="text-right text-xs text-text-secondary">
-                <div>{formatTime(run.createdAt)}</div>
-                <div>{formatDuration(run.startedAt, run.finishedAt)}</div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+          <LoadMore hasMore={hasMore} onLoad={loadMore} />
+        </>
       ) : (
         hasConfig && (
           <div className="text-center py-8 text-text-secondary text-sm">

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-flight-router/client";
 import { timeAgo } from "../lib/time";
 import { getIssues } from "../lib/server/issues";
+import { LoadMore } from "../components/load-more.client";
 
 interface Issue {
   id: string;
@@ -17,28 +18,56 @@ interface Issue {
 export function IssuesList({
   owner,
   repo,
+  initialStatus,
   initialIssues,
+  initialNextCursor,
+  initialHasMore,
 }: {
   owner: string;
   repo: string;
+  initialStatus: string;
   initialIssues: Issue[];
+  initialNextCursor: string | null;
+  initialHasMore: boolean;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get("status") || "open";
   const [issues, setIssues] = useState<Issue[]>(initialIssues);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
+  const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (status === "open") {
+    if (status === initialStatus) {
       setIssues(initialIssues);
+      setNextCursor(initialNextCursor);
+      setHasMore(initialHasMore);
       return;
     }
     setLoading(true);
     getIssues(owner, repo, status)
-      .then((data) => setIssues(data.issues || []))
-      .catch(() => setIssues([]))
+      .then((data) => {
+        setIssues(data.issues || []);
+        setNextCursor(data.nextCursor || null);
+        setHasMore(data.hasMore ?? false);
+      })
+      .catch(() => {
+        setIssues([]);
+        setNextCursor(null);
+        setHasMore(false);
+      })
       .finally(() => setLoading(false));
-  }, [owner, repo, status, initialIssues]);
+  }, [owner, repo, status, initialStatus, initialIssues, initialNextCursor, initialHasMore]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    const data = await getIssues(owner, repo, status, { cursor: nextCursor });
+    if (!data.error && data.issues) {
+      setIssues((prev) => [...prev, ...(data.issues as Issue[])]);
+      setNextCursor(data.nextCursor || null);
+      setHasMore(data.hasMore ?? false);
+    }
+  }, [owner, repo, status, nextCursor]);
 
   return (
     <div className="max-w-6xl mx-auto mt-4">
@@ -77,45 +106,48 @@ export function IssuesList({
           ))}
         </div>
       ) : issues.length > 0 ? (
-        <div className="border border-border rounded-lg overflow-hidden bg-surface">
-          {issues.map((issue, i) => (
-            <div
-              key={issue.id}
-              className={`px-4 py-3 ${i < issues.length - 1 ? "border-b border-border" : ""} hover:bg-surface-secondary transition-colors`}
-            >
-              <div className="flex items-start gap-3">
-                <svg
-                  className={`w-4 h-4 mt-0.5 flex-shrink-0 ${issue.status === "open" ? "text-success" : "text-danger"}`}
-                  fill="currentColor"
-                  viewBox="0 0 16 16"
-                >
-                  <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
-                  {issue.status === "open" && <circle cx="8" cy="8" r="3" />}
-                  {issue.status === "closed" && (
-                    <path d="M4 8l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" />
-                  )}
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <Link
-                    to={`/${owner}/${repo}/issue/${issue.number}`}
-                    className="text-sm font-semibold text-text-primary hover:text-text-link hover:underline"
+        <>
+          <div className="border border-border rounded-lg overflow-hidden bg-surface">
+            {issues.map((issue, i) => (
+              <div
+                key={issue.id}
+                className={`px-4 py-3 ${i < issues.length - 1 ? "border-b border-border" : ""} hover:bg-surface-secondary transition-colors`}
+              >
+                <div className="flex items-start gap-3">
+                  <svg
+                    className={`w-4 h-4 mt-0.5 flex-shrink-0 ${issue.status === "open" ? "text-success" : "text-danger"}`}
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
                   >
-                    {issue.title}
-                  </Link>
-                  <p className="text-xs text-text-secondary mt-0.5">
-                    #{issue.number} opened {timeAgo(issue.createdAt)} by{" "}
+                    <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
+                    {issue.status === "open" && <circle cx="8" cy="8" r="3" />}
+                    {issue.status === "closed" && (
+                      <path d="M4 8l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" />
+                    )}
+                  </svg>
+                  <div className="flex-1 min-w-0">
                     <Link
-                      to={`/${issue.author}`}
-                      className="hover:underline hover:text-text-primary"
+                      to={`/${owner}/${repo}/issue/${issue.number}`}
+                      className="text-sm font-semibold text-text-primary hover:text-text-link hover:underline"
                     >
-                      {issue.author}
+                      {issue.title}
                     </Link>
-                  </p>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      #{issue.number} opened {timeAgo(issue.createdAt)} by{" "}
+                      <Link
+                        to={`/${issue.author}`}
+                        className="hover:underline hover:text-text-primary"
+                      >
+                        {issue.author}
+                      </Link>
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <LoadMore hasMore={hasMore} onLoad={loadMore} />
+        </>
       ) : (
         <div className="border border-border rounded-lg p-12 text-center bg-surface">
           <svg

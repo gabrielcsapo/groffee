@@ -281,14 +281,23 @@ export function ThemeToggle() {
 }
 
 export function UserNav() {
-  const [user, setUser] = useState<{ username: string; isAdmin: boolean } | null>(null);
+  const [user, setUser] = useState<{
+    username: string;
+    isAdmin: boolean;
+    avatarUploadId: string | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     getSessionUser()
       .then((u) => {
-        if (u) setUser({ username: u.username, isAdmin: !!u.isAdmin });
+        if (u)
+          setUser({
+            username: u.username,
+            isAdmin: !!u.isAdmin,
+            avatarUploadId: u.avatarUploadId ?? null,
+          });
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -330,9 +339,20 @@ export function UserNav() {
       <div className="relative">
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-sm font-medium hover:bg-white/30 transition-colors ring-2 ring-transparent hover:ring-white/20"
+          className="rounded-full hover:opacity-90 transition-opacity ring-2 ring-transparent hover:ring-white/20"
+          aria-label="User menu"
         >
-          {user.username[0].toUpperCase()}
+          {user.avatarUploadId ? (
+            <img
+              src={`/api/uploads/${user.avatarUploadId}?w=64`}
+              alt={`${user.username} avatar`}
+              className="w-8 h-8 rounded-full object-cover bg-white/10"
+            />
+          ) : (
+            <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-sm font-medium">
+              {user.username[0].toUpperCase()}
+            </span>
+          )}
         </button>
         {menuOpen && (
           <>

@@ -1,14 +1,25 @@
 import { Hono } from "hono";
-import { db, repositories, users, pullRequests, comments, editHistory } from "@groffee/db";
-import { eq, and, desc, max, count, inArray, sql } from "drizzle-orm";
+import {
+  db,
+  repositories,
+  repoCollaborators,
+  users,
+  pullRequests,
+  comments,
+  diffComments,
+  editHistory,
+} from "@groffee/db";
+import { eq, and, desc, asc, max, count, inArray, sql } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
 import { listRefs, getDiff, snapshotRefs } from "@groffee/git";
 import { triggerIncrementalIndex } from "../lib/indexer.js";
+import { renderMarkdown } from "../../lib/markdown.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { logAudit, getClientIp } from "../lib/audit.js";
 import { resolveDiskPath } from "../lib/paths.js";
 import { triggerPipelines } from "../lib/pipeline-trigger.js";
+import { highlightDiff } from "../../lib/highlight.js";
 import type { AppEnv } from "../types.js";
 
 const execFileAsync = promisify(execFile);
@@ -92,6 +103,7 @@ pullRoutes.get("/:owner/:repo/pulls/:number", optionalAuth, async (c) => {
       { cwd: resolveDiskPath(result.repo.diskPath) },
     );
     diff = await getDiff(resolveDiskPath(result.repo.diskPath), mergeBase.trim(), pr.sourceBranch);
+    diff = await highlightDiff(diff);
   } catch {
     // Branches may not exist anymore
   }
@@ -338,16 +350,27 @@ pullRoutes.patch("/:owner/:repo/pulls/:number", requireAuth, async (c) => {
   return c.json({ pullRequest: updated });
 });
 
-// Merge pull request
+// Merge pull request — supports strategies "merge" | "squash"; "rebase" is 501.
 pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
   const user = c.get("user") as { id: string; username: string };
   const currentUser = c.get("user") as { id: string } | undefined;
   const result = await findRepoForPulls(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
   if (!result) return c.json({ error: "Repository not found" }, 404);
 
-  // Only repo owner can merge
-  if (user.id !== result.owner.id) {
-    return c.json({ error: "Only the repository owner can merge pull requests" }, 403);
+  // Write permission: owner OR collaborator with write/admin
+  let canWrite = user.id === result.owner.id;
+  if (!canWrite) {
+    const [collab] = await db
+      .select()
+      .from(repoCollaborators)
+      .where(
+        and(eq(repoCollaborators.repoId, result.repo.id), eq(repoCollaborators.userId, user.id)),
+      )
+      .limit(1);
+    canWrite = !!collab && (collab.permission === "write" || collab.permission === "admin");
+  }
+  if (!canWrite) {
+    return c.json({ error: "Only collaborators with write access can merge pull requests" }, 403);
   }
 
   const num = parseInt(c.req.param("number"), 10);
@@ -360,73 +383,116 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
   if (!pr) return c.json({ error: "Pull request not found" }, 404);
   if (pr.status !== "open") return c.json({ error: "Pull request is not open" }, 400);
 
+  const body = (await c.req.json().catch(() => ({}))) as {
+    strategy?: "merge" | "squash" | "rebase";
+    commitMessage?: string;
+    deleteBranch?: boolean;
+  };
+  const strategy = body.strategy ?? "merge";
+
+  if (strategy === "rebase") {
+    return c.json({ error: "Rebase merging not yet supported" }, 501);
+  }
+  if (strategy !== "merge" && strategy !== "squash") {
+    return c.json({ error: `Unknown merge strategy: ${strategy}` }, 400);
+  }
+
   const repoDiskPath = resolveDiskPath(result.repo.diskPath);
   // Snapshot refs before mutating so the indexer can diff afterward.
   const refsBefore = await snapshotRefs(repoDiskPath);
 
-  // Perform merge in bare repo using git
+  const gitEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: user.username,
+    GIT_AUTHOR_EMAIL: `${user.username}@groffee`,
+    GIT_COMMITTER_NAME: user.username,
+    GIT_COMMITTER_EMAIL: `${user.username}@groffee`,
+  };
+
+  let mergeCommitOid: string | null = null;
+
   try {
-    // Use a temp environment to do the merge
-    // For bare repos, we update the target ref to include the source commits
-    // Try fast-forward first
     const { stdout: mergeBase } = await execFileAsync(
       "git",
       ["merge-base", pr.targetBranch, pr.sourceBranch],
-      { cwd: resolveDiskPath(result.repo.diskPath) },
+      { cwd: repoDiskPath },
     );
-
     const { stdout: targetTip } = await execFileAsync("git", ["rev-parse", pr.targetBranch], {
-      cwd: resolveDiskPath(result.repo.diskPath),
+      cwd: repoDiskPath,
+    });
+    const { stdout: sourceTip } = await execFileAsync("git", ["rev-parse", pr.sourceBranch], {
+      cwd: repoDiskPath,
     });
 
-    if (mergeBase.trim() === targetTip.trim()) {
-      // Fast-forward: just update the target ref
-      const { stdout: sourceTip } = await execFileAsync("git", ["rev-parse", pr.sourceBranch], {
-        cwd: resolveDiskPath(result.repo.diskPath),
-      });
-      await execFileAsync(
-        "git",
-        ["update-ref", `refs/heads/${pr.targetBranch}`, sourceTip.trim()],
-        { cwd: resolveDiskPath(result.repo.diskPath) },
-      );
+    const targetTipOid = targetTip.trim();
+    const sourceTipOid = sourceTip.trim();
+    const mergeBaseOid = mergeBase.trim();
+
+    if (strategy === "merge") {
+      if (mergeBaseOid === targetTipOid) {
+        await execFileAsync("git", ["update-ref", `refs/heads/${pr.targetBranch}`, sourceTipOid], {
+          cwd: repoDiskPath,
+        });
+        mergeCommitOid = sourceTipOid;
+      } else {
+        const { stdout: treeOid } = await execFileAsync(
+          "git",
+          ["merge-tree", "--write-tree", pr.targetBranch, pr.sourceBranch],
+          { cwd: repoDiskPath },
+        );
+
+        const mergeMessage =
+          body.commitMessage?.trim() ||
+          `Merge pull request #${pr.number} from ${pr.sourceBranch}\n\n${pr.title}`;
+        const { stdout: commitOid } = await execFileAsync(
+          "git",
+          [
+            "commit-tree",
+            treeOid.trim(),
+            "-p",
+            targetTipOid,
+            "-p",
+            sourceTipOid,
+            "-m",
+            mergeMessage,
+          ],
+          { cwd: repoDiskPath, env: gitEnv },
+        );
+
+        const newOid = commitOid.trim();
+        await execFileAsync("git", ["update-ref", `refs/heads/${pr.targetBranch}`, newOid], {
+          cwd: repoDiskPath,
+        });
+        mergeCommitOid = newOid;
+      }
     } else {
-      // Create a merge commit using git merge-tree + commit-tree
+      // Squash
       const { stdout: treeOid } = await execFileAsync(
         "git",
         ["merge-tree", "--write-tree", pr.targetBranch, pr.sourceBranch],
-        { cwd: resolveDiskPath(result.repo.diskPath) },
+        { cwd: repoDiskPath },
       );
-
-      const mergeMessage = `Merge pull request #${pr.number} from ${pr.sourceBranch}\n\n${pr.title}`;
+      const squashMessage = body.commitMessage?.trim() || `${pr.title} (#${pr.number})`;
       const { stdout: commitOid } = await execFileAsync(
         "git",
-        [
-          "commit-tree",
-          treeOid.trim(),
-          "-p",
-          targetTip.trim(),
-          "-p",
-          pr.sourceBranch,
-          "-m",
-          mergeMessage,
-        ],
-        {
-          cwd: resolveDiskPath(result.repo.diskPath),
-          env: {
-            ...process.env,
-            GIT_AUTHOR_NAME: user.username,
-            GIT_AUTHOR_EMAIL: `${user.username}@groffee`,
-            GIT_COMMITTER_NAME: user.username,
-            GIT_COMMITTER_EMAIL: `${user.username}@groffee`,
-          },
-        },
+        ["commit-tree", treeOid.trim(), "-p", targetTipOid, "-m", squashMessage],
+        { cwd: repoDiskPath, env: gitEnv },
       );
+      const newOid = commitOid.trim();
+      await execFileAsync("git", ["update-ref", `refs/heads/${pr.targetBranch}`, newOid], {
+        cwd: repoDiskPath,
+      });
+      mergeCommitOid = newOid;
+    }
 
-      await execFileAsync(
-        "git",
-        ["update-ref", `refs/heads/${pr.targetBranch}`, commitOid.trim()],
-        { cwd: resolveDiskPath(result.repo.diskPath) },
-      );
+    if (body.deleteBranch) {
+      try {
+        await execFileAsync("git", ["update-ref", "-d", `refs/heads/${pr.sourceBranch}`], {
+          cwd: repoDiskPath,
+        });
+      } catch (err) {
+        console.error(`Failed to delete branch ${pr.sourceBranch}:`, err);
+      }
     }
 
     // Index the merge: bumps gitRefs.updatedAt for the target branch and
@@ -457,12 +523,15 @@ pullRoutes.post("/:owner/:repo/pulls/:number/merge", requireAuth, async (c) => {
         number: pr.number,
         sourceBranch: pr.sourceBranch,
         targetBranch: pr.targetBranch,
+        strategy,
+        deleteBranch: !!body.deleteBranch,
+        mergeCommitOid,
         repoName: c.req.param("repo"),
       },
       ipAddress: getClientIp(c.req.raw.headers),
     }).catch(console.error);
 
-    return c.json({ merged: true });
+    return c.json({ merged: true, mergeCommitOid });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Merge failed";
     return c.json({ error: `Merge failed: ${message}` }, 500);
@@ -554,3 +623,259 @@ pullRoutes.post("/:owner/:repo/pulls/:number/comments", requireAuth, async (c) =
 
   return c.json({ comment: { id, body: body.trim(), author: user.username, createdAt: now } });
 });
+
+// =====================================================
+// Inline diff comments (PR file review)
+// =====================================================
+// Hosted under `/diff-comments` to avoid colliding with the existing
+// conversation-comment endpoints at `/comments`.
+
+// List all diff comments on a PR (multi-tenancy: scoped by owner+repo+pr).
+pullRoutes.get("/:owner/:repo/pulls/:number/diff-comments", optionalAuth, async (c) => {
+  const currentUser = c.get("user") as { id: string } | undefined;
+  const result = await findRepoForPulls(c.req.param("owner"), c.req.param("repo"), currentUser?.id);
+  if (!result) return c.json({ error: "Repository not found" }, 404);
+
+  const num = parseInt(c.req.param("number"), 10);
+  const [pr] = await db
+    .select()
+    .from(pullRequests)
+    .where(and(eq(pullRequests.repoId, result.repo.id), eq(pullRequests.number, num)))
+    .limit(1);
+  if (!pr) return c.json({ error: "Pull request not found" }, 404);
+
+  const rows = await db
+    .select()
+    .from(diffComments)
+    .where(eq(diffComments.pullRequestId, pr.id))
+    .orderBy(asc(diffComments.createdAt));
+
+  const authorIds = [...new Set(rows.map((r) => r.authorId))];
+  const authors =
+    authorIds.length > 0 ? await db.select().from(users).where(inArray(users.id, authorIds)) : [];
+  const authorMap = new Map(authors.map((u) => [u.id, u.username]));
+
+  const flat = rows.map((r) => ({
+    id: r.id,
+    pullRequestId: r.pullRequestId,
+    parentId: r.parentId,
+    filePath: r.filePath,
+    commitOid: r.commitOid,
+    side: r.side,
+    lineNumber: r.lineNumber,
+    body: r.body,
+    bodyHtml: r.body ? renderMarkdown(r.body) : "",
+    resolved: !!r.resolved,
+    author: authorMap.get(r.authorId) || "unknown",
+    authorId: r.authorId,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  }));
+
+  return c.json({ comments: flat });
+});
+
+// Create a diff comment (or a reply if parentId is set).
+pullRoutes.post("/:owner/:repo/pulls/:number/diff-comments", requireAuth, async (c) => {
+  const user = c.get("user") as { id: string; username: string };
+  const result = await findRepoForPulls(c.req.param("owner"), c.req.param("repo"), user.id);
+  if (!result) return c.json({ error: "Repository not found" }, 404);
+
+  const num = parseInt(c.req.param("number"), 10);
+  const [pr] = await db
+    .select()
+    .from(pullRequests)
+    .where(and(eq(pullRequests.repoId, result.repo.id), eq(pullRequests.number, num)))
+    .limit(1);
+  if (!pr) return c.json({ error: "Pull request not found" }, 404);
+
+  const body = (await c.req.json().catch(() => ({}))) as {
+    filePath?: string;
+    commitOid?: string;
+    side?: "old" | "new";
+    lineNumber?: number;
+    body?: string;
+    parentId?: string | null;
+  };
+
+  if (!body.body?.trim()) return c.json({ error: "Comment body is required" }, 400);
+  if (!body.filePath) return c.json({ error: "filePath is required" }, 400);
+  if (!body.commitOid) return c.json({ error: "commitOid is required" }, 400);
+  if (body.side !== "old" && body.side !== "new")
+    return c.json({ error: "side must be 'old' or 'new'" }, 400);
+  if (!Number.isInteger(body.lineNumber) || (body.lineNumber as number) < 1)
+    return c.json({ error: "lineNumber must be a positive integer" }, 400);
+
+  if (body.parentId) {
+    // Multi-tenancy: parent must belong to this PR.
+    const [parent] = await db
+      .select()
+      .from(diffComments)
+      .where(and(eq(diffComments.id, body.parentId), eq(diffComments.pullRequestId, pr.id)))
+      .limit(1);
+    if (!parent) return c.json({ error: "Parent comment not found" }, 404);
+  }
+
+  const now = new Date();
+  const id = crypto.randomUUID();
+  await db.insert(diffComments).values({
+    id,
+    pullRequestId: pr.id,
+    authorId: user.id,
+    parentId: body.parentId ?? null,
+    filePath: body.filePath,
+    commitOid: body.commitOid,
+    side: body.side,
+    lineNumber: body.lineNumber as number,
+    body: body.body.trim(),
+    resolved: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  logAudit({
+    userId: user.id,
+    action: "pr.diff_comment.create",
+    targetType: "pull_request",
+    targetId: pr.id,
+    metadata: {
+      diffCommentId: id,
+      number: pr.number,
+      filePath: body.filePath,
+      lineNumber: body.lineNumber,
+      side: body.side,
+      parentId: body.parentId ?? null,
+    },
+    ipAddress: getClientIp(c.req.raw.headers),
+  }).catch(console.error);
+
+  return c.json({
+    comment: {
+      id,
+      pullRequestId: pr.id,
+      parentId: body.parentId ?? null,
+      filePath: body.filePath,
+      commitOid: body.commitOid,
+      side: body.side,
+      lineNumber: body.lineNumber,
+      body: body.body.trim(),
+      bodyHtml: renderMarkdown(body.body.trim()),
+      resolved: false,
+      author: user.username,
+      authorId: user.id,
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
+});
+
+// Update a diff comment (body or resolved flag).
+pullRoutes.patch("/:owner/:repo/pulls/:number/diff-comments/:commentId", requireAuth, async (c) => {
+  const user = c.get("user") as { id: string; username: string };
+  const result = await findRepoForPulls(c.req.param("owner"), c.req.param("repo"), user.id);
+  if (!result) return c.json({ error: "Repository not found" }, 404);
+
+  const num = parseInt(c.req.param("number"), 10);
+  const [pr] = await db
+    .select()
+    .from(pullRequests)
+    .where(and(eq(pullRequests.repoId, result.repo.id), eq(pullRequests.number, num)))
+    .limit(1);
+  if (!pr) return c.json({ error: "Pull request not found" }, 404);
+
+  const commentId = c.req.param("commentId");
+  const [existing] = await db
+    .select()
+    .from(diffComments)
+    .where(and(eq(diffComments.id, commentId), eq(diffComments.pullRequestId, pr.id)))
+    .limit(1);
+  if (!existing) return c.json({ error: "Comment not found" }, 404);
+
+  const body = (await c.req.json().catch(() => ({}))) as {
+    body?: string;
+    resolved?: boolean;
+  };
+
+  // Body edit: author or repo owner only.
+  if (typeof body.body === "string") {
+    if (user.id !== existing.authorId && user.id !== result.owner.id) {
+      return c.json({ error: "Only the author or repo owner can edit this comment" }, 403);
+    }
+    const trimmed = body.body.trim();
+    if (!trimmed) return c.json({ error: "Comment body is required" }, 400);
+    await db
+      .update(diffComments)
+      .set({ body: trimmed, updatedAt: new Date() })
+      .where(eq(diffComments.id, existing.id));
+  }
+
+  // Resolve toggle: any participant.
+  if (typeof body.resolved === "boolean") {
+    const rootId = existing.parentId ?? existing.id;
+    const now = new Date();
+    await db
+      .update(diffComments)
+      .set({ resolved: body.resolved, updatedAt: now })
+      .where(and(eq(diffComments.id, rootId), eq(diffComments.pullRequestId, pr.id)));
+    await db
+      .update(diffComments)
+      .set({ resolved: body.resolved, updatedAt: now })
+      .where(and(eq(diffComments.parentId, rootId), eq(diffComments.pullRequestId, pr.id)));
+  }
+
+  const [updated] = await db
+    .select()
+    .from(diffComments)
+    .where(eq(diffComments.id, existing.id))
+    .limit(1);
+
+  return c.json({
+    comment: updated
+      ? {
+          ...updated,
+          bodyHtml: updated.body ? renderMarkdown(updated.body) : "",
+          resolved: !!updated.resolved,
+        }
+      : null,
+  });
+});
+
+// Delete a diff comment (and its replies if it's a thread root).
+pullRoutes.delete(
+  "/:owner/:repo/pulls/:number/diff-comments/:commentId",
+  requireAuth,
+  async (c) => {
+    const user = c.get("user") as { id: string; username: string };
+    const result = await findRepoForPulls(c.req.param("owner"), c.req.param("repo"), user.id);
+    if (!result) return c.json({ error: "Repository not found" }, 404);
+
+    const num = parseInt(c.req.param("number"), 10);
+    const [pr] = await db
+      .select()
+      .from(pullRequests)
+      .where(and(eq(pullRequests.repoId, result.repo.id), eq(pullRequests.number, num)))
+      .limit(1);
+    if (!pr) return c.json({ error: "Pull request not found" }, 404);
+
+    const commentId = c.req.param("commentId");
+    const [existing] = await db
+      .select()
+      .from(diffComments)
+      .where(and(eq(diffComments.id, commentId), eq(diffComments.pullRequestId, pr.id)))
+      .limit(1);
+    if (!existing) return c.json({ error: "Comment not found" }, 404);
+
+    if (user.id !== existing.authorId && user.id !== result.owner.id) {
+      return c.json({ error: "Only the author or repo owner can delete this comment" }, 403);
+    }
+
+    await db
+      .delete(diffComments)
+      .where(and(eq(diffComments.parentId, existing.id), eq(diffComments.pullRequestId, pr.id)));
+    await db
+      .delete(diffComments)
+      .where(and(eq(diffComments.id, existing.id), eq(diffComments.pullRequestId, pr.id)));
+
+    return c.json({ deleted: true });
+  },
+);

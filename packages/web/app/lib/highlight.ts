@@ -1,4 +1,5 @@
 import { createHighlighter, type Highlighter, type BundledLanguage } from "shiki";
+import type { DiffFile } from "@groffee/git";
 
 let highlighterPromise: Promise<Highlighter> | null = null;
 
@@ -361,4 +362,44 @@ export async function highlightDiffLines(
   }
 
   return lineMap.size > 0 ? lineMap : null;
+}
+
+/**
+ * Adds Shiki syntax highlighting to a parsed diff. The leading +/-/space
+ * prefix character is split off before highlighting (so the prefix is
+ * never colored as code) and each hunk gets a parallel `highlightedLines`
+ * array of HTML strings, one per `lines` entry — `null` for lines that
+ * weren't highlighted (unsupported language, oversized diff, etc.).
+ *
+ * The original `lines` array is preserved verbatim (the +/- coloring in
+ * the renderer still keys off the prefix character).
+ *
+ * Returns a new array of files; callers can pass the result straight
+ * through to client components.
+ */
+export async function highlightDiff(diff: DiffFile[]): Promise<DiffFile[]> {
+  return Promise.all(
+    diff.map(async (file) => {
+      const filename = (file.newPath || file.oldPath).split("/").pop() || "";
+      const lang = getLangFromFilename(filename);
+
+      if (!lang) {
+        // No known language → skip highlighting entirely for this file.
+        return file;
+      }
+
+      const lineMap = await highlightDiffLines(file.hunks, lang);
+      if (!lineMap) return file;
+
+      return {
+        ...file,
+        hunks: file.hunks.map((hunk, hunkIdx) => ({
+          ...hunk,
+          highlightedLines: hunk.lines.map(
+            (_line, lineIdx) => lineMap.get(`${hunkIdx}-${lineIdx}`) ?? null,
+          ),
+        })),
+      };
+    }),
+  );
 }

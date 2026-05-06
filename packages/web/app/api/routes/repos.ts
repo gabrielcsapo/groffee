@@ -32,6 +32,13 @@ import { logAudit, getClientIp } from "../lib/audit.js";
 import { parseLfsPointer, lfsObjectDiskPath } from "../../lib/lfs.js";
 import { getCachedActivity, setCachedActivity } from "../lib/activity-cache.js";
 import { DATA_DIR, resolveDiskPath } from "../lib/paths.js";
+import {
+  editFile,
+  createFile,
+  deleteFile,
+  renameFile,
+  validatePath,
+} from "../../lib/server/repo-edit.js";
 
 export const repoRoutes = new Hono<AppEnv>();
 
@@ -238,6 +245,12 @@ repoRoutes.patch("/:owner/:name", requireAuth, async (c) => {
   if (typeof body.isPublic === "boolean") updates.isPublic = body.isPublic;
   if (typeof body.defaultBranch === "string" && body.defaultBranch)
     updates.defaultBranch = body.defaultBranch;
+  if (typeof body.editPolicy === "string") {
+    if (body.editPolicy !== "direct" && body.editPolicy !== "pull_request") {
+      return c.json({ error: "Invalid edit policy" }, 400);
+    }
+    updates.editPolicy = body.editPolicy;
+  }
 
   await db.update(repositories).set(updates).where(eq(repositories.id, repo.id));
 
@@ -625,6 +638,182 @@ repoRoutes.get("/:owner/:name/blob/:ref{.+}", optionalAuth, async (c) => {
     const message = e instanceof Error ? e.message : "Failed to read file";
     return c.json({ error: message }, 404);
   }
+});
+
+// --- Edit-in-browser content routes ---
+
+/**
+ * Pull the user's full record (we need email + displayName for the commit
+ * author, and the auth middleware only attaches the basic columns).
+ */
+async function loadActor(userId: string) {
+  const [u] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!u) return null;
+  return { id: u.id, username: u.username, email: u.email, displayName: u.displayName };
+}
+
+function mapEditError(message: string): 400 | 401 | 403 | 404 {
+  if (message === "Unauthorized") return 401;
+  if (message === "Forbidden") return 403;
+  if (message === "Repository not found") return 404;
+  return 400;
+}
+
+// Create or update a file at <ref>/<path>.
+// PUT /api/repos/:owner/:repo/contents/:ref{.+}
+repoRoutes.put("/:owner/:name/contents/:ref{.+}", requireAuth, async (c) => {
+  const user = c.get("user") as { id: string };
+  const refAndPath = c.req.param("ref");
+
+  const repo = await findRepo(c.req.param("owner"), c.req.param("name"), user.id);
+  if (!repo) return c.json({ error: "Repository not found" }, 404);
+
+  const { ref, subPath: filePath } = await resolveRefAndPath(
+    repo.id,
+    repo.defaultBranch,
+    refAndPath,
+  );
+
+  const pathErr = validatePath(filePath);
+  if (pathErr) return c.json({ error: "Invalid path" }, 400);
+
+  const body = (await c.req.json().catch(() => null)) as {
+    content?: string;
+    message?: string;
+    description?: string;
+    intent?: "create" | "edit";
+    mode?: "direct" | "pull_request";
+  } | null;
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+
+  const { content, message, description, intent, mode } = body;
+  if (typeof content !== "string") return c.json({ error: "content is required" }, 400);
+  if (typeof message !== "string" || !message.trim())
+    return c.json({ error: "message is required" }, 400);
+
+  const actor = await loadActor(user.id);
+  if (!actor) return c.json({ error: "Unauthorized" }, 401);
+
+  // Choose create vs edit. Caller can force via intent; otherwise try edit
+  // and fall back to create if the file does not exist.
+  const callArgs = {
+    ownerName: c.req.param("owner"),
+    repoName: c.req.param("name"),
+    ref,
+    path: filePath,
+    content,
+    message,
+    description,
+    mode,
+    actor,
+  } as const;
+
+  let result;
+  if (intent === "create") {
+    result = await createFile(callArgs);
+  } else if (intent === "edit") {
+    result = await editFile(callArgs);
+  } else {
+    // Auto-detect: try edit first, fall back to create on "Path does not exist"
+    result = await editFile(callArgs);
+    if ("error" in result && /does not exist/i.test(result.error)) {
+      result = await createFile(callArgs);
+    }
+  }
+
+  if ("error" in result) return c.json({ error: result.error }, mapEditError(result.error));
+  return c.json(result);
+});
+
+// Delete a file at <ref>/<path>.
+// DELETE /api/repos/:owner/:repo/contents/:ref{.+}
+repoRoutes.delete("/:owner/:name/contents/:ref{.+}", requireAuth, async (c) => {
+  const user = c.get("user") as { id: string };
+  const refAndPath = c.req.param("ref");
+
+  const repo = await findRepo(c.req.param("owner"), c.req.param("name"), user.id);
+  if (!repo) return c.json({ error: "Repository not found" }, 404);
+
+  const { ref, subPath: filePath } = await resolveRefAndPath(
+    repo.id,
+    repo.defaultBranch,
+    refAndPath,
+  );
+
+  const pathErr = validatePath(filePath);
+  if (pathErr) return c.json({ error: "Invalid path" }, 400);
+
+  const body = (await c.req.json().catch(() => null)) as {
+    message?: string;
+    description?: string;
+    mode?: "direct" | "pull_request";
+  } | null;
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+
+  const { message, description, mode } = body;
+  if (typeof message !== "string" || !message.trim())
+    return c.json({ error: "message is required" }, 400);
+
+  const actor = await loadActor(user.id);
+  if (!actor) return c.json({ error: "Unauthorized" }, 401);
+
+  const result = await deleteFile({
+    ownerName: c.req.param("owner"),
+    repoName: c.req.param("name"),
+    ref,
+    path: filePath,
+    message,
+    description,
+    mode,
+    actor,
+  });
+
+  if ("error" in result) return c.json({ error: result.error }, mapEditError(result.error));
+  return c.json(result);
+});
+
+// Rename a file at <ref>.
+// POST /api/repos/:owner/:repo/contents-rename/:ref
+repoRoutes.post("/:owner/:name/contents-rename/:ref", requireAuth, async (c) => {
+  const user = c.get("user") as { id: string };
+  const refRaw = c.req.param("ref");
+
+  const repo = await findRepo(c.req.param("owner"), c.req.param("name"), user.id);
+  if (!repo) return c.json({ error: "Repository not found" }, 404);
+
+  const body = (await c.req.json().catch(() => null)) as {
+    oldPath?: string;
+    newPath?: string;
+    message?: string;
+    description?: string;
+    mode?: "direct" | "pull_request";
+  } | null;
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+
+  const { oldPath, newPath, message, description, mode } = body;
+  if (typeof oldPath !== "string" || typeof newPath !== "string")
+    return c.json({ error: "oldPath and newPath are required" }, 400);
+  if (typeof message !== "string" || !message.trim())
+    return c.json({ error: "message is required" }, 400);
+  if (validatePath(oldPath) || validatePath(newPath)) return c.json({ error: "Invalid path" }, 400);
+
+  const actor = await loadActor(user.id);
+  if (!actor) return c.json({ error: "Unauthorized" }, 401);
+
+  const result = await renameFile({
+    ownerName: c.req.param("owner"),
+    repoName: c.req.param("name"),
+    ref: refRaw,
+    oldPath,
+    newPath,
+    message,
+    description,
+    mode,
+    actor,
+  });
+
+  if ("error" in result) return c.json({ error: result.error }, mapEditError(result.error));
+  return c.json(result);
 });
 
 // Get commit log

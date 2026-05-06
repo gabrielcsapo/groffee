@@ -14,8 +14,11 @@ import {
   pullRequests,
   issues,
   lfsObjects,
+  clampLimit,
+  decodeCursor,
+  encodeCursor,
 } from "@groffee/db";
-import { eq, and, like, desc, asc, sql } from "drizzle-orm";
+import { eq, and, like, desc, asc, sql, lt, or } from "drizzle-orm";
 import {
   initBareRepo,
   getTree,
@@ -37,6 +40,20 @@ import { batchLoadUsers } from "./user-utils";
 import { getCachedActivity, setCachedActivity } from "../../api/lib/activity-cache";
 
 // --- Helpers ---
+
+/**
+ * Returns true iff the repo (looked up by id) is currently archived. Used by
+ * write-path server actions to 403 cleanly instead of mutating data on a repo
+ * the owner has marked read-only.
+ */
+export async function isRepoArchivedById(repoId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ isArchived: repositories.isArchived })
+    .from(repositories)
+    .where(eq(repositories.id, repoId))
+    .limit(1);
+  return !!row?.isArchived;
+}
 
 async function findRepo(ownerName: string, repoName: string, currentUserId?: string) {
   const [owner] = await db.select().from(users).where(eq(users.username, ownerName)).limit(1);
@@ -233,6 +250,81 @@ export async function getRepoRefs(ownerName: string, repoName: string) {
   } catch {
     return { refs: [], defaultBranch: repo.defaultBranch };
   }
+}
+
+/**
+ * List a repo's tags, joined with the commit they point at, sorted by the
+ * commit's author timestamp (newest first). Cursor pagination on (ts, name).
+ *
+ * Cursor shape uses `name` as the secondary sort key (rather than the usual id
+ * column) because gitRefs.id isn't meaningful — the deterministic tie-breaker
+ * we want is the tag name itself (which is unique per repo).
+ */
+export async function getRepoTags(
+  ownerName: string,
+  repoName: string,
+  options: { cursor?: string | null; limit?: number } = {},
+) {
+  const currentUser = await getSessionUser();
+  const repo = await findRepo(ownerName, repoName, currentUser?.id);
+  if (!repo) return { error: "Repository not found" as const };
+
+  const limit = clampLimit(options.limit);
+  const decoded = decodeCursor(options.cursor);
+
+  // Cursor: ts is the commit author timestamp (Unix seconds), id is the tag name.
+  const cursorPredicate = decoded
+    ? or(
+        lt(gitCommits.authorTimestamp, decoded.ts),
+        and(eq(gitCommits.authorTimestamp, decoded.ts), lt(gitRefs.name, decoded.id)),
+      )
+    : undefined;
+
+  const rows = await db
+    .select({
+      name: gitRefs.name,
+      commitOid: gitRefs.commitOid,
+      message: gitCommits.message,
+      authorName: gitCommits.authorName,
+      authorEmail: gitCommits.authorEmail,
+      authorTimestamp: gitCommits.authorTimestamp,
+    })
+    .from(gitRefs)
+    .innerJoin(
+      gitCommits,
+      and(eq(gitCommits.repoId, gitRefs.repoId), eq(gitCommits.oid, gitRefs.commitOid)),
+    )
+    .where(
+      and(
+        eq(gitRefs.repoId, repo.id),
+        eq(gitRefs.type, "tag"),
+        ...(cursorPredicate ? [cursorPredicate] : []),
+      ),
+    )
+    .orderBy(desc(gitCommits.authorTimestamp), desc(gitRefs.name))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  let nextCursor: string | null = null;
+  if (hasMore && items.length > 0) {
+    const last = items[items.length - 1];
+    nextCursor = encodeCursor({ ts: last.authorTimestamp, id: last.name });
+  }
+
+  return {
+    tags: items.map((t) => ({
+      name: t.name,
+      commitOid: t.commitOid,
+      shortOid: t.commitOid.slice(0, 7),
+      subject: t.message.split("\n")[0],
+      authorName: t.authorName,
+      authorEmail: t.authorEmail,
+      authorTimestamp: t.authorTimestamp,
+    })),
+    nextCursor,
+    hasMore,
+  };
 }
 
 export async function getRepoTree(ownerName: string, repoName: string, refAndPath: string) {
@@ -454,6 +546,7 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
       .limit(1);
 
     if (refRecord) {
+      const commitSha = refRecord.commitOid;
       const [commitRecord] = await db
         .select({ treeOid: gitCommits.treeOid })
         .from(gitCommits)
@@ -494,6 +587,7 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
                   content: blob.content,
                   oid: blob.oid,
                   ref,
+                  commitSha,
                   path: filePath,
                   lfsPointer: { oid: lfsInfo.oid, size: lfsInfo.size, stored: !!lfsRecord },
                 };
@@ -506,6 +600,7 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
                 oid: blob.oid,
                 size: blob.size,
                 ref,
+                commitSha,
                 path: filePath,
               };
             }
@@ -514,6 +609,7 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
                 content: blob.content,
                 oid: blob.oid,
                 ref,
+                commitSha,
                 path: filePath,
               };
             }
@@ -542,6 +638,11 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
       }
     }
 
+    // Resolve commit SHA: if the ref is itself a 40-char hex SHA, use it;
+    // otherwise look it up from the listed refs so the permalink can be stable.
+    const isHexSha = /^[0-9a-f]{40}$/.test(gitRef);
+    const commitSha = isHexSha ? gitRef : (refs.find((r) => r.name === gitRef)?.oid ?? gitRef);
+
     const { content, oid } = await getBlob(resolveDiskPath(repo.diskPath), gitRef, gitFilePath);
     const text = new TextDecoder().decode(content);
     const lfsInfo = parseLfsPointer(text);
@@ -555,11 +656,12 @@ export async function getRepoBlob(ownerName: string, repoName: string, refAndPat
         content: text,
         oid,
         ref: gitRef,
+        commitSha,
         path: gitFilePath,
         lfsPointer: { oid: lfsInfo.oid, size: lfsInfo.size, stored: !!lfsRecord },
       };
     }
-    return { content: text, oid, ref: gitRef, path: gitFilePath };
+    return { content: text, oid, ref: gitRef, commitSha, path: gitFilePath };
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to read file";
     return { error: message };
@@ -1295,7 +1397,12 @@ export async function createRepo(name: string, description: string, isPublic: bo
 export async function updateRepo(
   ownerName: string,
   repoName: string,
-  updates: { description?: string; isPublic?: boolean; defaultBranch?: string },
+  updates: {
+    description?: string;
+    isPublic?: boolean;
+    defaultBranch?: string;
+    editPolicy?: "direct" | "pull_request";
+  },
 ) {
   const user = await getSessionUser();
   if (!user) return { error: "Unauthorized" };
@@ -1314,6 +1421,9 @@ export async function updateRepo(
   if (typeof updates.isPublic === "boolean") dbUpdates.isPublic = updates.isPublic;
   if (typeof updates.defaultBranch === "string" && updates.defaultBranch)
     dbUpdates.defaultBranch = updates.defaultBranch;
+  if (updates.editPolicy === "direct" || updates.editPolicy === "pull_request") {
+    dbUpdates.editPolicy = updates.editPolicy;
+  }
 
   await db.update(repositories).set(dbUpdates).where(eq(repositories.id, repo.id));
 
@@ -1342,6 +1452,248 @@ export async function updateRepo(
         updated.updatedAt instanceof Date ? updated.updatedAt.toISOString() : updated.updatedAt,
     },
   };
+}
+
+/**
+ * Set the default branch for a repository. Owner-only.
+ *
+ * Validates that `newBranch` exists in the gitRefs index. Updates the
+ * repositories.defaultBranch column — does NOT touch HEAD on disk because
+ * Hono routes that resolve "default branch" all read from the DB column,
+ * and `resolveHead` only consults the bare repo's HEAD as a runtime
+ * pointer (which we deliberately leave untouched so push/clone keep
+ * working without a server-side reset).
+ */
+export async function updateDefaultBranch(ownerName: string, repoName: string, newBranch: string) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" as string };
+  if (user.username !== ownerName) return { error: "Forbidden" as string };
+
+  if (!newBranch || typeof newBranch !== "string") {
+    return { error: "Invalid branch name" as string };
+  }
+
+  const [repo] = await db
+    .select()
+    .from(repositories)
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)))
+    .limit(1);
+  if (!repo) return { error: "Repository not found" as string };
+
+  // Ensure the branch exists in the indexed refs (covers both new pushes and
+  // re-indexed repos). Tags don't qualify — defaultBranch must be a branch ref.
+  const [refRow] = await db
+    .select({ name: gitRefs.name })
+    .from(gitRefs)
+    .where(
+      and(eq(gitRefs.repoId, repo.id), eq(gitRefs.name, newBranch), eq(gitRefs.type, "branch")),
+    )
+    .limit(1);
+  if (!refRow) return { error: `Branch "${newBranch}" does not exist` as string };
+
+  const previous = repo.defaultBranch;
+  if (previous === newBranch) {
+    return { repository: { defaultBranch: newBranch }, previous };
+  }
+
+  await db
+    .update(repositories)
+    .set({ defaultBranch: newBranch, updatedAt: new Date() })
+    .where(eq(repositories.id, repo.id));
+
+  const req = getRequest();
+  logAudit({
+    userId: user.id,
+    action: "repo.default_branch_change",
+    targetType: "repository",
+    targetId: repo.id,
+    metadata: { from: previous, to: newBranch },
+    ipAddress: req ? getClientIp(req) : "unknown",
+  }).catch(console.error);
+
+  return { repository: { defaultBranch: newBranch }, previous };
+}
+
+export async function getRepoSearchIndexStatus(ownerName: string, repoName: string) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" };
+  if (user.username !== ownerName) return { error: "Forbidden" };
+
+  const [repo] = await db
+    .select()
+    .from(repositories)
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)))
+    .limit(1);
+  if (!repo) return { error: "Repository not found" };
+
+  // Latest ref update for this repo — if it's newer than lastIndexedAt the
+  // FTS index is stale relative to HEAD.
+  const [latestRef] = await db
+    .select({ ts: sql<number>`cast(max(${gitRefs.updatedAt}) as integer)` })
+    .from(gitRefs)
+    .where(eq(gitRefs.repoId, repo.id));
+
+  const lastIndexedAt = repo.lastIndexedAt;
+  const lastIndexedMs = lastIndexedAt instanceof Date ? lastIndexedAt.getTime() : null;
+  const latestRefMs = latestRef?.ts != null ? latestRef.ts * 1000 : null;
+
+  let status: "fresh" | "stale" | "never" = "never";
+  if (lastIndexedMs != null) {
+    status = latestRefMs != null && latestRefMs > lastIndexedMs ? "stale" : "fresh";
+  } else if (latestRefMs != null) {
+    status = "stale";
+  }
+
+  return {
+    lastIndexedAt: lastIndexedAt instanceof Date ? lastIndexedAt.toISOString() : null,
+    latestRefAt: latestRefMs ? new Date(latestRefMs).toISOString() : null,
+    status,
+  };
+}
+
+export async function reindexRepoSearch(ownerName: string, repoName: string) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" };
+  if (user.username !== ownerName) return { error: "Forbidden" };
+
+  const [repo] = await db
+    .select()
+    .from(repositories)
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)))
+    .limit(1);
+  if (!repo) return { error: "Repository not found" };
+
+  // Lazy-import to avoid pulling the full indexer (and its git/FTS deps)
+  // into the regular repos.ts hot path used by every page render.
+  const { fullReindex } = await import("../../api/lib/indexer");
+
+  try {
+    await fullReindex(repo.id, resolveDiskPath(repo.diskPath));
+    const now = new Date();
+    await db.update(repositories).set({ lastIndexedAt: now }).where(eq(repositories.id, repo.id));
+
+    const req = getRequest();
+    logAudit({
+      userId: user.id,
+      action: "repo.reindex_search",
+      targetType: "repository",
+      targetId: repo.id,
+      ipAddress: req ? getClientIp(req) : "unknown",
+    }).catch(console.error);
+
+    return { ok: true, lastIndexedAt: now.toISOString() };
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Reindex failed";
+    return { error: message };
+  }
+}
+
+/**
+ * Toggle the archived flag on a repository. Owner-only.
+ *
+ * Archived repos are read-only — pushes (HTTP/SSH), issue/PR/comment writes,
+ * edit-in-browser, secret CRUD, and invite generation all 403. Reads stay
+ * open. Unarchiving restores write access without any further migration.
+ */
+export async function setRepoArchived(ownerName: string, repoName: string, archived: boolean) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" as string };
+  if (user.username !== ownerName) return { error: "Forbidden" as string };
+
+  const [repo] = await db
+    .select()
+    .from(repositories)
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, repoName)))
+    .limit(1);
+  if (!repo) return { error: "Repository not found" as string };
+
+  await db
+    .update(repositories)
+    .set({ isArchived: archived, updatedAt: new Date() })
+    .where(eq(repositories.id, repo.id));
+
+  const req = getRequest();
+  logAudit({
+    userId: user.id,
+    action: archived ? "repo.archive" : "repo.unarchive",
+    targetType: "repository",
+    targetId: repo.id,
+    metadata: { name: repoName },
+    ipAddress: req ? getClientIp(req) : "unknown",
+  }).catch(console.error);
+
+  return { isArchived: archived };
+}
+
+/**
+ * Rename a repository. Owner-only. Validates the new name against the same
+ * rules as createRepo and ensures uniqueness within the owner's namespace.
+ *
+ * Renames the on-disk dir (`data/repos/<owner>/<oldName>.git` →
+ * `<newName>.git`) and updates the DB row's `name` and `diskPath` columns.
+ *
+ * Returns `{ newSlug }` so the client can redirect to the new URL.
+ */
+export async function renameRepository(ownerName: string, oldName: string, newName: string) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" as string };
+  if (user.username !== ownerName) return { error: "Forbidden" as string };
+
+  if (!newName || !/^[a-zA-Z0-9._-]+$/.test(newName)) {
+    return {
+      error:
+        "Invalid repository name. Use alphanumeric characters, dots, hyphens, and underscores." as string,
+    };
+  }
+
+  const [repo] = await db
+    .select()
+    .from(repositories)
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, oldName)))
+    .limit(1);
+  if (!repo) return { error: "Repository not found" as string };
+
+  if (newName === oldName) {
+    return { newSlug: `${ownerName}/${oldName}` };
+  }
+
+  const [conflict] = await db
+    .select()
+    .from(repositories)
+    .where(and(eq(repositories.ownerId, user.id), eq(repositories.name, newName)))
+    .limit(1);
+  if (conflict) return { error: "A repository with that name already exists" as string };
+
+  const newDiskPath = `${user.username}/${newName}.git`;
+  const oldAbs = resolveDiskPath(repo.diskPath);
+  const newAbs = resolveDiskPath(newDiskPath);
+
+  const { rename, mkdir } = await import("node:fs/promises");
+  const path = await import("node:path");
+  try {
+    await mkdir(path.dirname(newAbs), { recursive: true });
+    await rename(oldAbs, newAbs);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Failed to rename on disk";
+    return { error: msg as string };
+  }
+
+  await db
+    .update(repositories)
+    .set({ name: newName, diskPath: newDiskPath, updatedAt: new Date() })
+    .where(eq(repositories.id, repo.id));
+
+  const req = getRequest();
+  logAudit({
+    userId: user.id,
+    action: "repo.rename",
+    targetType: "repository",
+    targetId: repo.id,
+    metadata: { from: oldName, to: newName },
+    ipAddress: req ? getClientIp(req) : "unknown",
+  }).catch(console.error);
+
+  return { newSlug: `${ownerName}/${newName}` };
 }
 
 export async function deleteRepo(ownerName: string, repoName: string) {

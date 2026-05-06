@@ -1,0 +1,1 @@
+ALTER TABLE `repositories` ADD `edit_policy` text DEFAULT 'direct' NOT NULL;

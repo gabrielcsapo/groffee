@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-flight-router/client";
 import { timeAgo } from "../lib/time";
 import { getPullRequests } from "../lib/server/pulls";
+import { LoadMore } from "../components/load-more.client";
 
 interface PR {
   id: string;
@@ -19,28 +20,56 @@ interface PR {
 export function PullsList({
   owner,
   repo,
+  initialStatus,
   initialPulls,
+  initialNextCursor,
+  initialHasMore,
 }: {
   owner: string;
   repo: string;
+  initialStatus: string;
   initialPulls: PR[];
+  initialNextCursor: string | null;
+  initialHasMore: boolean;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get("status") || "open";
   const [pulls, setPulls] = useState<PR[]>(initialPulls);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
+  const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (status === "open") {
+    if (status === initialStatus) {
       setPulls(initialPulls);
+      setNextCursor(initialNextCursor);
+      setHasMore(initialHasMore);
       return;
     }
     setLoading(true);
     getPullRequests(owner, repo, status)
-      .then((data) => setPulls(data.pullRequests || []))
-      .catch(() => setPulls([]))
+      .then((data) => {
+        setPulls(data.pullRequests || []);
+        setNextCursor(data.nextCursor || null);
+        setHasMore(data.hasMore ?? false);
+      })
+      .catch(() => {
+        setPulls([]);
+        setNextCursor(null);
+        setHasMore(false);
+      })
       .finally(() => setLoading(false));
-  }, [owner, repo, status, initialPulls]);
+  }, [owner, repo, status, initialStatus, initialPulls, initialNextCursor, initialHasMore]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    const data = await getPullRequests(owner, repo, status, { cursor: nextCursor });
+    if (!data.error && data.pullRequests) {
+      setPulls((prev) => [...prev, ...(data.pullRequests as PR[])]);
+      setNextCursor(data.nextCursor || null);
+      setHasMore(data.hasMore ?? false);
+    }
+  }, [owner, repo, status, nextCursor]);
 
   return (
     <div className="max-w-6xl mx-auto mt-4">
@@ -85,89 +114,102 @@ export function PullsList({
           ))}
         </div>
       ) : pulls.length > 0 ? (
-        <div className="border border-border rounded-lg overflow-hidden bg-surface">
-          {pulls.map((pr, i) => (
-            <div
-              key={pr.id}
-              className={`px-4 py-3 ${i < pulls.length - 1 ? "border-b border-border" : ""} hover:bg-surface-secondary transition-colors`}
-            >
-              <div className="flex items-start gap-3">
-                <svg
-                  className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-                    pr.status === "open"
-                      ? "text-success"
-                      : pr.status === "merged"
-                        ? "text-merged"
-                        : "text-danger"
-                  }`}
-                  fill="currentColor"
-                  viewBox="0 0 16 16"
-                >
-                  {pr.status === "merged" ? (
-                    <path d="M5 3.254V3.25v.005a7.5 7.5 0 010 9.495v.005-.005a7.5 7.5 0 010-9.495V3.254zM4 2.5a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 014 2.5zm0 8.5a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 014 11zm8-8.5a.75.75 0 01.75.75v1.5a5.75 5.75 0 01-5.75 5.75.75.75 0 010-1.5A4.25 4.25 0 0011.25 4.75v-1.5A.75.75 0 0112 2.5z" />
-                  ) : (
-                    <>
-                      <circle
-                        cx="5"
-                        cy="3.5"
-                        r="2.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                      <circle
-                        cx="5"
-                        cy="12.5"
-                        r="2.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                      <line x1="5" y1="6" x2="5" y2="10" stroke="currentColor" strokeWidth="1.5" />
-                      <circle
-                        cx="12"
-                        cy="3.5"
-                        r="2.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                      <path
-                        d="M12 6v2c0 2-2 4-4 4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                    </>
-                  )}
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <Link
-                    to={`/${owner}/${repo}/pull/${pr.number}`}
-                    className="text-sm font-semibold text-text-primary hover:text-text-link hover:underline"
+        <>
+          <div className="border border-border rounded-lg overflow-hidden bg-surface">
+            {pulls.map((pr, i) => (
+              <div
+                key={pr.id}
+                className={`px-4 py-3 ${i < pulls.length - 1 ? "border-b border-border" : ""} hover:bg-surface-secondary transition-colors`}
+              >
+                <div className="flex items-start gap-3">
+                  <svg
+                    className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                      pr.status === "open"
+                        ? "text-success"
+                        : pr.status === "merged"
+                          ? "text-merged"
+                          : "text-danger"
+                    }`}
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
                   >
-                    {pr.title}
-                  </Link>
-                  <p className="text-xs text-text-secondary mt-0.5">
-                    #{pr.number} opened {timeAgo(pr.createdAt)} by{" "}
-                    <Link to={`/${pr.author}`} className="hover:underline hover:text-text-primary">
-                      {pr.author}
+                    {pr.status === "merged" ? (
+                      <path d="M5 3.254V3.25v.005a7.5 7.5 0 010 9.495v.005-.005a7.5 7.5 0 010-9.495V3.254zM4 2.5a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 014 2.5zm0 8.5a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 014 11zm8-8.5a.75.75 0 01.75.75v1.5a5.75 5.75 0 01-5.75 5.75.75.75 0 010-1.5A4.25 4.25 0 0011.25 4.75v-1.5A.75.75 0 0112 2.5z" />
+                    ) : (
+                      <>
+                        <circle
+                          cx="5"
+                          cy="3.5"
+                          r="2.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
+                        <circle
+                          cx="5"
+                          cy="12.5"
+                          r="2.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
+                        <line
+                          x1="5"
+                          y1="6"
+                          x2="5"
+                          y2="10"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
+                        <circle
+                          cx="12"
+                          cy="3.5"
+                          r="2.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
+                        <path
+                          d="M12 6v2c0 2-2 4-4 4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
+                      </>
+                    )}
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <Link
+                      to={`/${owner}/${repo}/pull/${pr.number}`}
+                      className="text-sm font-semibold text-text-primary hover:text-text-link hover:underline"
+                    >
+                      {pr.title}
                     </Link>
-                    <span className="ml-2">
-                      <code className="px-1 py-0.5 bg-surface-secondary rounded text-xs">
-                        {pr.sourceBranch}
-                      </code>{" "}
-                      →{" "}
-                      <code className="px-1 py-0.5 bg-surface-secondary rounded text-xs">
-                        {pr.targetBranch}
-                      </code>
-                    </span>
-                  </p>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      #{pr.number} opened {timeAgo(pr.createdAt)} by{" "}
+                      <Link
+                        to={`/${pr.author}`}
+                        className="hover:underline hover:text-text-primary"
+                      >
+                        {pr.author}
+                      </Link>
+                      <span className="ml-2">
+                        <code className="px-1 py-0.5 bg-surface-secondary rounded text-xs">
+                          {pr.sourceBranch}
+                        </code>{" "}
+                        →{" "}
+                        <code className="px-1 py-0.5 bg-surface-secondary rounded text-xs">
+                          {pr.targetBranch}
+                        </code>
+                      </span>
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <LoadMore hasMore={hasMore} onLoad={loadMore} />
+        </>
       ) : (
         <div className="border border-border rounded-lg p-12 text-center bg-surface">
           <svg
