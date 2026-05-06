@@ -3,6 +3,7 @@
 import { db, repositories, users, issues, pullRequests, editHistory } from "@groffee/db";
 import { eq, desc, asc, inArray, sql } from "drizzle-orm";
 import { highlightSearchSnippet } from "../highlight";
+import { aggregateLanguageFacets } from "./language-map";
 
 // ─── Code Search (global) ───
 
@@ -94,14 +95,20 @@ export async function searchCodeLanguages(query: string) {
   if (!query.trim()) return { languages: [] };
 
   try {
-    // Use SQL to extract and aggregate file extensions instead of loading 10k rows into Node
+    // Group by file path in SQL (so multiple matches per file collapse to one
+    // row), then extract extensions in JS using lastIndexOf and map to a
+    // canonical language label. The previous "extract via SUBSTR + dot count"
+    // SQL was wrong for paths with multiple dots (foo.client.tsx → ".lient.tsx").
     const rows = db.all(
-      sql`SELECT LOWER(SUBSTR(cs.file_path, INSTR(cs.file_path, '.') + LENGTH(cs.file_path) - LENGTH(REPLACE(cs.file_path, '.', '')) )) as ext, COUNT(*) as count FROM code_search cs JOIN repositories r ON r.id = cs.repo_id WHERE r.is_public = 1 AND code_search MATCH ${query.trim()} AND INSTR(cs.file_path, '.') > 0 GROUP BY ext ORDER BY count DESC LIMIT 20`,
-    ) as Array<{ ext: string; count: number }>;
+      sql`SELECT cs.file_path AS filePath, COUNT(*) AS count
+          FROM code_search cs
+          JOIN repositories r ON r.id = cs.repo_id
+          WHERE r.is_public = 1
+            AND code_search MATCH ${query.trim()}
+          GROUP BY cs.file_path`,
+    ) as Array<{ filePath: string; count: number }>;
 
-    const languages = rows.filter((r) => r.ext).map((r) => ({ ext: r.ext, count: r.count }));
-
-    return { languages };
+    return { languages: aggregateLanguageFacets(rows) };
   } catch {
     return { languages: [] };
   }
@@ -446,14 +453,15 @@ export async function searchRepoCodeLanguages(ownerName: string, repoName: strin
   if (!repo) return { languages: [] };
 
   try {
-    // Use SQL to extract and aggregate file extensions instead of loading 10k rows into Node
     const rows = db.all(
-      sql`SELECT LOWER(SUBSTR(cs.file_path, INSTR(cs.file_path, '.') + LENGTH(cs.file_path) - LENGTH(REPLACE(cs.file_path, '.', '')) )) as ext, COUNT(*) as count FROM code_search cs WHERE cs.repo_id = ${repo.id} AND code_search MATCH ${query.trim()} AND INSTR(cs.file_path, '.') > 0 GROUP BY ext ORDER BY count DESC LIMIT 20`,
-    ) as Array<{ ext: string; count: number }>;
+      sql`SELECT cs.file_path AS filePath, COUNT(*) AS count
+          FROM code_search cs
+          WHERE cs.repo_id = ${repo.id}
+            AND code_search MATCH ${query.trim()}
+          GROUP BY cs.file_path`,
+    ) as Array<{ filePath: string; count: number }>;
 
-    const languages = rows.filter((r) => r.ext).map((r) => ({ ext: r.ext, count: r.count }));
-
-    return { languages };
+    return { languages: aggregateLanguageFacets(rows) };
   } catch {
     return { languages: [] };
   }

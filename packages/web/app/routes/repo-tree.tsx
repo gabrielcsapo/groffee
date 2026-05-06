@@ -1,7 +1,8 @@
 import { Link } from "react-flight-router/client";
-import { getRepoTree, getRepoRefs } from "../lib/server/repos";
-import { CloneUrl } from "@groffee/ui";
+import { getRepo, getRepoTree, getRepoRefs } from "../lib/server/repos";
+import { getRepoEditContext } from "../lib/server/repo-edit";
 import { BranchSwitcherWrapper as BranchSwitcher } from "../components/branch-switcher-wrapper.client";
+import { RepoAboutSidebar } from "../components/repo-about-sidebar";
 
 function formatRelativeDate(timestamp: number): string {
   const seconds = Math.floor(Date.now() / 1000 - timestamp);
@@ -22,10 +23,14 @@ export default async function RepoTree({ params }: { params?: Record<string, str
   const { owner, repo: repoName } = params as { owner: string; repo: string };
   const splat = params!.splat || "";
 
-  const [treeData, refsData] = await Promise.all([
+  const [treeData, refsData, editCtx, repoData] = await Promise.all([
     getRepoTree(owner, repoName, splat),
     getRepoRefs(owner, repoName),
+    getRepoEditContext(owner, repoName),
+    getRepo(owner, repoName),
   ]);
+  const canWrite = "canWrite" in editCtx ? editCtx.canWrite : false;
+  const repository = repoData.repository;
 
   if (treeData.error) {
     return (
@@ -51,136 +56,107 @@ export default async function RepoTree({ params }: { params?: Record<string, str
   };
   const pathParts = treePath ? treePath.split("/") : [];
   const branches = (refsData.refs || []).filter((r: { type: string }) => r.type === "branch");
-  const clonePath = `/${owner}/${repoName}.git`;
+  const tags = (refsData.refs || []).filter((r: { type: string }) => r.type === "tag");
 
   return (
-    <div className="max-w-4xl mx-auto mt-8">
-      {/* Actions bar */}
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
-          {branches.length > 0 && (
-            <BranchSwitcher
-              branches={branches}
-              currentRef={ref}
-              basePath={`/${owner}/${repoName}`}
-            />
-          )}
-          <Link
-            to={`/${owner}/${repoName}/commits/${ref}`}
-            className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-link hover:no-underline"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            Commits
-          </Link>
-          {branches.length > 0 && (
-            <span className="text-sm text-text-secondary">
-              {branches.length} branch{branches.length !== 1 ? "es" : ""}
-            </span>
-          )}
-        </div>
-        <CloneUrl path={clonePath} hasLfs={hasLfs} />
-      </div>
-
-      {/* Breadcrumbs (when navigating into subdirectories) */}
-      {treePath && (
-        <div className="flex items-center gap-1.5 text-sm mb-4 text-text-secondary">
-          <Link to={`/${owner}/${repoName}/tree/${ref}`} className="text-text-link hover:underline">
-            {repoName}
-          </Link>
-          {pathParts.map((part: string, i: number) => {
-            const partPath = pathParts.slice(0, i + 1).join("/");
-            const isLast = i === pathParts.length - 1;
-            return (
-              <span key={partPath} className="flex items-center gap-1.5">
-                <span>/</span>
-                {isLast ? (
-                  <span className="font-semibold text-text-primary">{part}</span>
-                ) : (
-                  <Link
-                    to={`/${owner}/${repoName}/tree/${ref}/${partPath}`}
-                    className="text-text-link hover:underline"
-                  >
-                    {part}
-                  </Link>
-                )}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      {/* File tree */}
-      <div className="border border-border rounded-lg overflow-hidden bg-surface">
-        <table className="w-full text-sm">
-          <tbody>
-            {treePath && (
-              <tr className="border-b border-border hover:bg-surface-secondary">
-                <td className="py-2 px-4">
-                  <Link
-                    to={
-                      pathParts.length > 1
-                        ? `/${owner}/${repoName}/tree/${ref}/${pathParts.slice(0, -1).join("/")}`
-                        : `/${owner}/${repoName}/tree/${ref}`
-                    }
-                    className="text-text-link hover:underline flex items-center gap-2"
-                  >
-                    <svg
-                      className="w-4 h-4 text-text-secondary"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 17l-5-5m0 0l5-5m-5 5h12"
-                      />
-                    </svg>
-                    ..
-                  </Link>
-                </td>
-                <td></td>
-                <td></td>
-              </tr>
-            )}
-            {entries.map(
-              (
-                entry: {
-                  name: string;
-                  path: string;
-                  type: string;
-                  oid: string;
-                  isLfs?: boolean;
-                  lastCommit: { oid: string; message: string; timestamp: number } | null;
-                },
-                i: number,
-              ) => (
-                <tr
-                  key={entry.oid}
-                  className={`hover:bg-surface-secondary ${i < entries.length - 1 || treePath ? "border-b border-border" : ""}`}
+    <div className="max-w-6xl mx-auto mt-8">
+      <div className="flex flex-col xl:flex-row gap-8">
+        <div className="flex-1 min-w-0">
+          {/* Actions bar */}
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              {(branches.length > 0 || tags.length > 0) && (
+                <BranchSwitcher
+                  branches={branches}
+                  tags={tags}
+                  currentRef={ref}
+                  basePath={`/${owner}/${repoName}`}
+                  mode="tree"
+                  path={treePath}
+                />
+              )}
+              <Link
+                to={`/${owner}/${repoName}/commits/${ref}`}
+                className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-link hover:no-underline"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                Commits
+              </Link>
+              {branches.length > 0 && (
+                <span className="text-sm text-text-secondary">
+                  {branches.length} branch{branches.length !== 1 ? "es" : ""}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              {canWrite && (
+                <Link
+                  to={
+                    treePath
+                      ? `/${owner}/${repoName}/new/${ref}/${treePath}`
+                      : `/${owner}/${repoName}/new/${ref}`
+                  }
+                  className="btn-secondary btn-sm"
                 >
-                  <td className="py-2 px-4 whitespace-nowrap">
-                    <Link
-                      to={`/${owner}/${repoName}/${entry.type === "tree" ? "tree" : "blob"}/${ref}/${entry.path}`}
-                      className="text-text-link hover:underline flex items-center gap-2"
-                    >
-                      {entry.type === "tree" ? (
-                        <svg
-                          className="w-4 h-4 text-text-link"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                        </svg>
-                      ) : (
+                  Add file
+                </Link>
+              )}
+            </div>
+          </div>
+
+          {/* Breadcrumbs (when navigating into subdirectories) */}
+          {treePath && (
+            <div className="flex items-center gap-1.5 text-sm mb-4 text-text-secondary">
+              <Link
+                to={`/${owner}/${repoName}/tree/${ref}`}
+                className="text-text-link hover:underline"
+              >
+                {repoName}
+              </Link>
+              {pathParts.map((part: string, i: number) => {
+                const partPath = pathParts.slice(0, i + 1).join("/");
+                const isLast = i === pathParts.length - 1;
+                return (
+                  <span key={partPath} className="flex items-center gap-1.5">
+                    <span>/</span>
+                    {isLast ? (
+                      <span className="font-semibold text-text-primary">{part}</span>
+                    ) : (
+                      <Link
+                        to={`/${owner}/${repoName}/tree/${ref}/${partPath}`}
+                        className="text-text-link hover:underline"
+                      >
+                        {part}
+                      </Link>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* File tree */}
+          <div className="border border-border rounded-lg overflow-hidden bg-surface">
+            <table className="w-full text-sm">
+              <tbody>
+                {treePath && (
+                  <tr className="border-b border-border hover:bg-surface-secondary">
+                    <td className="py-2 px-4">
+                      <Link
+                        to={
+                          pathParts.length > 1
+                            ? `/${owner}/${repoName}/tree/${ref}/${pathParts.slice(0, -1).join("/")}`
+                            : `/${owner}/${repoName}/tree/${ref}`
+                        }
+                        className="text-text-link hover:underline flex items-center gap-2"
+                      >
                         <svg
                           className="w-4 h-4 text-text-secondary"
                           fill="none"
@@ -191,43 +167,102 @@ export default async function RepoTree({ params }: { params?: Record<string, str
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            d="M11 17l-5-5m0 0l5-5m-5 5h12"
                           />
                         </svg>
-                      )}
-                      {entry.name}
-                      {entry.isLfs && (
-                        <span className="px-1 py-0.5 text-[10px] font-medium rounded bg-blue-500/10 text-blue-600">
-                          LFS
-                        </span>
-                      )}
-                    </Link>
-                  </td>
-                  <td className="py-2 px-4 truncate max-w-xs">
-                    {entry.lastCommit && (
-                      <Link
-                        to={`/${owner}/${repoName}/commit/${entry.lastCommit.oid}`}
-                        className="text-text-secondary hover:text-text-link hover:underline"
-                      >
-                        {entry.lastCommit.message}
+                        ..
                       </Link>
-                    )}
-                  </td>
-                  <td className="py-2 px-4 text-text-secondary whitespace-nowrap text-right">
-                    {entry.lastCommit && (
-                      <time
-                        dateTime={new Date(entry.lastCommit.timestamp * 1000).toISOString()}
-                        title={new Date(entry.lastCommit.timestamp * 1000).toLocaleString()}
-                      >
-                        {formatRelativeDate(entry.lastCommit.timestamp)}
-                      </time>
-                    )}
-                  </td>
-                </tr>
-              ),
-            )}
-          </tbody>
-        </table>
+                    </td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                )}
+                {entries.map(
+                  (
+                    entry: {
+                      name: string;
+                      path: string;
+                      type: string;
+                      oid: string;
+                      isLfs?: boolean;
+                      lastCommit: { oid: string; message: string; timestamp: number } | null;
+                    },
+                    i: number,
+                  ) => (
+                    <tr
+                      key={entry.oid}
+                      className={`hover:bg-surface-secondary ${i < entries.length - 1 || treePath ? "border-b border-border" : ""}`}
+                    >
+                      <td className="py-2 px-4 whitespace-nowrap">
+                        <Link
+                          to={`/${owner}/${repoName}/${entry.type === "tree" ? "tree" : "blob"}/${ref}/${entry.path}`}
+                          className="text-text-link hover:underline flex items-center gap-2"
+                        >
+                          {entry.type === "tree" ? (
+                            <svg
+                              className="w-4 h-4 text-text-link"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                            </svg>
+                          ) : (
+                            <svg
+                              className="w-4 h-4 text-text-secondary"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                              />
+                            </svg>
+                          )}
+                          {entry.name}
+                          {entry.isLfs && (
+                            <span className="px-1 py-0.5 text-[10px] font-medium rounded bg-blue-500/10 text-blue-600">
+                              LFS
+                            </span>
+                          )}
+                        </Link>
+                      </td>
+                      <td className="py-2 px-4 truncate max-w-xs hidden sm:table-cell">
+                        {entry.lastCommit && (
+                          <Link
+                            to={`/${owner}/${repoName}/commit/${entry.lastCommit.oid}`}
+                            className="text-text-secondary hover:text-text-link hover:underline"
+                          >
+                            {entry.lastCommit.message}
+                          </Link>
+                        )}
+                      </td>
+                      <td className="py-2 px-4 text-text-secondary whitespace-nowrap text-right">
+                        {entry.lastCommit && (
+                          <time
+                            dateTime={new Date(entry.lastCommit.timestamp * 1000).toISOString()}
+                            title={new Date(entry.lastCommit.timestamp * 1000).toLocaleString()}
+                          >
+                            {formatRelativeDate(entry.lastCommit.timestamp)}
+                          </time>
+                        )}
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <RepoAboutSidebar
+          owner={owner}
+          repo={repoName}
+          description={repository?.description ?? null}
+          gitRef={ref}
+          hasLfs={hasLfs}
+        />
       </div>
     </div>
   );

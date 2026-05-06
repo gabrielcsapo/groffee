@@ -52,7 +52,7 @@ export default function Root() {
           </nav>
         </header>
         <GlobalNavigationLoadingBar />
-        <main className="flex-1 max-w-[1280px] w-full mx-auto px-6 py-6">
+        <main className="flex-1 max-w-[1280px] w-full mx-auto px-4 sm:px-6 py-6">
           <Outlet />
         </main>
         <footer className="border-t border-border mt-auto">

@@ -1,9 +1,31 @@
 import { getPullRequests } from "../lib/server/pulls";
 import { PullsList } from "./pulls.client";
 
-export default async function Pulls({ params }: { params?: Record<string, string> }) {
-  const { owner, repo } = params as { owner: string; repo: string };
-  const data = await getPullRequests(owner, repo, "open");
+export async function loader({ request }: { request: Request }) {
+  const url = new URL(request.url);
+  const status = url.searchParams.get("status") || "open";
+  return { status };
+}
 
-  return <PullsList owner={owner} repo={repo} initialPulls={data.pullRequests || []} />;
+export default async function Pulls({
+  params,
+  loaderData,
+}: {
+  params?: Record<string, string>;
+  loaderData?: { status: string };
+}) {
+  const { owner, repo } = params as { owner: string; repo: string };
+  const status = loaderData?.status || "open";
+  const data = await getPullRequests(owner, repo, status);
+
+  return (
+    <PullsList
+      owner={owner}
+      repo={repo}
+      initialStatus={status}
+      initialPulls={data.pullRequests || []}
+      initialNextCursor={data.nextCursor || null}
+      initialHasMore={data.hasMore ?? false}
+    />
+  );
 }

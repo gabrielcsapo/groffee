@@ -1,0 +1,1 @@
+ALTER TABLE `pipeline_jobs` ADD `matrix_values` text;

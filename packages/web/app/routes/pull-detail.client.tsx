@@ -6,7 +6,8 @@ import { timeAgo } from "../lib/time";
 import { getSessionUser } from "../lib/server/auth";
 import { updatePullRequest } from "../lib/server/pulls";
 import { PullConversationView } from "./pull-conversation.client";
-import { PullFilesView } from "./pull-files.client";
+import { PullFilesView, type DiffComment } from "./pull-files.client";
+import { PullCommitsView, type PRCommit } from "./pull-commits.client";
 
 interface PR {
   id: string;
@@ -28,6 +29,7 @@ interface PR {
 interface Comment {
   id: string;
   body: string;
+  bodyHtml?: string;
   author: string;
   authorId?: string;
   createdAt: string;
@@ -46,7 +48,15 @@ interface DiffFile {
     newStart: number;
     newLines: number;
     lines: string[];
+    highlightedLines?: (string | null)[];
   }>;
+}
+
+interface PipelineRunSummary {
+  id: string;
+  number: number;
+  status: string;
+  pipelineName: string;
 }
 
 export interface PullDetailData {
@@ -59,6 +69,8 @@ export interface PullDetailData {
   commentsList: Comment[];
   setCommentsList: React.Dispatch<React.SetStateAction<Comment[]>>;
   user: { username: string } | null;
+  prBodyHtml: string;
+  setPrBodyHtml: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export function PullDetailLayout({
@@ -66,24 +78,37 @@ export function PullDetailLayout({
   repo,
   prNumber,
   initialPR,
+  initialPRBodyHtml,
   initialDiff,
   initialComments,
+  initialDiffComments,
+  initialCommits,
+  sourceHeadOid,
+  pipelineRun,
   tab,
 }: {
   owner: string;
   repo: string;
   prNumber: string;
   initialPR: PR | null;
+  initialPRBodyHtml?: string;
   initialDiff: DiffFile[] | null;
   initialComments: Comment[];
-  tab: "conversation" | "files";
+  initialDiffComments?: DiffComment[];
+  initialCommits?: PRCommit[];
+  sourceHeadOid?: string | null;
+  pipelineRun?: PipelineRunSummary | null;
+  tab: "conversation" | "files" | "commits";
 }) {
-  const isFilesTab = tab === "files";
   const basePath = `/${owner}/${repo}/pull/${prNumber}`;
 
   const [pr, setPr] = useState<PR | null>(initialPR);
+  const [prBodyHtml, setPrBodyHtml] = useState<string>(initialPRBodyHtml || "");
   const [diff] = useState<DiffFile[] | null>(initialDiff);
   const [commentsList, setCommentsList] = useState<Comment[]>(initialComments);
+  const [diffCommentsList, setDiffCommentsList] = useState<DiffComment[]>(
+    initialDiffComments || [],
+  );
   const [user, setUser] = useState<{ username: string } | null>(null);
 
   // PR title edit state (kept in layout since title is in header)
@@ -134,6 +159,13 @@ export function PullDetailLayout({
 
   const statusBadge =
     pr.status === "open" ? "badge-open" : pr.status === "merged" ? "badge-merged" : "badge-closed";
+
+  const tabClass = (active: boolean) =>
+    `px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap shrink-0 ${
+      active
+        ? "border-primary text-text-primary"
+        : "border-transparent text-text-secondary hover:text-text-primary"
+    }`;
 
   return (
     <div className="max-w-5xl mx-auto mt-4">
@@ -192,6 +224,28 @@ export function PullDetailLayout({
               {pr.targetBranch}
             </code>
           </span>
+          {pipelineRun && (
+            <Link
+              to={`/${owner}/${repo}/pipelines/runs/${pipelineRun.number}`}
+              className="text-xs"
+              title={`Pipeline ${pipelineRun.pipelineName} #${pipelineRun.number} (${pipelineRun.status})`}
+            >
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${
+                  pipelineRun.status === "success"
+                    ? "border-success/40 text-success bg-success/10"
+                    : pipelineRun.status === "failure" || pipelineRun.status === "timed_out"
+                      ? "border-danger/40 text-danger bg-danger/10"
+                      : pipelineRun.status === "running" || pipelineRun.status === "queued"
+                        ? "border-warning/40 text-warning bg-warning/10"
+                        : "border-border text-text-secondary bg-surface-secondary"
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                CI {pipelineRun.status}
+              </span>
+            </Link>
+          )}
           {pr.editCount && pr.editCount > 0 && (
             <span
               className="text-xs text-text-secondary"
@@ -204,24 +258,32 @@ export function PullDetailLayout({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-border mb-6">
-        <Link
-          to={basePath}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${!isFilesTab ? "border-primary text-text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}
-        >
+      <div className="flex gap-1 border-b border-border mb-6 overflow-x-auto scrollbar-thin">
+        <Link to={basePath} className={tabClass(tab === "conversation")}>
           Conversation
         </Link>
-        <Link
-          to={`${basePath}/files-changed`}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${isFilesTab ? "border-primary text-text-primary" : "border-transparent text-text-secondary hover:text-text-primary"}`}
-        >
+        <Link to={`${basePath}/files-changed`} className={tabClass(tab === "files")}>
           Files changed {diff ? `(${diff.length})` : ""}
+        </Link>
+        <Link to={`${basePath}/commits`} className={tabClass(tab === "commits")}>
+          Commits {initialCommits ? `(${initialCommits.length})` : ""}
         </Link>
       </div>
 
       {/* Tab content */}
-      {isFilesTab ? (
-        <PullFilesView diff={diff} />
+      {tab === "files" ? (
+        <PullFilesView
+          owner={owner}
+          repo={repo}
+          prNumber={prNumber}
+          diff={diff}
+          sourceHeadOid={sourceHeadOid ?? null}
+          initialDiffComments={diffCommentsList}
+          onDiffCommentsChange={setDiffCommentsList}
+          currentUser={user}
+        />
+      ) : tab === "commits" ? (
+        <PullCommitsView owner={owner} repo={repo} commits={initialCommits || []} />
       ) : (
         <PullConversationView
           owner={owner}
@@ -229,6 +291,8 @@ export function PullDetailLayout({
           prNumber={prNumber}
           pr={pr}
           setPr={setPr}
+          prBodyHtml={prBodyHtml}
+          setPrBodyHtml={setPrBodyHtml}
           commentsList={commentsList}
           setCommentsList={setCommentsList}
           user={user}

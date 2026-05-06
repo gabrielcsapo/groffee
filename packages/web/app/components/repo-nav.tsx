@@ -137,12 +137,15 @@ export function RepoNav({
   ];
 
   return (
-    <div className="flex gap-1 border-b border-border mb-6">
+    // Below sm the tabs scroll horizontally (no wrap) so users on a phone
+    // don't end up with a 2-line tab strip that pushes content down. The
+    // outer container clips on the right edge at narrow widths.
+    <div className="flex gap-1 border-b border-border mb-6 overflow-x-auto scrollbar-thin">
       {tabs.map((tab) => (
         <Link
           key={tab.label}
           to={tab.href}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px hover:no-underline ${
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px hover:no-underline whitespace-nowrap shrink-0 ${
             tab.active
               ? "border-primary text-text-primary"
               : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"

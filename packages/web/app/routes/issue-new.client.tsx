@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-flight-router/client";
 import { createIssue } from "../lib/server/issues";
+import { MarkdownEditor } from "../components/markdown-editor.client";
 
 export default function NewIssueClient() {
   const { owner, repo: repoName } = useParams();
@@ -47,12 +48,11 @@ export default function NewIssueClient() {
           />
         </div>
         <div className="mb-4">
-          <textarea
+          <MarkdownEditor
             value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={8}
+            onChange={setBody}
+            minRows={8}
             placeholder="Leave a comment..."
-            className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y"
           />
         </div>
         <div className="flex justify-end gap-3">

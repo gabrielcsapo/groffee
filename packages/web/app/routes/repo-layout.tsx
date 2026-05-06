@@ -1,9 +1,10 @@
-import { Link, Outlet } from "react-flight-router/client";
+import { Link } from "react-flight-router/client";
 import { getRepo } from "../lib/server/repos";
 import { getIssueCount } from "../lib/server/issues";
 import { getPullRequestCount } from "../lib/server/pulls";
 import { getLatestRunStatus } from "../lib/server/pipelines";
 import { RepoNavWrapper as RepoNav } from "../components/repo-nav-wrapper.client";
+import { KeyedOutlet } from "../components/keyed-outlet.client";
 
 export default async function RepoLayout({ params }: { params?: Record<string, string> }) {
   const { owner, repo } = params as { owner: string; repo: string };
@@ -54,9 +55,19 @@ export default async function RepoLayout({ params }: { params?: Record<string, s
               >
                 {repository.isPublic ? "Public" : "Private"}
               </span>
+              {repository.isArchived && (
+                <span className="ml-1 badge bg-yellow-500/15 text-yellow-700 border border-yellow-500/30">
+                  Archived
+                </span>
+              )}
             </div>
             {repository.description && (
               <p className="text-sm text-text-secondary mt-1">{repository.description}</p>
+            )}
+            {repository.isArchived && (
+              <div className="mt-3 px-3 py-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 text-yellow-800 text-xs">
+                This repository has been archived by the owner. It is now read-only.
+              </div>
             )}
           </div>
         )}
@@ -69,7 +80,7 @@ export default async function RepoLayout({ params }: { params?: Record<string, s
           latestRunStatus={latestRun?.status ?? null}
         />
       </div>
-      <Outlet />
+      <KeyedOutlet />
     </>
   );
 }

@@ -15,12 +15,24 @@ import { searchRoutes } from "./routes/search.js";
 import { tokenRoutes } from "./routes/tokens.js";
 import { pipelineRoutes } from "./routes/pipelines.js";
 import { pagesRoutes } from "./routes/pages.js";
+import { uploadRoutes } from "./routes/uploads.js";
+import { secretRoutes } from "./routes/secrets.js";
+import { inviteRoutes, inviteAcceptRoutes } from "./routes/invites.js";
 import { requestId } from "./middleware/request-id.js";
 import { requestLogger } from "./middleware/request-logger.js";
+import { startStuckRunSweeper } from "./lib/pipeline-queue.js";
+import { startArtifactRetentionSweeper } from "./lib/artifact-sweeper.js";
 
 const startTime = Date.now();
 
 import { REPOS_DIR } from "./lib/paths.js";
+
+// Background workers — started once per process. The stuck-run sweeper
+// recovers runs whose worker process died (server restart, OOM) by marking
+// them timed_out. The retention sweeper deletes artifact rows + on-disk
+// dirs whose `retentionUntil` has passed.
+startStuckRunSweeper();
+startArtifactRetentionSweeper();
 
 export const app = new Hono();
 
@@ -70,7 +82,11 @@ app.route("/api/repos", collaboratorRoutes);
 app.route("/api/repos", searchRoutes);
 app.route("/api", searchRoutes);
 app.route("/api/repos", pipelineRoutes);
+app.route("/api/repos", secretRoutes);
 app.route("/api/repos", pagesRoutes);
+app.route("/api/repos", inviteRoutes);
+app.route("/api", inviteAcceptRoutes);
+app.route("/api/uploads", uploadRoutes);
 
 // Git LFS routes (must be before git protocol routes)
 app.route("/", gitLfsRoutes);

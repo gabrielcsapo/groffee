@@ -1,0 +1,1 @@
+ALTER TABLE `repositories` ADD `is_archived` integer DEFAULT false NOT NULL;

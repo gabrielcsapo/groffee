@@ -6,6 +6,7 @@ import {
   gitTreeEntries,
   gitBlobs,
   gitCommitFiles,
+  repositories,
 } from "@groffee/db";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { invalidateActivityCache } from "./activity-cache.js";
@@ -338,6 +339,14 @@ export async function fullReindex(repoId: string, repoPath: string): Promise<voi
     }
   }
 
+  // Stamp last_indexed_at so the admin dashboard / repo settings know the
+  // FTS index is current. We do this for both full and incremental paths.
+  await db
+    .update(repositories)
+    .set({ lastIndexedAt: new Date() })
+    .where(eq(repositories.id, repoId))
+    .catch(() => {});
+
   // Invalidate activity cache after full reindex
   await invalidateActivityCache(repoId).catch(() => {});
 }
@@ -369,6 +378,14 @@ export async function triggerIncrementalIndex(
       console.error(`Failed to index ref ${change.name} for repo ${repoId}:`, err);
     }
   }
+
+  // Stamp last_indexed_at after incremental indexing too, so the dashboard
+  // / settings status reflect every push, not only full reindexes.
+  await db
+    .update(repositories)
+    .set({ lastIndexedAt: new Date() })
+    .where(eq(repositories.id, repoId))
+    .catch(() => {});
 
   // Invalidate activity cache after incremental index
   await invalidateActivityCache(repoId).catch(() => {});

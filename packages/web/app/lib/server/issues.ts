@@ -1,11 +1,26 @@
 "use server";
 
-import { db, repositories, users, issues, pullRequests, comments, editHistory } from "@groffee/db";
-import { eq, and, desc, max, count, inArray, sql } from "drizzle-orm";
+import {
+  db,
+  repositories,
+  users,
+  issues,
+  pullRequests,
+  comments,
+  editHistory,
+  clampLimit,
+  cursorOrderBy,
+  cursorWhere,
+  paginatedResult,
+} from "@groffee/db";
+import { eq, and, max, count, inArray, sql } from "drizzle-orm";
 import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
 import { getRequest } from "./request-context";
 import { batchLoadUsers } from "./user-utils";
+import { isRepoArchivedById } from "./repos";
+
+const ARCHIVED_ERROR = "This repository is archived and is read-only.";
 
 async function findRepoForIssues(ownerName: string, repoName: string, currentUserId?: string) {
   const [owner] = await db.select().from(users).where(eq(users.username, ownerName)).limit(1);
@@ -23,16 +38,29 @@ async function findRepoForIssues(ownerName: string, repoName: string, currentUse
   return { repo, owner };
 }
 
-export async function getIssues(ownerName: string, repoName: string, status: string = "open") {
+export async function getIssues(
+  ownerName: string,
+  repoName: string,
+  status: string = "open",
+  options: { cursor?: string | null; limit?: number } = {},
+) {
   const currentUser = await getSessionUser();
   const result = await findRepoForIssues(ownerName, repoName, currentUser?.id);
-  if (!result) return { error: "Repository not found" };
+  if (!result) return { error: "Repository not found" as string };
 
+  const limit = clampLimit(options.limit);
   const issueList = await db
     .select()
     .from(issues)
-    .where(and(eq(issues.repoId, result.repo.id), eq(issues.status, status as "open" | "closed")))
-    .orderBy(desc(issues.createdAt));
+    .where(
+      and(
+        eq(issues.repoId, result.repo.id),
+        eq(issues.status, status as "open" | "closed"),
+        cursorWhere(options.cursor, issues.createdAt, issues.id, "desc"),
+      ),
+    )
+    .orderBy(...cursorOrderBy(issues.createdAt, issues.id, "desc"))
+    .limit(limit + 1);
 
   const authorMap = await batchLoadUsers(issueList.map((i) => i.authorId));
 
@@ -44,7 +72,10 @@ export async function getIssues(ownerName: string, repoName: string, status: str
     author: authorMap.get(i.authorId) || "unknown",
   }));
 
-  return { issues: issuesWithAuthors };
+  // Cursor on createdAt: passed through paginatedResult, which reads the
+  // `createdAt` field on the last returned row to encode the next cursor.
+  const page = paginatedResult(issuesWithAuthors, limit, "createdAt");
+  return { issues: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore };
 }
 
 export async function getIssueCount(ownerName: string, repoName: string, status: string = "open") {
@@ -151,6 +182,7 @@ export async function createIssue(
 
   const result = await findRepoForIssues(ownerName, repoName, user.id);
   if (!result) return { error: "Repository not found" };
+  if (await isRepoArchivedById(result.repo.id)) return { error: ARCHIVED_ERROR };
 
   if (!title?.trim()) return { error: "Title is required" };
 
@@ -222,6 +254,7 @@ export async function updateIssue(
 
   const result = await findRepoForIssues(ownerName, repoName, user.id);
   if (!result) return { error: "Repository not found" };
+  if (await isRepoArchivedById(result.repo.id)) return { error: ARCHIVED_ERROR };
 
   const [issue] = await db
     .select()
@@ -315,6 +348,7 @@ export async function createIssueComment(
 
   const result = await findRepoForIssues(ownerName, repoName, user.id);
   if (!result) return { error: "Repository not found" };
+  if (await isRepoArchivedById(result.repo.id)) return { error: ARCHIVED_ERROR };
 
   const [issue] = await db
     .select()
@@ -354,6 +388,7 @@ export async function updateIssueComment(
 
   const result = await findRepoForIssues(ownerName, repoName, user.id);
   if (!result) return { error: "Repository not found" };
+  if (await isRepoArchivedById(result.repo.id)) return { error: ARCHIVED_ERROR };
 
   const [comment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
   if (!comment) return { error: "Comment not found" };

@@ -10,6 +10,9 @@ import {
   updatePRComment,
   mergePullRequest,
 } from "../lib/server/pulls";
+import { previewMarkdown } from "../lib/server/markdown-preview";
+import { MarkdownEditor } from "../components/markdown-editor.client";
+import { MarkdownCopyButtons } from "../components/markdown-copy-buttons.client";
 
 interface EditEntry {
   id: string;
@@ -91,6 +94,7 @@ interface PR {
 interface Comment {
   id: string;
   body: string;
+  bodyHtml?: string;
   author: string;
   authorId?: string;
   createdAt: string;
@@ -105,6 +109,8 @@ export function PullConversationView({
   prNumber,
   pr,
   setPr,
+  prBodyHtml,
+  setPrBodyHtml,
   commentsList,
   setCommentsList,
   user,
@@ -114,6 +120,8 @@ export function PullConversationView({
   prNumber: string;
   pr: PR | null;
   setPr: React.Dispatch<React.SetStateAction<PR | null>>;
+  prBodyHtml: string;
+  setPrBodyHtml: React.Dispatch<React.SetStateAction<string>>;
   commentsList: Comment[];
   setCommentsList: React.Dispatch<React.SetStateAction<Comment[]>>;
   user: { username: string } | null;
@@ -121,6 +129,9 @@ export function PullConversationView({
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [merging, setMerging] = useState(false);
+  const [mergeStrategy, setMergeStrategy] = useState<"merge" | "squash" | "rebase">("merge");
+  const [mergeCommitMessage, setMergeCommitMessage] = useState(pr?.title ?? "");
+  const [deleteBranch, setDeleteBranch] = useState(true);
 
   // PR body edit state
   const [editingBody, setEditingBody] = useState(false);
@@ -161,12 +172,19 @@ export function PullConversationView({
       body: editBody,
     });
     if (!result.error) {
+      const trimmed = editBody.trim();
       setPr({
         ...pr,
-        body: editBody.trim() || null,
+        body: trimmed || null,
         editCount: (pr.editCount || 0) + 1,
         lastEditedAt: new Date().toISOString(),
       });
+      try {
+        const { html } = await previewMarkdown(trimmed);
+        setPrBodyHtml(html);
+      } catch {
+        setPrBodyHtml("");
+      }
       setEditingBody(false);
     }
     setEditSaving(false);
@@ -188,12 +206,21 @@ export function PullConversationView({
       editCommentBody,
     );
     if (!result.error) {
+      const trimmed = editCommentBody.trim();
+      let html = "";
+      try {
+        const r = await previewMarkdown(trimmed);
+        html = r.html;
+      } catch {
+        html = "";
+      }
       setCommentsList(
         commentsList.map((c) =>
           c.id === comment.id
             ? {
                 ...c,
-                body: editCommentBody.trim(),
+                body: trimmed,
+                bodyHtml: html,
                 editCount: (c.editCount || 0) + 1,
                 lastEditedAt: new Date().toISOString(),
               }
@@ -227,15 +254,27 @@ export function PullConversationView({
     setSubmitting(true);
     const result = await createPRComment(owner, repo, Number(prNumber), newComment);
     if (!result.error && result.comment) {
-      setCommentsList([...commentsList, result.comment]);
+      let html = "";
+      try {
+        const r = await previewMarkdown(result.comment.body || "");
+        html = r.html;
+      } catch {
+        html = "";
+      }
+      setCommentsList([...commentsList, { ...result.comment, bodyHtml: html }]);
       setNewComment("");
     }
     setSubmitting(false);
   }
 
   async function handleMerge() {
+    if (!pr) return;
     setMerging(true);
-    const result = await mergePullRequest(owner, repo, Number(prNumber));
+    const result = await mergePullRequest(owner, repo, Number(prNumber), {
+      strategy: mergeStrategy,
+      commitMessage: mergeCommitMessage.trim() || undefined,
+      deleteBranch,
+    });
     if (result.error) {
       alert(result.error);
     } else {
@@ -279,13 +318,14 @@ export function PullConversationView({
         </div>
         {editingBody ? (
           <div className="p-4">
-            <textarea
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-              rows={8}
-              className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
-              placeholder="Pull request description..."
-            />
+            <div className="mb-3">
+              <MarkdownEditor
+                value={editBody}
+                onChange={setEditBody}
+                minRows={8}
+                placeholder="Pull request description..."
+              />
+            </div>
             <div className="flex items-center gap-2 justify-end">
               <button
                 onClick={() => setEditingBody(false)}
@@ -298,11 +338,18 @@ export function PullConversationView({
               </button>
             </div>
           </div>
+        ) : pr.body ? (
+          prBodyHtml ? (
+            <MarkdownCopyButtons
+              className="markdown-body px-4 py-3 text-sm text-text-primary"
+              html={prBodyHtml}
+            />
+          ) : (
+            <div className="px-4 py-3 text-sm text-text-primary whitespace-pre-wrap">{pr.body}</div>
+          )
         ) : (
-          <div className="px-4 py-3 text-sm text-text-primary whitespace-pre-wrap">
-            {pr.body || (
-              <span className="text-text-secondary italic">No description provided.</span>
-            )}
+          <div className="px-4 py-3 text-sm text-text-primary">
+            <span className="text-text-secondary italic">No description provided.</span>
           </div>
         )}
       </div>
@@ -348,12 +395,13 @@ export function PullConversationView({
             </div>
             {editingCommentId === comment.id ? (
               <div className="p-4">
-                <textarea
-                  value={editCommentBody}
-                  onChange={(e) => setEditCommentBody(e.target.value)}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
-                />
+                <div className="mb-3">
+                  <MarkdownEditor
+                    value={editCommentBody}
+                    onChange={setEditCommentBody}
+                    minRows={4}
+                  />
+                </div>
                 <div className="flex items-center gap-2 justify-end">
                   <button
                     onClick={() => setEditingCommentId(null)}
@@ -370,6 +418,11 @@ export function PullConversationView({
                   </button>
                 </div>
               </div>
+            ) : comment.bodyHtml ? (
+              <MarkdownCopyButtons
+                className="markdown-body px-4 py-3 text-sm text-text-primary"
+                html={comment.bodyHtml}
+              />
             ) : (
               <div className="px-4 py-3 text-sm text-text-primary whitespace-pre-wrap">
                 {comment.body}
@@ -391,11 +444,49 @@ export function PullConversationView({
       {/* Merge box */}
       {pr.status === "open" && user && user.username === owner && (
         <div className="border border-success/30 rounded-lg p-4 mb-4 bg-success/5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
             <p className="text-sm text-text-primary font-medium">
               This pull request can be merged.
             </p>
-            <button onClick={handleMerge} disabled={merging} className="btn-primary btn-sm">
+            <div className="flex items-center gap-2 ml-auto">
+              <label className="text-xs text-text-secondary">Strategy</label>
+              <select
+                value={mergeStrategy}
+                onChange={(e) => setMergeStrategy(e.target.value as "merge" | "squash" | "rebase")}
+                className="text-sm px-2 py-1 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option value="merge">Merge</option>
+                <option value="squash">Squash</option>
+                <option value="rebase" disabled title="Rebase merging not yet supported">
+                  Rebase (coming soon)
+                </option>
+              </select>
+            </div>
+          </div>
+          <input
+            type="text"
+            value={mergeCommitMessage}
+            onChange={(e) => setMergeCommitMessage(e.target.value)}
+            placeholder="Commit message"
+            className="w-full mb-3 px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+          />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <label className="flex items-center gap-2 text-sm text-text-primary">
+              <input
+                type="checkbox"
+                checked={deleteBranch}
+                onChange={(e) => setDeleteBranch(e.target.checked)}
+              />
+              Delete{" "}
+              <code className="text-xs px-1 bg-surface-secondary rounded">{pr.sourceBranch}</code>{" "}
+              after merge
+            </label>
+            <button
+              onClick={handleMerge}
+              disabled={merging || mergeStrategy === "rebase"}
+              className="btn-primary btn-sm"
+              title={mergeStrategy === "rebase" ? "Rebase merging not yet supported" : undefined}
+            >
               {merging ? "Merging..." : "Merge pull request"}
             </button>
           </div>
@@ -426,13 +517,14 @@ export function PullConversationView({
       {user && (
         <div className="bg-surface border border-border rounded-lg p-4">
           <form onSubmit={handleComment}>
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              rows={4}
-              placeholder="Leave a comment..."
-              className="w-full px-3 py-2 border border-border rounded-md bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y mb-3"
-            />
+            <div className="mb-3">
+              <MarkdownEditor
+                value={newComment}
+                onChange={setNewComment}
+                minRows={4}
+                placeholder="Leave a comment..."
+              />
+            </div>
             <div className="flex items-center justify-between">
               {pr.status !== "merged" &&
                 (user.username === pr.author || user.username === owner) && (

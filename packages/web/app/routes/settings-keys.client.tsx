@@ -48,6 +48,21 @@ export default function SettingsKeysClient() {
     e.preventDefault();
     setError("");
     setMessage("");
+
+    // Cheap client-side gate so we can give a fast error before the server
+    // round-trip. The authoritative check (and SHA-256 fingerprint) still
+    // happens in lib/server/keys.ts via generateFingerprint().
+    const trimmed = publicKey.trim();
+    const looksLikeKey = /^(ssh-rsa|ssh-ed25519|ssh-dss|ecdsa-sha2-nistp(256|384|521)|sk-)/.test(
+      trimmed,
+    );
+    if (!looksLikeKey) {
+      setError(
+        "Public key must start with a supported algorithm (ssh-rsa, ssh-ed25519, ecdsa-sha2-nistp256/384/521).",
+      );
+      return;
+    }
+
     setAdding(true);
 
     const result = await addSSHKey(title, publicKey);
@@ -101,7 +116,9 @@ export default function SettingsKeysClient() {
       <SettingsNav />
       <h1 className="text-2xl font-bold text-text-primary mb-1">SSH Keys</h1>
       <p className="text-sm text-text-secondary mb-6">
-        SSH keys allow you to push and pull from repositories over SSH.
+        Your account SSH keys let you clone, fetch, and push to any repository you have access to.
+        For machine-to-machine access scoped to a single repository, use a deploy key in that repo's
+        settings instead.
       </p>
 
       {message && (

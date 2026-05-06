@@ -92,6 +92,10 @@ authRoutes.post("/login", async (c) => {
     return c.json({ error: "Invalid credentials" }, 401);
   }
 
+  if (user.disabled) {
+    return c.json({ error: "This account has been disabled." }, 403);
+  }
+
   const valid = await verifyPassword(user.passwordHash, password);
   if (!valid) {
     return c.json({ error: "Invalid credentials" }, 401);
