@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react";
 import { Link } from "react-flight-router/client";
+import { Avatar } from "../components/avatar";
 import { timeAgo } from "../lib/time";
 import {
   createDiffComment,
@@ -40,6 +41,8 @@ export interface DiffComment {
   bodyHtml?: string;
   resolved: boolean;
   author: string;
+  authorDisplayName?: string | null;
+  authorAvatarUploadId?: string | null;
   authorId: string;
   createdAt: string;
   updatedAt: string;
@@ -134,11 +137,21 @@ function CommentBlock({
   return (
     <div className="border border-border rounded-md bg-surface my-1.5">
       <div className="px-3 py-1.5 border-b border-border bg-surface-secondary text-xs flex items-center justify-between">
-        <span>
+        <span className="flex items-center gap-1.5">
+          <Link to={`/${comment.author}`} className="shrink-0 hover:no-underline">
+            <Avatar
+              user={{
+                username: comment.author,
+                avatarUploadId: comment.authorAvatarUploadId ?? null,
+                displayName: comment.authorDisplayName ?? null,
+              }}
+              size="xs"
+            />
+          </Link>
           <Link to={`/${comment.author}`} className="font-medium text-text-primary hover:underline">
             {comment.author}
           </Link>
-          <span className="text-text-secondary ml-1">commented {timeAgo(comment.createdAt)}</span>
+          <span className="text-text-secondary">commented {timeAgo(comment.createdAt)}</span>
         </span>
         <div className="flex items-center gap-2">
           {canEdit && !editing && (
@@ -242,7 +255,7 @@ function InlineThread({
   const collapsedCount = threads.length - visibleThreads.length;
 
   return (
-    <div className="bg-surface-secondary/30 border-l-2 border-primary/40 px-3 py-2">
+    <div className="bg-surface-secondary border-l-2 border-text-link/40 px-3 py-2">
       {collapsedCount > 0 && (
         <button
           onClick={() => {
@@ -347,9 +360,54 @@ const DiffFileCard = memo(function DiffFileCard({
   onResolveToggle,
   newCommentSubmitting,
 }: DiffFileCardProps) {
+  // Per-file UI state. "Viewed" is local-only (intentional — the audit was
+  // about giving reviewers a way to track progress at-a-glance, not about
+  // persisting it across page loads. Server-side viewed state is a separate
+  // feature.) Collapse defaults to true when viewed.
+  const [viewed, setViewed] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  // Auto-collapse when marking as viewed; auto-expand when unmarking.
+  const onToggleViewed = (next: boolean) => {
+    setViewed(next);
+    setCollapsed(next);
+  };
+
+  // Aggregate per-file diff stats. Counts every `+`/`-` line across all
+  // hunks; context lines are ignored. Memoized so we don't walk the file on
+  // every render.
+  const { added, removed } = useMemo(() => {
+    let a = 0;
+    let r = 0;
+    for (const hunk of file.hunks) {
+      for (const line of hunk.lines) {
+        if (line.startsWith("+")) a += 1;
+        else if (line.startsWith("-")) r += 1;
+      }
+    }
+    return { added: a, removed: r };
+  }, [file]);
+
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2 bg-surface-secondary border-b border-border">
+      <div className="flex items-center gap-2 px-4 py-2 bg-surface-secondary border-b border-border sticky top-0 z-10">
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? "Expand file" : "Collapse file"}
+          aria-expanded={!collapsed}
+          className="shrink-0 text-text-secondary hover:text-text-primary p-0.5 -ml-1"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+            className={`transition-transform ${collapsed ? "-rotate-90" : ""}`}
+          >
+            <path d="M4 6l4 4 4-4H4z" />
+          </svg>
+        </button>
         <span
           className={`text-xs font-medium px-1.5 py-0.5 rounded ${
             file.status === "added"
@@ -361,112 +419,146 @@ const DiffFileCard = memo(function DiffFileCard({
         >
           {file.status}
         </span>
-        <span className="text-sm font-medium text-text-primary font-mono">{filePath}</span>
+        <span className="text-sm font-medium text-text-primary font-mono truncate">{filePath}</span>
+        <span className="ml-auto flex items-center gap-3 text-xs font-mono shrink-0">
+          {added > 0 && <span className="text-success">+{added}</span>}
+          {removed > 0 && <span className="text-danger">−{removed}</span>}
+          <label className="flex items-center gap-1.5 text-text-secondary cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={viewed}
+              onChange={(e) => onToggleViewed(e.target.checked)}
+              className="w-3.5 h-3.5 accent-action"
+            />
+            Viewed
+          </label>
+        </span>
       </div>
-      <div className="overflow-x-auto">
-        {file.hunks.map((hunk, hunkIdx) => {
-          // Track running per-side line numbers as we walk hunk lines.
-          let oldLine = hunk.oldStart;
-          let newLine = hunk.newStart;
-          return (
-            <div key={hunkIdx}>
-              <div className="text-xs text-text-secondary bg-primary/5 px-4 py-1 font-mono border-b border-border">
-                @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
-              </div>
-              <table className="w-full text-sm font-mono">
-                <tbody>
-                  {hunk.lines.map((line, lineIdx) => {
-                    const isAdd = line.startsWith("+");
-                    const isDel = line.startsWith("-");
-                    const bg = isAdd ? "bg-diff-add-bg" : isDel ? "bg-diff-del-bg" : "";
-                    const textColor = isAdd
-                      ? "text-success"
-                      : isDel
-                        ? "text-danger"
-                        : "text-text-primary";
-                    const prefix = line[0] ?? " ";
-                    const highlighted = hunk.highlightedLines?.[lineIdx] ?? null;
+      {!collapsed && (
+        <div className="overflow-x-auto">
+          {file.hunks.map((hunk, hunkIdx) => {
+            // Track running per-side line numbers as we walk hunk lines.
+            let oldLine = hunk.oldStart;
+            let newLine = hunk.newStart;
+            return (
+              <div key={hunkIdx}>
+                <div className="text-xs text-text-secondary bg-surface-secondary px-4 py-1 font-mono border-b border-border">
+                  @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
+                </div>
+                <table className="w-full text-sm font-mono">
+                  <tbody>
+                    {hunk.lines.map((line, lineIdx) => {
+                      const isAdd = line.startsWith("+");
+                      const isDel = line.startsWith("-");
+                      const bg = isAdd ? "bg-diff-add-bg" : isDel ? "bg-diff-del-bg" : "";
+                      const textColor = isAdd
+                        ? "text-success"
+                        : isDel
+                          ? "text-danger"
+                          : "text-text-primary";
+                      const prefix = line[0] ?? " ";
+                      const highlighted = hunk.highlightedLines?.[lineIdx] ?? null;
 
-                    // Pick the line number for inline-comment anchoring. For
-                    // additions we anchor to the new side; for deletions to
-                    // the old side; context lines anchor to the new side.
-                    const side: "old" | "new" = isDel ? "old" : "new";
-                    const anchorLine = isDel ? oldLine : newLine;
-                    const key = lineKey(filePath, side, anchorLine);
-                    const threads = threadsByLineKey.get(key) || [];
-                    const isAddingHere = newCommentTarget?.lineKey === key;
+                      // Pick the line number for inline-comment anchoring. For
+                      // additions we anchor to the new side; for deletions to
+                      // the old side; context lines anchor to the new side.
+                      const side: "old" | "new" = isDel ? "old" : "new";
+                      const anchorLine = isDel ? oldLine : newLine;
+                      const key = lineKey(filePath, side, anchorLine);
+                      const threads = threadsByLineKey.get(key) || [];
+                      const isAddingHere = newCommentTarget?.lineKey === key;
 
-                    // Advance counters AFTER we pick the anchor.
-                    if (!isAdd) oldLine += 1;
-                    if (!isDel) newLine += 1;
+                      // Capture the per-side line numbers for the gutter
+                      // BEFORE we advance them.
+                      const oldNum = isAdd ? null : oldLine;
+                      const newNum = isDel ? null : newLine;
 
-                    return (
-                      <tr key={lineIdx} className="group">
-                        <td colSpan={2} className="p-0">
-                          <div className={`flex ${bg}`}>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                currentUser &&
-                                setNewCommentTarget(isAddingHere ? null : { lineKey: key })
-                              }
-                              className={`shrink-0 w-6 text-xs select-none ${
-                                currentUser
-                                  ? "opacity-0 group-hover:opacity-100 text-text-link hover:underline cursor-pointer"
-                                  : "opacity-0"
-                              }`}
-                              title={currentUser ? "Add a comment" : "Sign in to comment"}
-                              tabIndex={currentUser ? 0 : -1}
-                            >
-                              +
-                            </button>
-                            <div className={`flex-1 py-0 px-2 whitespace-pre ${textColor}`}>
-                              {highlighted != null ? (
-                                <>
-                                  <span>{prefix}</span>
-                                  <span
-                                    className="shiki-line"
-                                    dangerouslySetInnerHTML={{ __html: highlighted }}
-                                  />
-                                </>
-                              ) : (
-                                line
-                              )}
+                      // Advance counters AFTER we pick the anchor.
+                      if (!isAdd) oldLine += 1;
+                      if (!isDel) newLine += 1;
+
+                      return (
+                        <tr key={lineIdx} className="group">
+                          <td colSpan={2} className="p-0">
+                            <div className={`flex ${bg}`}>
+                              {/* Old-side line number gutter */}
+                              <span
+                                className="shrink-0 w-10 px-2 text-right text-xs text-text-secondary select-none tabular-nums"
+                                aria-hidden="true"
+                              >
+                                {oldNum ?? ""}
+                              </span>
+                              {/* New-side line number gutter */}
+                              <span
+                                className="shrink-0 w-10 px-2 text-right text-xs text-text-secondary select-none tabular-nums border-r border-border/50"
+                                aria-hidden="true"
+                              >
+                                {newNum ?? ""}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  currentUser &&
+                                  setNewCommentTarget(isAddingHere ? null : { lineKey: key })
+                                }
+                                className={`shrink-0 w-6 text-xs select-none ${
+                                  currentUser
+                                    ? "opacity-0 group-hover:opacity-100 text-text-link hover:underline cursor-pointer"
+                                    : "opacity-0"
+                                }`}
+                                title={currentUser ? "Add a comment" : "Sign in to comment"}
+                                tabIndex={currentUser ? 0 : -1}
+                              >
+                                +
+                              </button>
+                              <div className={`flex-1 py-0 px-2 whitespace-pre ${textColor}`}>
+                                {highlighted != null ? (
+                                  <>
+                                    <span>{prefix}</span>
+                                    <span
+                                      className="shiki-line"
+                                      dangerouslySetInnerHTML={{ __html: highlighted }}
+                                    />
+                                  </>
+                                ) : (
+                                  line
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          {threads.length > 0 && (
-                            <InlineThread
-                              threads={threads}
-                              currentUser={currentUser}
-                              ownerName={ownerName}
-                              onCreateReply={onCreateReply}
-                              onEdit={onEdit}
-                              onDelete={onDelete}
-                              onResolveToggle={onResolveToggle}
-                              collapseResolvedByDefault
-                            />
-                          )}
-                          {isAddingHere && (
-                            <div className="bg-surface-secondary/30 border-l-2 border-primary/40 px-3 py-2">
-                              <CommentForm
-                                submitting={newCommentSubmitting}
-                                placeholder="Leave a review comment..."
-                                submitLabel="Add comment"
-                                onCancel={() => setNewCommentTarget(null)}
-                                onSubmit={(body) => onSubmitNewComment(side, anchorLine, body)}
+                            {threads.length > 0 && (
+                              <InlineThread
+                                threads={threads}
+                                currentUser={currentUser}
+                                ownerName={ownerName}
+                                onCreateReply={onCreateReply}
+                                onEdit={onEdit}
+                                onDelete={onDelete}
+                                onResolveToggle={onResolveToggle}
+                                collapseResolvedByDefault
                               />
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          );
-        })}
-      </div>
+                            )}
+                            {isAddingHere && (
+                              <div className="bg-surface-secondary border-l-2 border-text-link/50 px-3 py-2">
+                                <CommentForm
+                                  submitting={newCommentSubmitting}
+                                  placeholder="Leave a review comment..."
+                                  submitLabel="Add comment"
+                                  onCancel={() => setNewCommentTarget(null)}
+                                  onSubmit={(body) => onSubmitNewComment(side, anchorLine, body)}
+                                />
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 });
@@ -495,6 +587,24 @@ function DiffSidebar({
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeFileIdx]);
+
+  // Per-file diff stats, memoized over the diff array. Walks every line
+  // once; cheap relative to the page render.
+  const statsByIdx = useMemo(() => {
+    const map = new Map<number, { added: number; removed: number }>();
+    diff.forEach((file, idx) => {
+      let added = 0;
+      let removed = 0;
+      for (const hunk of file.hunks) {
+        for (const line of hunk.lines) {
+          if (line.startsWith("+")) added += 1;
+          else if (line.startsWith("-")) removed += 1;
+        }
+      }
+      map.set(idx, { added, removed });
+    });
+    return map;
+  }, [diff]);
 
   const filtered = diff
     .map((file, idx) => ({ file, idx }))
@@ -528,6 +638,7 @@ function DiffSidebar({
           {filtered.map(({ file, idx }) => {
             const path = file.newPath || file.oldPath;
             const counts = threadCounts.get(path);
+            const stats = statsByIdx.get(idx);
             return (
               <button
                 key={idx}
@@ -535,7 +646,7 @@ function DiffSidebar({
                 onClick={() => scrollToFile(idx)}
                 className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate flex items-center gap-1.5 border-b border-border/50 ${
                   idx === activeFileIdx
-                    ? "bg-primary/5 text-text-link"
+                    ? "bg-selected-bg text-selected-text"
                     : "hover:bg-surface-secondary text-text-primary"
                 }`}
               >
@@ -549,6 +660,12 @@ function DiffSidebar({
                   }`}
                 />
                 <span className="truncate flex-1">{path}</span>
+                {stats && (stats.added > 0 || stats.removed > 0) && (
+                  <span className="shrink-0 flex items-center gap-1 text-[10px] font-medium">
+                    {stats.added > 0 && <span className="text-success">+{stats.added}</span>}
+                    {stats.removed > 0 && <span className="text-danger">−{stats.removed}</span>}
+                  </span>
+                )}
                 {counts && counts.total > 0 && (
                   <span
                     className={`shrink-0 text-[10px] px-1 rounded ${

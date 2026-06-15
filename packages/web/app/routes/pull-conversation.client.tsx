@@ -13,6 +13,7 @@ import {
 import { previewMarkdown } from "../lib/server/markdown-preview";
 import { MarkdownEditor } from "../components/markdown-editor.client";
 import { MarkdownCopyButtons } from "../components/markdown-copy-buttons.client";
+import { Avatar } from "../components/avatar";
 
 interface EditEntry {
   id: string;
@@ -82,6 +83,8 @@ interface PR {
   status: string;
   author: string;
   authorId?: string;
+  authorDisplayName?: string | null;
+  authorAvatarUploadId?: string | null;
   sourceBranch: string;
   targetBranch: string;
   createdAt: string;
@@ -97,10 +100,18 @@ interface Comment {
   bodyHtml?: string;
   author: string;
   authorId?: string;
+  authorDisplayName?: string | null;
+  authorAvatarUploadId?: string | null;
   createdAt: string;
   updatedAt?: string;
   editCount?: number;
   lastEditedAt?: string | null;
+}
+
+interface PipelineRunSummary {
+  number: number;
+  status: string;
+  pipelineName: string;
 }
 
 export function PullConversationView({
@@ -114,6 +125,7 @@ export function PullConversationView({
   commentsList,
   setCommentsList,
   user,
+  pipelineRun,
 }: {
   owner: string;
   repo: string;
@@ -125,6 +137,7 @@ export function PullConversationView({
   commentsList: Comment[];
   setCommentsList: React.Dispatch<React.SetStateAction<Comment[]>>;
   user: { username: string } | null;
+  pipelineRun?: PipelineRunSummary | null;
 }) {
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -297,7 +310,17 @@ export function PullConversationView({
       {/* PR body */}
       <div className="border border-border rounded-lg mb-4">
         <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm font-medium text-text-primary flex items-center justify-between">
-          <span className="flex items-center">
+          <span className="flex items-center gap-2">
+            <Link to={`/${pr.author}`} className="shrink-0 hover:no-underline">
+              <Avatar
+                user={{
+                  username: pr.author,
+                  avatarUploadId: pr.authorAvatarUploadId ?? null,
+                  displayName: pr.authorDisplayName ?? null,
+                }}
+                size="sm"
+              />
+            </Link>
             <Link to={`/${pr.author}`} className="hover:underline">
               {pr.author}
             </Link>
@@ -368,16 +391,24 @@ export function PullConversationView({
         <div key={comment.id}>
           <div className="border border-border rounded-lg mb-2">
             <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm flex items-center justify-between">
-              <span className="flex items-center">
+              <span className="flex items-center gap-2">
+                <Link to={`/${comment.author}`} className="shrink-0 hover:no-underline">
+                  <Avatar
+                    user={{
+                      username: comment.author,
+                      avatarUploadId: comment.authorAvatarUploadId ?? null,
+                      displayName: comment.authorDisplayName ?? null,
+                    }}
+                    size="sm"
+                  />
+                </Link>
                 <Link
                   to={`/${comment.author}`}
                   className="text-text-primary font-bold hover:underline"
                 >
                   {comment.author}
                 </Link>
-                <span className="text-text-secondary ml-1">
-                  commented {timeAgo(comment.createdAt)}
-                </span>
+                <span className="text-text-secondary">commented {timeAgo(comment.createdAt)}</span>
                 <EditedIndicator
                   editCount={comment.editCount}
                   lastEditedAt={comment.lastEditedAt}
@@ -441,6 +472,62 @@ export function PullConversationView({
         </div>
       ))}
 
+      {/* Checks region — shown above the merge box so reviewers can see CI
+       * state at a glance. When no pipeline has run on the source branch, we
+       * still render an empty-state slot so the absence is *visible* (the
+       * audit feedback was that silent absence is worse than an explicit
+       * "no checks configured" message). */}
+      {pr.status === "open" && (
+        <div className="border border-border rounded-lg mb-4">
+          <div className="px-4 py-2 bg-surface-secondary border-b border-border text-sm font-medium text-text-primary">
+            Checks
+          </div>
+          <div className="px-4 py-3">
+            {pipelineRun ? (
+              <Link
+                to={`/${owner}/${repo}/pipelines/runs/${pipelineRun.number}`}
+                className="flex items-center gap-3 text-sm hover:no-underline"
+                title={`Pipeline ${pipelineRun.pipelineName} #${pipelineRun.number}`}
+              >
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs font-medium ${
+                    pipelineRun.status === "success"
+                      ? "border-success/40 text-success bg-success/15"
+                      : pipelineRun.status === "failure" || pipelineRun.status === "timed_out"
+                        ? "border-danger/40 text-danger bg-danger/15"
+                        : pipelineRun.status === "running" || pipelineRun.status === "queued"
+                          ? "border-warning/40 text-warning bg-warning/15"
+                          : "border-border text-text-secondary bg-surface-secondary"
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  {pipelineRun.status}
+                </span>
+                <span className="text-text-primary font-medium">{pipelineRun.pipelineName}</span>
+                <span className="text-text-secondary">#{pipelineRun.number}</span>
+                <span className="ml-auto text-xs text-text-link hover:underline">View run →</span>
+              </Link>
+            ) : (
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-text-secondary">
+                  No pipelines have run on{" "}
+                  <code className="text-xs px-1 bg-surface-secondary rounded">
+                    {pr.sourceBranch}
+                  </code>{" "}
+                  yet.
+                </span>
+                <Link
+                  to={`/${owner}/${repo}/pipelines/config`}
+                  className="text-xs text-text-link hover:underline whitespace-nowrap"
+                >
+                  Configure pipelines →
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Merge box */}
       {pr.status === "open" && user && user.username === owner && (
         <div className="border border-success/30 rounded-lg p-4 mb-4 bg-success/5">
@@ -450,17 +537,46 @@ export function PullConversationView({
             </p>
             <div className="flex items-center gap-2 ml-auto">
               <label className="text-xs text-text-secondary">Strategy</label>
-              <select
-                value={mergeStrategy}
-                onChange={(e) => setMergeStrategy(e.target.value as "merge" | "squash" | "rebase")}
-                className="text-sm px-2 py-1 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+              <div
+                className="inline-flex border border-border rounded-md overflow-hidden text-xs font-medium"
+                role="radiogroup"
+                aria-label="Merge strategy"
               >
-                <option value="merge">Merge</option>
-                <option value="squash">Squash</option>
-                <option value="rebase" disabled title="Rebase merging not yet supported">
-                  Rebase (coming soon)
-                </option>
-              </select>
+                {(
+                  [
+                    { value: "merge", label: "Merge", disabled: false, title: "" },
+                    { value: "squash", label: "Squash", disabled: false, title: "" },
+                    {
+                      value: "rebase",
+                      label: "Rebase",
+                      disabled: true,
+                      title: "Rebase merging not yet supported",
+                    },
+                  ] as const
+                ).map((opt, i) => {
+                  const active = mergeStrategy === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={opt.disabled}
+                      title={opt.title}
+                      onClick={() => !opt.disabled && setMergeStrategy(opt.value)}
+                      className={`px-3 py-1 transition-colors ${i > 0 ? "border-l border-border" : ""} ${
+                        active
+                          ? "bg-selected-bg text-selected-text"
+                          : opt.disabled
+                            ? "text-text-secondary opacity-50 cursor-not-allowed"
+                            : "text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
           <input
@@ -528,15 +644,7 @@ export function PullConversationView({
             <div className="flex items-center justify-between">
               {pr.status !== "merged" &&
                 (user.username === pr.author || user.username === owner) && (
-                  <button
-                    type="button"
-                    onClick={toggleStatus}
-                    className={`btn-sm rounded-md border font-medium ${
-                      pr.status === "open"
-                        ? "border-danger/30 text-danger hover:bg-danger/5"
-                        : "border-success/30 text-success hover:bg-success/5"
-                    }`}
-                  >
+                  <button type="button" onClick={toggleStatus} className="btn-secondary btn-sm">
                     {pr.status === "open" ? "Close pull request" : "Reopen pull request"}
                   </button>
                 )}

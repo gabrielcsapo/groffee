@@ -1,8 +1,13 @@
 export { GroffeeLogo } from "./components/groffee-logo.tsx";
+export { Wordmark } from "./components/wordmark.tsx";
 export { CloneUrl } from "./components/clone-url.tsx";
 export { RepoNav } from "./components/repo-nav.tsx";
 export { BranchSwitcher, RefPicker } from "./components/branch-switcher.tsx";
 export { Button } from "./components/button.tsx";
 export { Badge } from "./components/badge.tsx";
 export { Card } from "./components/card.tsx";
+export { Input } from "./components/input.tsx";
+export { RepositoryRow } from "./components/repository-row.tsx";
+export { StatusPill, type StatusPillState } from "./components/status-pill.tsx";
+export { Callout } from "./components/callout.tsx";
 export { ApiDocs } from "./components/api-docs.tsx";

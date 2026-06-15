@@ -1,78 +1,178 @@
+import { CopyButton } from "./copy-button.tsx";
+import { DocsSidebar, type SidebarGroup, type SidebarMethod } from "./docs-sidebar.tsx";
+
+/** Helper — the same slug `Endpoint` (below) generates from method+path,
+ * extracted so the rail and the section can stay in sync without a
+ * separate id table. */
+function slug(method: string, path: string): string {
+  return `${method.toLowerCase()}-${path}`
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
+function ep(method: SidebarMethod, path: string) {
+  return { method, path, slug: slug(method, path) };
+}
+
+const DOCS_NAV: SidebarGroup[] = [
+  {
+    kind: "links",
+    title: "overview",
+    links: [
+      { href: "#overview", label: "introduction" },
+      { href: "#authentication", label: "authentication" },
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "health",
+    sectionHref: "#health",
+    endpoints: [ep("GET", "/api/health")],
+  },
+  {
+    kind: "endpoints",
+    title: "auth",
+    sectionHref: "#auth",
+    endpoints: [
+      ep("POST", "/api/auth/register"),
+      ep("POST", "/api/auth/login"),
+      ep("POST", "/api/auth/logout"),
+      ep("GET", "/api/auth/me"),
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "ssh keys",
+    sectionHref: "#ssh-keys",
+    endpoints: [
+      ep("GET", "/api/user/ssh-keys"),
+      ep("POST", "/api/user/ssh-keys"),
+      ep("DELETE", "/api/user/ssh-keys/:id"),
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "tokens",
+    sectionHref: "#tokens",
+    endpoints: [
+      ep("GET", "/api/user/tokens"),
+      ep("POST", "/api/user/tokens"),
+      ep("DELETE", "/api/user/tokens/:id"),
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "repositories",
+    sectionHref: "#repositories",
+    endpoints: [
+      ep("GET", "/api/repos"),
+      ep("POST", "/api/repos"),
+      ep("GET", "/api/repos/:owner"),
+      ep("GET", "/api/repos/:owner/:repo"),
+      ep("PATCH", "/api/repos/:owner/:repo"),
+      ep("DELETE", "/api/repos/:owner/:repo"),
+      ep("GET", "/api/repos/:owner/:repo/refs"),
+      ep("GET", "/api/repos/:owner/:repo/tree/:ref+"),
+      ep("GET", "/api/repos/:owner/:repo/blob/:ref+"),
+      ep("GET", "/api/repos/:owner/:repo/commits/:ref"),
+      ep("GET", "/api/repos/:owner/:repo/commit/:sha"),
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "collaborators",
+    sectionHref: "#collaborators",
+    endpoints: [
+      ep("GET", "/api/repos/:owner/:repo/collaborators"),
+      ep("POST", "/api/repos/:owner/:repo/collaborators"),
+      ep("DELETE", "/api/repos/:owner/:repo/collaborators/:collabId"),
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "issues",
+    sectionHref: "#issues",
+    endpoints: [
+      ep("GET", "/api/repos/:owner/:repo/issues"),
+      ep("GET", "/api/repos/:owner/:repo/issues/:number"),
+      ep("POST", "/api/repos/:owner/:repo/issues"),
+      ep("PATCH", "/api/repos/:owner/:repo/issues/:number"),
+      ep("POST", "/api/repos/:owner/:repo/issues/:number/comments"),
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "pull requests",
+    sectionHref: "#pull-requests",
+    endpoints: [
+      ep("GET", "/api/repos/:owner/:repo/pulls"),
+      ep("GET", "/api/repos/:owner/:repo/pulls/:number"),
+      ep("POST", "/api/repos/:owner/:repo/pulls"),
+      ep("PATCH", "/api/repos/:owner/:repo/pulls/:number"),
+      ep("POST", "/api/repos/:owner/:repo/pulls/:number/merge"),
+      ep("POST", "/api/repos/:owner/:repo/pulls/:number/comments"),
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "search",
+    sectionHref: "#search",
+    endpoints: [
+      ep("GET", "/api/repos/:owner/:repo/search/code"),
+      ep("GET", "/api/search/code"),
+      ep("GET", "/api/search/code/languages"),
+      ep("GET", "/api/repos/:owner/:repo/search/issues"),
+      ep("GET", "/api/repos/:owner/:repo/search/pulls"),
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "git protocol",
+    sectionHref: "#git-protocol",
+    endpoints: [
+      ep("GET", "/:owner/:repo.git/info/refs"),
+      ep("POST", "/:owner/:repo.git/git-upload-pack"),
+      ep("POST", "/:owner/:repo.git/git-receive-pack"),
+    ],
+  },
+  {
+    kind: "endpoints",
+    title: "git lfs",
+    sectionHref: "#git-lfs",
+    endpoints: [
+      ep("POST", "/:owner/:repo/info/lfs/objects/batch"),
+      ep("PUT", "/:owner/:repo/info/lfs/objects/:oid"),
+      ep("GET", "/:owner/:repo/info/lfs/objects/:oid"),
+      ep("POST", "/:owner/:repo/info/lfs/verify"),
+    ],
+  },
+  {
+    kind: "links",
+    title: "reference",
+    links: [
+      { href: "#errors", label: "error codes" },
+      { href: "#pagination", label: "pagination" },
+      { href: "#versioning", label: "versioning" },
+    ],
+  },
+];
+
 export function ApiDocs() {
   return (
-    <div className="flex gap-8 mt-4">
-      {/* Sidebar */}
-      <aside className="hidden lg:block w-56 shrink-0">
-        <nav className="sticky top-24 text-sm space-y-4">
-          <div>
-            <h3 className="font-semibold text-text-primary mb-1">Overview</h3>
-            <a href="#overview" className="block text-text-secondary hover:text-text-link py-0.5">
-              Introduction
-            </a>
-            <a
-              href="#authentication"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
-              Authentication
-            </a>
-          </div>
-          <div>
-            <h3 className="font-semibold text-text-primary mb-1">Endpoints</h3>
-            <a href="#health" className="block text-text-secondary hover:text-text-link py-0.5">
-              Health
-            </a>
-            <a href="#auth" className="block text-text-secondary hover:text-text-link py-0.5">
-              Auth
-            </a>
-            <a href="#ssh-keys" className="block text-text-secondary hover:text-text-link py-0.5">
-              SSH Keys
-            </a>
-            <a href="#tokens" className="block text-text-secondary hover:text-text-link py-0.5">
-              Tokens
-            </a>
-            <a
-              href="#repositories"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
-              Repositories
-            </a>
-            <a
-              href="#collaborators"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
-              Collaborators
-            </a>
-            <a href="#issues" className="block text-text-secondary hover:text-text-link py-0.5">
-              Issues
-            </a>
-            <a
-              href="#pull-requests"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
-              Pull Requests
-            </a>
-            <a href="#search" className="block text-text-secondary hover:text-text-link py-0.5">
-              Search
-            </a>
-            <a
-              href="#git-protocol"
-              className="block text-text-secondary hover:text-text-link py-0.5"
-            >
-              Git Protocol
-            </a>
-            <a href="#git-lfs" className="block text-text-secondary hover:text-text-link py-0.5">
-              Git LFS
-            </a>
-          </div>
-        </nav>
-      </aside>
-
+    <div className="flex gap-10 mt-4 text-base leading-relaxed">
+      {/* Main content — sits on the left so the eye reads content first,
+       * with the endpoint index as a secondary on-this-page rail on the
+       * right (Stripe / Linear / Tailwind-docs pattern). The content
+       * column gets `max-w-[760px]` to keep prose lines comfortable. */}
       {/* Main content */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 max-w-[760px]">
         {/* Intro */}
         <section id="overview" className="mb-10">
-          <h1 className="text-2xl font-bold text-text-primary mb-2">API Documentation</h1>
-          <p className="text-text-secondary text-sm mb-4">
+          <h1 className="font-editorial font-black text-5xl text-text-primary lowercase tracking-tight mb-3">
+            api docs
+          </h1>
+          <p className="text-text-secondary text-base mb-4">
             Groffee exposes a JSON REST API for managing repositories, issues, pull requests, and
             more. All endpoints are prefixed with <Code>/api</Code> and return JSON unless otherwise
             noted.
@@ -92,8 +192,10 @@ export function ApiDocs() {
         </section>
 
         <section id="authentication" className="mb-10">
-          <h2 className="text-xl font-bold text-text-primary mb-2">Authentication</h2>
-          <p className="text-text-secondary text-sm mb-3">
+          <h2 className="font-editorial font-bold text-3xl text-text-primary lowercase tracking-tight mb-3">
+            authentication
+          </h2>
+          <p className="text-text-secondary mb-3">
             Authentication is cookie-based for browser sessions or token-based for API access. Call{" "}
             <Code>POST /api/auth/login</Code> to obtain a session cookie, or use a personal access
             token via HTTP Basic auth (<Code>Authorization: Basic base64(username:token)</Code>).
@@ -1300,7 +1402,95 @@ export function ApiDocs() {
           }}
           notes="Checks both the database record and file on disk. Returns 404 if the object is not found."
         />
+
+        {/* ─── Reference appendix ─── */}
+
+        <SectionHeader id="errors" title="Error codes" />
+        <p className="text-text-secondary mb-4 text-sm">
+          Errors return a JSON body with an <Code>error</Code> field and the matching HTTP status
+          code. The table below covers the codes used across all endpoints; individual endpoints
+          document their own additional 409/422 cases.
+        </p>
+        <div className="card overflow-hidden mb-6">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-secondary">
+              <tr className="text-left text-text-secondary">
+                <th className="px-4 py-2 font-medium font-mono text-xs">code</th>
+                <th className="px-4 py-2 font-medium font-mono text-xs">meaning</th>
+                <th className="px-4 py-2 font-medium font-mono text-xs">when</th>
+              </tr>
+            </thead>
+            <tbody className="text-text-primary">
+              {[
+                ["400", "bad request", "the body or query params failed validation"],
+                ["401", "unauthorized", "no valid session cookie or token was sent"],
+                ["403", "forbidden", "you are authenticated but lack permission for this resource"],
+                ["404", "not found", "the resource doesn't exist or you can't see it"],
+                [
+                  "409",
+                  "conflict",
+                  "the request collides with existing state (e.g. duplicate name)",
+                ],
+                ["422", "unprocessable", "semantically invalid — see the endpoint for specifics"],
+                ["503", "unavailable", "the underlying git or LFS layer is temporarily down"],
+              ].map(([code, meaning, when]) => (
+                <tr key={code} className="border-t border-border">
+                  <td className="px-4 py-2 font-mono">{code}</td>
+                  <td className="px-4 py-2 font-mono text-text-secondary">{meaning}</td>
+                  <td className="px-4 py-2">{when}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <SectionHeader id="pagination" title="Pagination" />
+        <p className="text-text-secondary mb-4 text-sm">
+          List endpoints use opaque cursor pagination. Pass <Code>?cursor=…</Code> from the response
+          to fetch the next page; the server stays in control of the ordering so a record inserted
+          mid-walk can't be skipped or duplicated.
+        </p>
+        <div className="card p-4 text-sm mb-2">
+          <p className="mb-2">
+            <span className="font-medium">Request:</span>{" "}
+            <Code>GET /api/repos/:owner/:repo/issues?limit=50&cursor=eyJ0Ijox…</Code>
+          </p>
+          <p className="text-text-secondary text-xs">
+            Default limit: 25. Maximum: 100. Cursors are signed and only valid for a short window —
+            don't store them long-term.
+          </p>
+        </div>
+        <p className="text-text-secondary text-sm mb-6">
+          Responses always include a top-level <Code>nextCursor</Code> (null when you've reached the
+          end) and a <Code>hasMore</Code> boolean for clients that prefer the explicit signal.
+        </p>
+
+        <SectionHeader id="versioning" title="Versioning" />
+        <p className="text-text-secondary mb-4 text-sm">
+          The API is unversioned today. Groffee is self-hosted and you upgrade in lock-step with the
+          UI, so an out-of-band v1 → v2 transition would only hurt. Breaking changes are flagged in
+          the changelog and held until a major release; additive changes ship anytime.
+        </p>
+        <p className="text-text-secondary text-sm mb-6">
+          Found something wrong here?{" "}
+          <a
+            href="https://github.com/gabrielcsapo/groffee/blob/main/packages/ui/src/components/api-docs.tsx"
+            className="text-text-link hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            edit this page →
+          </a>
+        </p>
       </div>
+
+      {/* On-this-page rail — sticky on the right. 288px wide, 11px mono
+       * rows, scroll-spy, auto-scrolls to keep the active endpoint
+       * visible. This is the rail that turns the docs from a flat scroll
+       * into a real API browser. */}
+      <aside className="hidden lg:block w-72 shrink-0 self-start sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto pl-4 border-l border-border-muted">
+        <DocsSidebar groups={DOCS_NAV} />
+      </aside>
     </div>
   );
 }
@@ -1311,18 +1501,27 @@ function SectionHeader({ id, title }: { id: string; title: string }) {
   return (
     <h2
       id={id}
-      className="text-xl font-bold text-text-primary mt-10 mb-4 pt-4 border-t border-border first:mt-0 first:border-t-0 scroll-mt-20"
+      className="group font-editorial font-bold text-3xl text-text-primary lowercase tracking-tight mt-12 mb-5 pt-5 border-t border-border first:mt-0 first:border-t-0 scroll-mt-20"
     >
       {title}
+      {/* Permalink — hover reveals an amber `#` so users can copy section
+       * links. Aria-hidden because the surrounding heading already has the
+       * id, and the link target is the heading itself. */}
+      <a
+        href={`#${id}`}
+        aria-hidden="true"
+        tabIndex={-1}
+        className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-accent text-2xl font-mono no-underline hover:underline"
+      >
+        #
+      </a>
     </h2>
   );
 }
 
 function Code({ children }: { children: React.ReactNode }) {
   return (
-    <code className="px-1.5 py-0.5 bg-surface-secondary border border-border-muted rounded text-xs font-mono">
-      {children}
-    </code>
+    <code className="px-1.5 py-0.5 bg-surface-secondary rounded text-sm font-mono">{children}</code>
   );
 }
 
@@ -1356,6 +1555,17 @@ interface ParamDef {
   description: string;
 }
 
+/**
+ * Generate a stable anchor id from method + path. `GET /api/repos/:owner`
+ * → `get-api-repos-owner`. Strips leading slash, replaces every
+ * non-alphanumeric run with `-`, trims dashes. */
+function endpointSlug(method: string, path: string): string {
+  return `${method.toLowerCase()}-${path}`
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
 function Endpoint({
   method,
   path,
@@ -1377,12 +1587,23 @@ function Endpoint({
   response?: Record<string, unknown>;
   notes?: string;
 }) {
+  const slug = endpointSlug(method, path);
   return (
-    <div className="card mb-4 overflow-hidden">
+    <div id={slug} className="card mb-4 overflow-hidden scroll-mt-20 group">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-surface-secondary border-b border-border flex-wrap">
         <MethodBadge method={method} />
         <code className="text-sm font-mono font-medium text-text-primary">{path}</code>
+        {/* Per-endpoint permalink. Hidden until the row is hovered so it
+         * doesn't clutter the dense list, but discoverable for anyone who
+         * wants to share a deep link. */}
+        <a
+          href={`#${slug}`}
+          aria-label={`Permalink to ${method} ${path}`}
+          className="text-accent text-sm font-mono opacity-0 group-hover:opacity-100 transition-opacity no-underline hover:underline"
+        >
+          #
+        </a>
         <div className="flex-1" />
         <AuthBadge level={auth} />
       </div>
@@ -1463,10 +1684,40 @@ function SyntaxRow({ syntax, desc, example }: { syntax: string; desc: string; ex
   );
 }
 
+/**
+ * Tokenize a serialized JSON string for syntax highlighting. Runs at SSR
+ * render time so no client JS is needed and the highlighted output ships
+ * in the initial HTML. Cheap regex-based pass — accurate enough for the
+ * shape of JSON we emit in docs (keys/strings/numbers/booleans/null).
+ */
+function highlightJson(json: string): string {
+  // Escape HTML entities first so any user-provided key/value text doesn't
+  // break out of the rendered block.
+  const escaped = json.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return escaped.replace(
+    /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+    (match) => {
+      let cls = "tk-num";
+      if (match.startsWith('"')) {
+        cls = match.endsWith(":") || /":\s*$/.test(match) ? "tk-key" : "tk-str";
+      } else if (match === "true" || match === "false") {
+        cls = "tk-bool";
+      } else if (match === "null") {
+        cls = "tk-null";
+      }
+      return `<span class="${cls}">${match}</span>`;
+    },
+  );
+}
+
 function JsonBlock({ value }: { value: unknown }) {
+  const json = JSON.stringify(value, null, 2);
   return (
-    <pre className="bg-surface-secondary border border-border-muted rounded p-3 text-xs font-mono overflow-x-auto whitespace-pre">
-      {JSON.stringify(value, null, 2)}
-    </pre>
+    <div className="relative">
+      <pre className="bg-surface-secondary border border-border-muted rounded p-3 pr-16 text-xs font-mono overflow-x-auto whitespace-pre json-block">
+        <code dangerouslySetInnerHTML={{ __html: highlightJson(json) }} />
+      </pre>
+      <CopyButton text={json} />
+    </div>
   );
 }

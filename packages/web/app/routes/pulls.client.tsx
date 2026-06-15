@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-flight-router/client";
+import { StatusPill, type StatusPillState } from "@groffee/ui";
 import { timeAgo } from "../lib/time";
 import { getPullRequests } from "../lib/server/pulls";
 import { LoadMore } from "../components/load-more.client";
@@ -15,6 +16,9 @@ interface PR {
   sourceBranch: string;
   targetBranch: string;
   createdAt: string;
+  commentCount?: number;
+  pipelineStatus?: string | null;
+  pipelineRunNumber?: number | null;
 }
 
 export function PullsList({
@@ -77,19 +81,19 @@ export function PullsList({
         <div className="flex gap-1 bg-surface border border-border rounded-md overflow-hidden">
           <button
             onClick={() => setSearchParams(new URLSearchParams({ status: "open" }))}
-            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "open" ? "bg-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
+            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "open" ? "bg-selected-bg text-selected-text" : "text-text-secondary hover:bg-surface-secondary"}`}
           >
             Open
           </button>
           <button
             onClick={() => setSearchParams(new URLSearchParams({ status: "closed" }))}
-            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "closed" ? "bg-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
+            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "closed" ? "bg-selected-bg text-selected-text" : "text-text-secondary hover:bg-surface-secondary"}`}
           >
             Closed
           </button>
           <button
             onClick={() => setSearchParams(new URLSearchParams({ status: "merged" }))}
-            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "merged" ? "bg-primary text-white" : "text-text-secondary hover:bg-surface-secondary"}`}
+            className={`text-sm px-3 py-1.5 font-medium transition-colors ${status === "merged" ? "bg-selected-bg text-selected-text" : "text-text-secondary hover:bg-surface-secondary"}`}
           >
             Merged
           </button>
@@ -179,21 +183,44 @@ export function PullsList({
                     )}
                   </svg>
                   <div className="flex-1 min-w-0">
-                    <Link
-                      to={`/${owner}/${repo}/pull/${pr.number}`}
-                      className="text-sm font-semibold text-text-primary hover:text-text-link hover:underline"
-                    >
-                      {pr.title}
-                    </Link>
-                    <p className="text-xs text-text-secondary mt-0.5">
-                      #{pr.number} opened {timeAgo(pr.createdAt)} by{" "}
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Link
-                        to={`/${pr.author}`}
-                        className="hover:underline hover:text-text-primary"
+                        to={`/${owner}/${repo}/pull/${pr.number}`}
+                        className="text-sm font-semibold text-text-primary hover:text-text-link hover:underline"
                       >
-                        {pr.author}
+                        {pr.title}
                       </Link>
-                      <span className="ml-2">
+                      <StatusPill state={pr.status as StatusPillState} />
+                      {pr.pipelineStatus && pr.pipelineRunNumber != null && (
+                        <Link
+                          to={`/${owner}/${repo}/pipelines/runs/${pr.pipelineRunNumber}`}
+                          className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
+                            pr.pipelineStatus === "success"
+                              ? "text-success bg-success/15 border-success/40"
+                              : pr.pipelineStatus === "failure" || pr.pipelineStatus === "timed_out"
+                                ? "text-danger bg-danger/15 border-danger/40"
+                                : pr.pipelineStatus === "running" || pr.pipelineStatus === "queued"
+                                  ? "text-warning bg-warning/15 border-warning/40"
+                                  : "text-text-secondary bg-surface-secondary border-border"
+                          }`}
+                          title={`Pipeline #${pr.pipelineRunNumber} (${pr.pipelineStatus})`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                          {pr.pipelineStatus}
+                        </Link>
+                      )}
+                    </div>
+                    <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span>
+                        #{pr.number} opened {timeAgo(pr.createdAt)} by{" "}
+                        <Link
+                          to={`/${pr.author}`}
+                          className="hover:underline hover:text-text-primary"
+                        >
+                          {pr.author}
+                        </Link>
+                      </span>
+                      <span>
                         <code className="px-1 py-0.5 bg-surface-secondary rounded text-xs">
                           {pr.sourceBranch}
                         </code>{" "}
@@ -202,6 +229,23 @@ export function PullsList({
                           {pr.targetBranch}
                         </code>
                       </span>
+                      {pr.commentCount != null && pr.commentCount > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1"
+                          title={`${pr.commentCount} comment${pr.commentCount === 1 ? "" : "s"}`}
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 16 16"
+                            fill="currentColor"
+                            aria-hidden="true"
+                          >
+                            <path d="M1 2.75A1.75 1.75 0 0 1 2.75 1h10.5A1.75 1.75 0 0 1 15 2.75v8.5A1.75 1.75 0 0 1 13.25 13H5.18l-3.5 2.917A.75.75 0 0 1 .5 15.25V2.75Z" />
+                          </svg>
+                          {pr.commentCount}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>

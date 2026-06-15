@@ -6,7 +6,7 @@ import { Link } from "react-flight-router/client";
 interface Props {
   owner: string;
   repoName: string;
-  ref: string;
+  refName: string;
   path: string;
   initialContent: string;
   editPolicy: "direct" | "pull_request";
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export default function RepoEditClient(props: Props) {
-  const { owner, repoName, ref, path, initialContent, editPolicy } = props;
+  const { owner, repoName, refName, path, initialContent, editPolicy } = props;
   const fileName = path.split("/").pop() || path;
 
   const [content, setContent] = useState(initialContent);
@@ -35,7 +35,7 @@ export default function RepoEditClient(props: Props) {
     setError(null);
 
     try {
-      const res = await fetch(`/api/repos/${owner}/${repoName}/contents/${ref}/${path}`, {
+      const res = await fetch(`/api/repos/${owner}/${repoName}/contents/${refName}/${path}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -55,7 +55,7 @@ export default function RepoEditClient(props: Props) {
       if (data.prNumber) {
         window.location.href = `/${owner}/${repoName}/pull/${data.prNumber}`;
       } else {
-        window.location.href = `/${owner}/${repoName}/blob/${ref}/${path}`;
+        window.location.href = `/${owner}/${repoName}/blob/${refName}/${path}`;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save changes");
@@ -70,7 +70,7 @@ export default function RepoEditClient(props: Props) {
     ) {
       return;
     }
-    window.location.href = `/${owner}/${repoName}/blob/${ref}/${path}`;
+    window.location.href = `/${owner}/${repoName}/blob/${refName}/${path}`;
   }
 
   return (
@@ -85,7 +85,7 @@ export default function RepoEditClient(props: Props) {
           {repoName}
         </Link>
         <span className="text-text-secondary">/</span>
-        <span className="text-text-secondary text-sm">{ref}</span>
+        <span className="text-text-secondary text-sm">{refName}</span>
         {pathParts.map((part, i) => {
           const partPath = pathParts.slice(0, i + 1).join("/");
           const isLast = i === pathParts.length - 1;
@@ -96,7 +96,7 @@ export default function RepoEditClient(props: Props) {
                 <span className="font-semibold text-text-primary">{part}</span>
               ) : (
                 <Link
-                  to={`/${owner}/${repoName}/tree/${ref}/${partPath}`}
+                  to={`/${owner}/${repoName}/tree/${refName}/${partPath}`}
                   className="text-text-link hover:underline"
                 >
                   {part}
@@ -123,7 +123,7 @@ export default function RepoEditClient(props: Props) {
               className="text-sm font-mono bg-transparent border-none outline-none flex-1 text-text-primary"
             />
             <span className="text-xs text-text-secondary ml-3">
-              Editing on <span className="font-mono">{ref}</span>
+              Editing on <span className="font-mono">{refName}</span>
             </span>
           </div>
           <textarea
@@ -142,7 +142,7 @@ export default function RepoEditClient(props: Props) {
           {isPR && (
             <p className="text-xs text-text-secondary mb-3">
               A new branch will be created and a pull request opened against{" "}
-              <span className="font-mono">{ref}</span>.
+              <span className="font-mono">{refName}</span>.
             </p>
           )}
           <input

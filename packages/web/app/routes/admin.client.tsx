@@ -21,6 +21,7 @@ interface DashboardData {
     action: string;
     targetType: string;
     targetId: string;
+    targetLabel?: string | null;
     ipAddress: string | null;
     createdAt: string;
     username: string;
@@ -79,7 +80,7 @@ export function AdminNav() {
             to={link.to}
             className={`px-3 py-1.5 rounded-md text-sm font-medium hover:no-underline transition-colors ${
               active
-                ? "bg-primary/10 text-primary"
+                ? "bg-selected-bg text-selected-text"
                 : "text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
             }`}
           >
@@ -186,7 +187,9 @@ export default function AdminDashboardClient() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">Admin Dashboard</h1>
+      <h1 className="font-editorial font-bold text-3xl text-text-primary lowercase tracking-tight mb-1">
+        admin
+      </h1>
       <p className="text-text-secondary text-sm mb-6">System overview and management</p>
       <AdminNav />
 
@@ -240,16 +243,10 @@ export default function AdminDashboardClient() {
             >
               Manage users
             </Link>
-            <p className="text-xs text-text-secondary mt-3">
-              Run <code className="font-mono">pnpm admin recompute-storage</code> to refresh disk
-              usage and <code className="font-mono">pnpm admin reindex-search</code> to rebuild the
-              FTS index.
-            </p>
             <div className="border-t border-border pt-3 mt-3">
               <p className="text-xs text-text-secondary mb-2">
-                Synthesize <code>pull_requests</code> rows from{" "}
-                <code className="font-mono">git log --merges</code> on each repo's default branch.
-                Idempotent — safe to re-run. Manual / admin-triggered, never runs at boot.
+                Backfill <code>pull_requests</code> rows from merge commits on each repo&apos;s
+                default branch.
               </p>
               <button
                 type="button"
@@ -362,8 +359,13 @@ export default function AdminDashboardClient() {
                 <span className="font-mono px-2 py-0.5 rounded bg-surface-secondary border border-border whitespace-nowrap">
                   {ev.action}
                 </span>
-                <span className="text-text-secondary truncate flex-1">
-                  {ev.targetType}:{ev.targetId.slice(0, 8)}
+                <span
+                  className="text-text-secondary truncate flex-1"
+                  title={`${ev.targetType}:${ev.targetId}`}
+                >
+                  {ev.targetLabel
+                    ? `${ev.targetType}: ${ev.targetLabel}`
+                    : `${ev.targetType}:${ev.targetId.slice(0, 8)}`}
                 </span>
                 <span className="text-text-secondary whitespace-nowrap">{ev.ipAddress || "—"}</span>
                 <time className="text-text-secondary whitespace-nowrap">

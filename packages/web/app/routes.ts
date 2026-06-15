@@ -64,9 +64,19 @@ export const routes: RouteConfig[] = [
         component: () => import("./routes/settings-keys"),
       },
       {
+        id: "settings-ssh-keys-redirect",
+        path: "settings/ssh-keys",
+        component: () => import("./routes/settings-ssh-keys-redirect"),
+      },
+      {
         id: "settings-tokens",
         path: "settings/tokens",
         component: () => import("./routes/settings-tokens"),
+      },
+      {
+        id: "notifications",
+        path: "notifications",
+        component: () => import("./routes/notifications"),
       },
       {
         id: "admin",
@@ -202,16 +212,28 @@ export const routes: RouteConfig[] = [
             id: "pull-detail",
             path: "pull/:number",
             component: () => import("./routes/pull-detail"),
-          },
-          {
-            id: "pull-detail-files",
-            path: "pull/:number/files-changed",
-            component: () => import("./routes/pull-detail"),
-          },
-          {
-            id: "pull-detail-commits",
-            path: "pull/:number/commits",
-            component: () => import("./routes/pull-detail"),
+            // Conversation / Files / Commits are nested children so the
+            // PR chrome (header + tab strip) stays mounted as the user
+            // tabs between them — only the `<Outlet />` slot below the
+            // tabs swaps. The parent route's data fetch runs once per
+            // visit, not once per tab.
+            children: [
+              {
+                id: "pull-detail-conversation",
+                index: true,
+                component: () => import("./routes/pull-detail-conversation"),
+              },
+              {
+                id: "pull-detail-files",
+                path: "files-changed",
+                component: () => import("./routes/pull-detail-files"),
+              },
+              {
+                id: "pull-detail-commits",
+                path: "commits",
+                component: () => import("./routes/pull-detail-commits"),
+              },
+            ],
           },
         ],
       },

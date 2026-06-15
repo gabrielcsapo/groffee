@@ -12,9 +12,21 @@ import {
   getRunHistoryForRef,
 } from "../lib/server/pipelines";
 
+interface LogCommand {
+  severity: "error" | "warning" | "notice";
+  message: string;
+  file?: string;
+  line?: number;
+  col?: number;
+  endLine?: number;
+  endCol?: number;
+  title?: string;
+}
+
 interface LogLine {
   ts: string | null;
   html: string;
+  command?: LogCommand;
 }
 
 interface LogAnnotation {
@@ -80,13 +92,20 @@ interface Artifact {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  queued: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  running: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  success: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  failure: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-  cancelled: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
-  skipped: "bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-500",
-  timed_out: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+  queued:
+    "bg-yellow-100 text-yellow-800 border border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700/40",
+  running:
+    "bg-blue-100 text-blue-800 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/40",
+  success:
+    "bg-green-100 text-green-800 border border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/40",
+  failure:
+    "bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/40",
+  cancelled:
+    "bg-gray-100 text-gray-800 border border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700/40",
+  skipped:
+    "bg-gray-100 text-gray-600 border border-gray-300 dark:bg-gray-900/30 dark:text-gray-500 dark:border-gray-700/40",
+  timed_out:
+    "bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/40",
 };
 
 const STATUS_ICONS: Record<string, string> = {
@@ -278,17 +297,7 @@ function formatMatrixCellShort(cell: Job): string {
   return cell.name;
 }
 
-function PipelineGraph({
-  jobs,
-  onJobClick,
-  pipelineName,
-  trigger,
-}: {
-  jobs: Job[];
-  onJobClick: (jobId: string) => void;
-  pipelineName: string;
-  trigger: string;
-}) {
+function PipelineGraph({ jobs, onJobClick }: { jobs: Job[]; onJobClick: (jobId: string) => void }) {
   if (jobs.length === 0) return null;
   const { nodes, edges, width, height } = computeJobLayout(jobs);
   const nodeByName = new Map(nodes.map((n) => [n.group.baseName, n]));
@@ -308,11 +317,7 @@ function PipelineGraph({
   }
 
   return (
-    <div className="border border-border rounded-lg bg-surface-secondary p-4 mb-6 overflow-x-auto">
-      <div className="mb-3">
-        <div className="text-sm font-semibold text-text-primary">{pipelineName}</div>
-        <div className="text-xs text-text-tertiary">on: {trigger}</div>
-      </div>
+    <div className="overflow-x-auto">
       <div className="relative" style={{ width, height, minWidth: width }}>
         {/* SVG layer for connection lines */}
         <svg
@@ -442,6 +447,174 @@ function PipelineGraph({
   );
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Pipeline timeline (Gantt-style)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Each job becomes a horizontal lane: name on the left, a bar positioned by
+// startedAt and sized by duration. This is the only place that reveals
+// parallelism at a glance — the DAG shows topology, the cards below show
+// per-job detail, but neither answers "did these two jobs actually run in
+// parallel, or did one block the other?" The timeline does.
+//
+// Critical path is implicit: the rightmost-ending bar is what determined
+// total run time. Bars that finish early but block downstream jobs (e.g. a
+// fast lint job whose dependents are slow) are immediately visible as
+// "tail" gaps between bars.
+
+interface TimelineLane {
+  job: Job;
+  startMs: number;
+  endMs: number;
+}
+
+/** Format an offset-from-zero relative time as `0s`, `42s`, `1m 30s`, `12m`. */
+function formatOffset(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (s % 60 === 0 || m >= 10) return `${m}m`;
+  return `${m}m ${s % 60}s`;
+}
+
+/** Pick a sensible tick interval (in ms) so we land 4–8 ticks across the axis. */
+function pickTickInterval(totalMs: number): number {
+  const target = totalMs / 6;
+  const candidates = [
+    1_000, 2_000, 5_000, 10_000, 15_000, 30_000, 60_000, 120_000, 300_000, 600_000, 1_800_000,
+    3_600_000,
+  ];
+  for (const c of candidates) {
+    if (c >= target) return c;
+  }
+  return candidates[candidates.length - 1];
+}
+
+function PipelineTimeline({
+  jobs,
+  runStartedAt,
+  runFinishedAt,
+  onJobClick,
+}: {
+  jobs: Job[];
+  runStartedAt: string | null;
+  runFinishedAt: string | null;
+  onJobClick: (jobId: string) => void;
+}) {
+  // Need a wall-clock for in-progress runs. Re-tick once a second so the
+  // running-bar's trailing edge advances live without slamming the parent
+  // with re-renders from a faster timer.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (runFinishedAt) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [runFinishedAt]);
+
+  const lanes: TimelineLane[] = jobs
+    .filter((j) => j.startedAt)
+    .map((j) => ({
+      job: j,
+      startMs: new Date(j.startedAt!).getTime(),
+      endMs: j.finishedAt ? new Date(j.finishedAt).getTime() : now,
+    }))
+    // Order by start time so the visual reads top-to-bottom = earlier-to-later.
+    .sort((a, b) => a.startMs - b.startMs);
+
+  if (lanes.length === 0) return null;
+
+  const runStart = runStartedAt
+    ? new Date(runStartedAt).getTime()
+    : Math.min(...lanes.map((l) => l.startMs));
+  const runEnd = runFinishedAt
+    ? new Date(runFinishedAt).getTime()
+    : Math.max(now, ...lanes.map((l) => l.endMs));
+  const totalMs = Math.max(1, runEnd - runStart);
+
+  const tickInterval = pickTickInterval(totalMs);
+  const ticks: number[] = [];
+  for (let t = 0; t <= totalMs; t += tickInterval) ticks.push(t);
+
+  // Lane label column is fixed width so bars line up cleanly across rows;
+  // the bar track fills the rest. CSS grid handles the rest.
+  return (
+    <div className="text-xs">
+      {/* Axis row */}
+      <div className="flex">
+        <div className="w-[140px] shrink-0" />
+        <div className="relative h-5 flex-1 border-b border-border">
+          {ticks.map((t) => {
+            const left = (t / totalMs) * 100;
+            return (
+              <div
+                key={t}
+                className="absolute top-0 bottom-0 border-l border-border/60 text-text-tertiary"
+                style={{ left: `${left}%` }}
+              >
+                <span className="absolute top-0 left-1 whitespace-nowrap font-mono text-[10px]">
+                  {formatOffset(t)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Lane rows */}
+      {lanes.map((lane) => {
+        const left = ((lane.startMs - runStart) / totalMs) * 100;
+        const width = Math.max(0.5, ((lane.endMs - lane.startMs) / totalMs) * 100);
+        const isRunning = lane.job.status === "running";
+        const isFailure = lane.job.status === "failure" || lane.job.status === "timed_out";
+        const isCancelled = lane.job.status === "cancelled" || lane.job.status === "skipped";
+        const fillClass = isFailure
+          ? "bg-red-500/80 hover:bg-red-500"
+          : isRunning
+            ? "bg-blue-500/80 hover:bg-blue-500"
+            : isCancelled
+              ? "bg-gray-400/70 hover:bg-gray-400"
+              : "bg-green-500/80 hover:bg-green-500";
+        const labelName = lane.job.baseName || lane.job.name;
+        return (
+          <button
+            type="button"
+            key={lane.job.id}
+            onClick={() => onJobClick(lane.job.id)}
+            className="w-full flex items-center text-left rounded hover:bg-surface-primary/40 focus:outline-none focus:ring-1 focus:ring-accent/40"
+            aria-label={`Jump to ${labelName}`}
+          >
+            <div className="w-[140px] shrink-0 flex items-center gap-2 py-1 pr-3 min-w-0">
+              <JobStatusIcon status={lane.job.status} />
+              <span className="text-xs text-text-primary truncate">{labelName}</span>
+            </div>
+            <div className="relative h-7 my-0.5 flex-1">
+              {/* Track */}
+              <div className="absolute inset-y-0 left-0 right-0 rounded bg-surface-primary/60 border border-border/40" />
+              {/* Bar */}
+              <div
+                className={`absolute top-1 bottom-1 rounded-sm transition-colors ${fillClass} ${
+                  isRunning ? "animate-pulse" : ""
+                }`}
+                style={{ left: `${left}%`, width: `${width}%` }}
+                title={`${labelName} — start ${formatOffset(lane.startMs - runStart)}, duration ${formatDuration(
+                  lane.job.startedAt,
+                  lane.job.finishedAt,
+                )}`}
+              >
+                {width > 12 && (
+                  <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono text-white/95 tabular-nums truncate">
+                    {formatDuration(lane.job.startedAt, lane.job.finishedAt)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function JobStatusIcon({ status }: { status: string }) {
   if (status === "success") {
     return (
@@ -494,6 +667,33 @@ interface HistoryRun {
   createdAt: string | null;
 }
 
+/**
+ * Pick the most-useful step to focus on first when the run page loads.
+ * Priority: failure > running > last completed > first overall. This
+ * matches what a user would mentally select if scanning the page — when
+ * something failed, that's where you look; while it's running, that's
+ * where you look; when it's done and successful, the tail is the summary.
+ */
+function pickInitialStep(jobs: Job[]): string | null {
+  for (const job of jobs) {
+    for (const step of job.steps) {
+      if (step.status === "failure" || step.status === "timed_out") return step.id;
+    }
+  }
+  for (const job of jobs) {
+    for (const step of job.steps) {
+      if (step.status === "running") return step.id;
+    }
+  }
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const job = jobs[i];
+    for (let j = job.steps.length - 1; j >= 0; j--) {
+      if (job.steps[j].startedAt) return job.steps[j].id;
+    }
+  }
+  return jobs[0]?.steps[0]?.id ?? null;
+}
+
 export function PipelineRunView({
   owner,
   repo,
@@ -518,7 +718,18 @@ export function PipelineRunView({
   const [run, setRun] = useState(initialRun);
   const [jobs, setJobs] = useState(initialJobs);
   const [artifacts, setArtifacts] = useState(initialArtifacts);
-  const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+  // Selected step drives the right-side log pane in the master-detail
+  // layout. On mount, pick the most-interesting step so the page lands
+  // useful: first failure, else first running, else last completed step.
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(() =>
+    pickInitialStep(initialJobs),
+  );
+  // DAG + timeline strip collapses by default — they're navigation, not
+  // primary content. Click to expand for the topology view. When open, a
+  // single panel shows EITHER the graph OR the timeline — they're related
+  // views, so we tab between them instead of stacking.
+  const [dagOpen, setDagOpen] = useState(false);
+  const [graphView, setGraphView] = useState<"graph" | "timeline">("graph");
   const [stepLogs, setStepLogs] = useState<Record<string, LogLine[]>>({});
   const [stepAnnotations, setStepAnnotations] = useState<Record<string, LogAnnotation[]>>({});
   const [stepCommitShas, setStepCommitShas] = useState<Record<string, string>>({});
@@ -554,51 +765,56 @@ export function PipelineRunView({
     setArtifacts((prev) => prev.filter((a) => a.id !== artifactId));
   };
 
-  const toggleStep = async (step: Step) => {
-    const newExpanded = new Set(expandedSteps);
-    if (newExpanded.has(step.id)) {
-      newExpanded.delete(step.id);
-    } else {
-      newExpanded.add(step.id);
-      // Load logs if not cached
-      if (!stepLogs[step.id] && step.logPath) {
-        const data = await getStepLogs(owner, repo, run.number, step.id);
-        if (data.lines !== undefined) {
-          setStepLogs((prev) => ({ ...prev, [step.id]: data.lines! }));
-        }
-        if (data.annotations !== undefined) {
-          setStepAnnotations((prev) => ({ ...prev, [step.id]: data.annotations! }));
-        }
-        if (data.commitSha) {
-          setStepCommitShas((prev) => ({ ...prev, [step.id]: data.commitSha! }));
-        }
-      }
+  /** Lazy-load logs for a step (called by selection + initial mount). */
+  const loadStepLogs = async (step: Step) => {
+    if (stepLogs[step.id] || !step.logPath) return;
+    const data = await getStepLogs(owner, repo, run.number, step.id);
+    if (data.lines !== undefined) {
+      setStepLogs((prev) => ({ ...prev, [step.id]: data.lines! }));
     }
-    setExpandedSteps(newExpanded);
+    if (data.annotations !== undefined) {
+      setStepAnnotations((prev) => ({ ...prev, [step.id]: data.annotations! }));
+    }
+    if (data.commitSha) {
+      setStepCommitShas((prev) => ({ ...prev, [step.id]: data.commitSha! }));
+    }
   };
 
-  // Poll logs for running steps
+  const selectStep = (step: Step) => {
+    setSelectedStepId(step.id);
+    void loadStepLogs(step);
+  };
+
+  // Load logs for the auto-selected step on first mount so the log pane
+  // is populated immediately rather than waiting for the user to click.
   useEffect(() => {
-    const runningSteps = jobs
-      .flatMap((j) => j.steps)
-      .filter((s) => s.status === "running" && expandedSteps.has(s.id));
-    if (runningSteps.length === 0) return;
+    if (!selectedStepId) return;
+    const step = jobs.flatMap((j) => j.steps).find((s) => s.id === selectedStepId);
+    if (step) void loadStepLogs(step);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Poll logs for the currently-selected step while it's still running.
+  // Only one step is in view at a time, so we poll exactly one — keeps
+  // network traffic minimal during an active run.
+  useEffect(() => {
+    if (!selectedStepId) return;
+    const step = jobs.flatMap((j) => j.steps).find((s) => s.id === selectedStepId);
+    if (!step || step.status !== "running") return;
     const interval = setInterval(async () => {
-      for (const step of runningSteps) {
-        const data = await getStepLogs(owner, repo, run.number, step.id);
-        if (data.lines !== undefined) {
-          setStepLogs((prev) => ({ ...prev, [step.id]: data.lines! }));
-        }
-        if (data.annotations !== undefined) {
-          setStepAnnotations((prev) => ({ ...prev, [step.id]: data.annotations! }));
-        }
-        if (data.commitSha) {
-          setStepCommitShas((prev) => ({ ...prev, [step.id]: data.commitSha! }));
-        }
+      const data = await getStepLogs(owner, repo, run.number, step.id);
+      if (data.lines !== undefined) {
+        setStepLogs((prev) => ({ ...prev, [step.id]: data.lines! }));
+      }
+      if (data.annotations !== undefined) {
+        setStepAnnotations((prev) => ({ ...prev, [step.id]: data.annotations! }));
+      }
+      if (data.commitSha) {
+        setStepCommitShas((prev) => ({ ...prev, [step.id]: data.commitSha! }));
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [jobs, expandedSteps, owner, repo, run.number]);
+  }, [selectedStepId, jobs, owner, repo, run.number]);
 
   const handleCancel = async () => {
     setCancelling(true);
@@ -637,16 +853,12 @@ export function PipelineRunView({
   };
 
   const handleJobClick = (jobId: string) => {
-    // Scroll the matching job card into view; expand its first step's logs
-    const el = document.getElementById(`job-${jobId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-      const job = jobs.find((j) => j.id === jobId);
-      const firstFailedOrFirst = job?.steps.find((s) => s.status === "failure") || job?.steps[0];
-      if (firstFailedOrFirst && !expandedSteps.has(firstFailedOrFirst.id)) {
-        toggleStep(firstFailedOrFirst);
-      }
-    }
+    // In the master-detail layout the log pane is always visible, so the
+    // DAG / timeline navigators don't need to scroll — they just select
+    // the right step. Pick first failure within the job, else first step.
+    const job = jobs.find((j) => j.id === jobId);
+    const target = job?.steps.find((s) => s.status === "failure") || job?.steps[0];
+    if (target) selectStep(target);
   };
 
   return (
@@ -744,7 +956,7 @@ export function PipelineRunView({
               run.status === "timed_out") && (
               <button
                 onClick={handleRetry}
-                className="px-3 py-1.5 text-sm bg-primary text-white rounded-md hover:bg-primary-hover"
+                className="px-3 py-1.5 text-sm bg-action text-white rounded-md hover:bg-action-hover"
               >
                 Retry
               </button>
@@ -759,205 +971,375 @@ export function PipelineRunView({
         )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6">
-        <div className="min-w-0">
-          {/* DAG visualization */}
-          <PipelineGraph
-            jobs={jobs}
-            onJobClick={handleJobClick}
-            pipelineName={run.pipelineName}
-            trigger={run.trigger}
-          />
-
-          {/* Artifacts (between DAG and per-job logs) */}
-          {artifacts.length > 0 && (
-            <div className="border border-border rounded-lg overflow-hidden mb-6">
+      {/* Collapsible Graph/Timeline strip. They're navigation, not primary
+          content, so they don't get a fixed slot above the fold — pop the
+          panel open and choose the view you want via the toggle. */}
+      <div className="border border-border rounded-lg mb-4 overflow-hidden">
+        <div className="flex items-stretch bg-surface-secondary">
+          <button
+            type="button"
+            onClick={() => setDagOpen((o) => !o)}
+            className="flex-1 flex items-center gap-2 px-4 py-2 hover:bg-surface-secondary/60 text-left"
+          >
+            <span className="text-xs w-4">{dagOpen ? "▼" : "▶"}</span>
+            <span className="text-sm font-medium text-text-primary">
+              {dagOpen ? (graphView === "graph" ? "Graph" : "Timeline") : "Graph & timeline"}
+            </span>
+            <span className="text-xs text-text-secondary ml-auto tabular-nums">
+              {jobs.length} job{jobs.length === 1 ? "" : "s"}
+              {run.startedAt ? ` · ${formatDuration(run.startedAt, run.finishedAt)}` : ""}
+            </span>
+          </button>
+          {dagOpen && (
+            <div className="flex items-center gap-1 px-2 border-l border-border" role="tablist">
               <button
                 type="button"
-                onClick={() => setArtifactsOpen((v) => !v)}
-                className="w-full flex items-center gap-2 px-4 py-3 bg-surface-secondary hover:bg-surface-secondary/80 text-left"
+                role="tab"
+                aria-selected={graphView === "graph"}
+                aria-label="Graph view"
+                title="Graph view"
+                onClick={() => setGraphView("graph")}
+                className={`p-1.5 rounded-md transition-colors ${
+                  graphView === "graph"
+                    ? "bg-surface text-text-primary border border-border"
+                    : "text-text-secondary hover:text-text-primary border border-transparent"
+                }`}
               >
-                <span className="text-xs w-4">{artifactsOpen ? "▼" : "▶"}</span>
-                <span className="font-medium text-sm text-text-primary">
-                  Artifacts ({artifacts.length})
-                </span>
+                {/* DAG-ish: three nodes connected by edges, mirroring the
+                    actual graph view's left-to-right topology layout. */}
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <circle cx="3" cy="4" r="1.8" />
+                  <circle cx="3" cy="12" r="1.8" />
+                  <circle cx="13" cy="8" r="1.8" />
+                  <path d="M4.5 4.7 L11.4 7.5" strokeLinecap="round" />
+                  <path d="M4.5 11.3 L11.4 8.5" strokeLinecap="round" />
+                </svg>
               </button>
-              {artifactsOpen && (
-                <div>
-                  {artifacts.map((artifact, idx) => {
-                    const job = jobs.find((j) => j.id === artifact.jobId);
-                    const expired = artifact.retentionUntil
-                      ? new Date(artifact.retentionUntil).getTime() < Date.now()
-                      : false;
-                    return (
-                      <div
-                        key={artifact.id}
-                        className={`flex items-center justify-between gap-3 px-4 py-2.5 ${
-                          idx > 0 ? "border-t border-border" : ""
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <svg
-                            className="w-4 h-4 text-text-secondary flex-shrink-0"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
-                            />
-                          </svg>
-                          <span className="text-sm text-text-primary truncate">
-                            {artifact.name}
-                          </span>
-                          {(artifact.jobName || job?.name) && (
-                            <button
-                              type="button"
-                              onClick={() => handleJobClick(artifact.jobId)}
-                              className="text-xs text-text-secondary hover:text-text-primary underline-offset-2 hover:underline whitespace-nowrap"
-                              title="Jump to producing job"
-                            >
-                              from {artifact.jobName || job?.name}
-                            </button>
-                          )}
-                          <span className="text-xs text-text-secondary tabular-nums whitespace-nowrap">
-                            {formatBytes(artifact.sizeBytes)}
-                          </span>
-                          {artifact.retentionUntil && (
-                            <span
-                              className={`text-xs whitespace-nowrap ${
-                                expired ? "text-red-600" : "text-text-tertiary"
-                              }`}
-                              title={`Retention until ${artifact.retentionUntil}`}
-                            >
-                              {expired
-                                ? "expired"
-                                : `expires ${new Date(artifact.retentionUntil).toLocaleDateString()}`}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <a
-                            href={`/api/repos/${owner}/${repo}/pipelines/artifacts/${artifact.id}/download`}
-                            className="px-2 py-1 text-xs border border-border rounded hover:bg-surface-secondary hover:no-underline text-text-primary"
-                          >
-                            Download
-                          </a>
-                          {isOwner && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteArtifact(artifact.id)}
-                              disabled={deletingArtifactId === artifact.id}
-                              className="px-2 py-1 text-xs border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
-                            >
-                              {deletingArtifactId === artifact.id ? "Deleting…" : "Delete"}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={graphView === "timeline"}
+                aria-label="Timeline view"
+                title="Timeline view"
+                onClick={() => setGraphView("timeline")}
+                className={`p-1.5 rounded-md transition-colors ${
+                  graphView === "timeline"
+                    ? "bg-surface text-text-primary border border-border"
+                    : "text-text-secondary hover:text-text-primary border border-transparent"
+                }`}
+              >
+                {/* Gantt-ish: three horizontal bars of varying length and
+                    offset, echoing the actual timeline lanes. */}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <rect x="2" y="3" width="7" height="2" rx="0.5" />
+                  <rect x="2" y="7" width="11" height="2" rx="0.5" />
+                  <rect x="5" y="11" width="6" height="2" rx="0.5" />
+                </svg>
+              </button>
             </div>
           )}
-
-          {/* Jobs */}
-          <div className="space-y-4">
-            {jobs.map((job) => (
-              <div
-                key={job.id}
-                id={`job-${job.id}`}
-                className="border border-border rounded-lg overflow-hidden scroll-mt-4"
-              >
-                {/* Job header */}
-                <div className="flex items-center gap-3 px-4 py-3 bg-surface-secondary">
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[job.status] || ""}`}
-                  >
-                    <span>{STATUS_ICONS[job.status] || ""}</span>
-                    {job.status}
-                  </span>
-                  <span className="font-medium text-sm text-text-primary">{job.name}</span>
-                  <span className="text-xs text-text-secondary ml-auto">
-                    {formatDuration(job.startedAt, job.finishedAt)}
-                  </span>
-                </div>
-
-                {/* Steps */}
-                <div>
-                  {job.steps.map((step, stepIdx) => (
-                    <div key={step.id}>
-                      <button
-                        onClick={() => toggleStep(step)}
-                        className={`w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-surface-secondary ${
-                          stepIdx > 0 ? "border-t border-border" : ""
-                        }`}
-                      >
-                        <span className="text-xs w-4">
-                          {expandedSteps.has(step.id) ? "\u25BC" : "\u25B6"}
-                        </span>
-                        <span
-                          className={`inline-flex items-center w-4 text-xs ${
-                            step.status === "success"
-                              ? "text-green-600"
-                              : step.status === "failure"
-                                ? "text-red-600"
-                                : step.status === "running"
-                                  ? "text-blue-600"
-                                  : "text-text-tertiary"
-                          }`}
-                        >
-                          {STATUS_ICONS[step.status] || ""}
-                        </span>
-                        <span className="text-sm text-text-primary">{step.name}</span>
-                        {step.command && (
-                          <span className="text-xs font-mono text-text-tertiary truncate max-w-xs">
-                            {step.command}
-                          </span>
-                        )}
-                        {step.uses && (
-                          <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-1.5 py-0.5 rounded">
-                            {step.uses}
-                          </span>
-                        )}
-                        <span className="text-xs text-text-secondary ml-auto">
-                          {formatDuration(step.startedAt, step.finishedAt)}
-                        </span>
-                      </button>
-                      {expandedSteps.has(step.id) && (
-                        <StepLogViewer
-                          step={step}
-                          runNumber={run.number}
-                          owner={owner}
-                          repo={repo}
-                          lines={stepLogs[step.id]}
-                          annotations={stepAnnotations[step.id]}
-                          commitSha={stepCommitShas[step.id] || run.commitOid}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
-        {/* Right-side history sidebar */}
-        <RunHistorySidebar
+        {dagOpen && (
+          <div className="border-t border-border bg-surface-secondary/30 p-3">
+            {graphView === "graph" ? (
+              <PipelineGraph jobs={jobs} onJobClick={handleJobClick} />
+            ) : (
+              <PipelineTimeline
+                jobs={jobs}
+                runStartedAt={run.startedAt}
+                runFinishedAt={run.finishedAt}
+                onJobClick={handleJobClick}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Master-detail: steps tree on the left, log pane on the right.
+          The right pane is the primary surface — logs occupy the bulk of
+          the viewport. Click a step in the left rail to swap content. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 mb-4">
+        <StepRail jobs={jobs} selectedStepId={selectedStepId} onSelectStep={selectStep} />
+        <LogPane
+          jobs={jobs}
+          selectedStepId={selectedStepId}
+          run={run}
           owner={owner}
           repo={repo}
-          ref={run.ref}
-          excludeRunId={run.id}
-          initialRuns={historyInitial}
-          initialNextCursor={historyNextCursor}
-          initialHasMore={historyHasMore}
+          stepLogs={stepLogs}
+          stepAnnotations={stepAnnotations}
+          stepCommitShas={stepCommitShas}
         />
       </div>
+
+      {/* Artifacts (below the master-detail row) */}
+      {artifacts.length > 0 && (
+        <div className="border border-border rounded-lg overflow-hidden mb-6">
+          <button
+            type="button"
+            onClick={() => setArtifactsOpen((v) => !v)}
+            className="w-full flex items-center gap-2 px-4 py-3 bg-surface-secondary hover:bg-surface-secondary/80 text-left"
+          >
+            <span className="text-xs w-4">{artifactsOpen ? "▼" : "▶"}</span>
+            <span className="font-medium text-sm text-text-primary">
+              Artifacts ({artifacts.length})
+            </span>
+          </button>
+          {artifactsOpen && (
+            <div>
+              {artifacts.map((artifact, idx) => {
+                const job = jobs.find((j) => j.id === artifact.jobId);
+                const expired = artifact.retentionUntil
+                  ? new Date(artifact.retentionUntil).getTime() < Date.now()
+                  : false;
+                return (
+                  <div
+                    key={artifact.id}
+                    className={`flex items-center justify-between gap-3 px-4 py-2.5 ${
+                      idx > 0 ? "border-t border-border" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <svg
+                        className="w-4 h-4 text-text-secondary flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
+                        />
+                      </svg>
+                      <span className="text-sm text-text-primary truncate">{artifact.name}</span>
+                      {(artifact.jobName || job?.name) && (
+                        <button
+                          type="button"
+                          onClick={() => handleJobClick(artifact.jobId)}
+                          className="text-xs text-text-secondary hover:text-text-primary underline-offset-2 hover:underline whitespace-nowrap"
+                          title="Jump to producing job"
+                        >
+                          from {artifact.jobName || job?.name}
+                        </button>
+                      )}
+                      <span className="text-xs text-text-secondary tabular-nums whitespace-nowrap">
+                        {formatBytes(artifact.sizeBytes)}
+                      </span>
+                      {artifact.retentionUntil && (
+                        <span
+                          className={`text-xs whitespace-nowrap ${
+                            expired ? "text-red-600" : "text-text-tertiary"
+                          }`}
+                          title={`Retention until ${artifact.retentionUntil}`}
+                        >
+                          {expired
+                            ? "expired"
+                            : `expires ${new Date(artifact.retentionUntil).toLocaleDateString()}`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <a
+                        href={`/api/repos/${owner}/${repo}/pipelines/artifacts/${artifact.id}/download`}
+                        className="px-2 py-1 text-xs border border-border rounded hover:bg-surface-secondary hover:no-underline text-text-primary"
+                      >
+                        Download
+                      </a>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteArtifact(artifact.id)}
+                          disabled={deletingArtifactId === artifact.id}
+                          className="px-2 py-1 text-xs border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
+                        >
+                          {deletingArtifactId === artifact.id ? "Deleting…" : "Delete"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* History \u2014 moved below the main content so the log pane keeps
+          full width of the screen. */}
+      <RunHistorySidebar
+        owner={owner}
+        repo={repo}
+        ref={run.ref}
+        excludeRunId={run.id}
+        initialRuns={historyInitial}
+        initialNextCursor={historyNextCursor}
+        initialHasMore={historyHasMore}
+      />
     </div>
+  );
+}
+
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// StepRail \u2014 left-column job/step tree. Each step is clickable; the active
+// step gets an accent border + tinted background.
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+function StepRail({
+  jobs,
+  selectedStepId,
+  onSelectStep,
+}: {
+  jobs: Job[];
+  selectedStepId: string | null;
+  onSelectStep: (step: Step) => void;
+}) {
+  return (
+    <aside className="border border-border rounded-lg overflow-hidden bg-surface self-start">
+      {jobs.map((job, i) => (
+        <div key={job.id} className={i > 0 ? "border-t border-border" : ""}>
+          <div className="flex items-center gap-2 px-3 py-2 bg-surface-secondary text-xs">
+            <span
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium font-mono ${STATUS_COLORS[job.status] || ""}`}
+            >
+              <span>{STATUS_ICONS[job.status] || ""}</span>
+              {job.status}
+            </span>
+            <span className="font-medium text-text-primary truncate">{job.name}</span>
+            <span className="ml-auto text-text-tertiary tabular-nums">
+              {formatDuration(job.startedAt, job.finishedAt)}
+            </span>
+          </div>
+          {job.steps.map((step) => {
+            const selected = step.id === selectedStepId;
+            const stepColor =
+              step.status === "success"
+                ? "text-green-600"
+                : step.status === "failure" || step.status === "timed_out"
+                  ? "text-red-600"
+                  : step.status === "running"
+                    ? "text-blue-600 animate-pulse"
+                    : "text-text-tertiary";
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => onSelectStep(step)}
+                className={`w-full flex items-center gap-2 pl-3 pr-3 py-1.5 text-left text-sm transition-colors border-l-2 ${
+                  selected
+                    ? "bg-accent/10 border-accent text-text-primary"
+                    : "border-transparent hover:bg-surface-secondary/50 text-text-primary"
+                }`}
+              >
+                <span className={`inline-flex w-4 justify-center text-xs ${stepColor}`}>
+                  {STATUS_ICONS[step.status] || "\u00B7"}
+                </span>
+                <span className="flex-1 truncate">{step.name}</span>
+                <span className="text-[11px] text-text-tertiary tabular-nums">
+                  {formatDuration(step.startedAt, step.finishedAt)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </aside>
+  );
+}
+
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// LogPane \u2014 right column showing the selected step's logs with a sticky
+// step-context header (status pill, job name, command line, duration).
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+function LogPane({
+  jobs,
+  selectedStepId,
+  run,
+  owner,
+  repo,
+  stepLogs,
+  stepAnnotations,
+  stepCommitShas,
+}: {
+  jobs: Job[];
+  selectedStepId: string | null;
+  run: Run;
+  owner: string;
+  repo: string;
+  stepLogs: Record<string, LogLine[]>;
+  stepAnnotations: Record<string, LogAnnotation[]>;
+  stepCommitShas: Record<string, string>;
+}) {
+  const step = selectedStepId
+    ? jobs.flatMap((j) => j.steps).find((s) => s.id === selectedStepId)
+    : undefined;
+  const parentJob = step ? jobs.find((j) => j.steps.some((s) => s.id === step.id)) : undefined;
+
+  return (
+    <section className="border border-border rounded-lg overflow-hidden bg-surface flex flex-col self-start w-full">
+      {!step || !parentJob ? (
+        <div className="flex items-center justify-center text-sm text-text-tertiary p-8 min-h-[160px]">
+          Select a step on the left to view its logs.
+        </div>
+      ) : (
+        <>
+          {/* Sticky step header \u2014 status, name, parent job, command. Stays
+              put when the log body scrolls so context is never lost. */}
+          <div className="border-b border-border bg-surface-secondary px-4 py-2.5">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono ${STATUS_COLORS[step.status] || ""}`}
+              >
+                <span>{STATUS_ICONS[step.status] || ""}</span>
+                {step.status}
+              </span>
+              <span className="text-sm font-medium text-text-primary">{step.name}</span>
+              <span className="text-xs text-text-tertiary">
+                in <span className="text-text-secondary">{parentJob.name}</span>
+              </span>
+              <span className="ml-auto text-xs text-text-secondary tabular-nums">
+                {formatDuration(step.startedAt, step.finishedAt)}
+              </span>
+            </div>
+            {step.command && (
+              <div className="mt-1.5 font-mono text-xs text-text-secondary truncate">
+                <span className="text-text-tertiary">$ </span>
+                {step.command}
+              </div>
+            )}
+            {step.uses && (
+              <div className="mt-1.5 text-xs text-text-secondary">
+                uses{" "}
+                <code className="font-mono bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-1.5 py-0.5 rounded">
+                  {step.uses}
+                </code>
+              </div>
+            )}
+          </div>
+          <div>
+            <StepLogViewer
+              step={step}
+              runNumber={run.number}
+              owner={owner}
+              repo={repo}
+              lines={stepLogs[step.id]}
+              annotations={stepAnnotations[step.id]}
+              commitSha={stepCommitShas[step.id] || run.commitOid}
+              fillHeight
+            />
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -1202,6 +1584,7 @@ function StepLogViewer({
   lines,
   annotations,
   commitSha,
+  fillHeight = false,
 }: {
   step: Step;
   runNumber: number;
@@ -1210,6 +1593,10 @@ function StepLogViewer({
   lines: LogLine[] | undefined;
   annotations?: LogAnnotation[];
   commitSha: string;
+  /** When true, the log body fills its parent's height instead of capping
+   * at 480px. Used by the master-detail layout where the parent already
+   * sets the height. */
+  fillHeight?: boolean;
 }) {
   const [filter, setFilter] = useState("");
   const [matchIndex, setMatchIndex] = useState(0);
@@ -1328,7 +1715,9 @@ function StepLogViewer({
       {/* Log body */}
       <div
         ref={containerRef}
-        className="font-mono text-xs text-gray-200 overflow-auto max-h-[480px] py-2"
+        className={`font-mono text-xs text-gray-200 overflow-auto py-2 ${
+          fillHeight ? "max-h-[calc(100vh-260px)]" : "max-h-[480px]"
+        }`}
       >
         {visibleLines.map((line) => {
           // Look up annotations for this original line. Fast path: most
@@ -1338,6 +1727,50 @@ function StepLogViewer({
             lineAnns && lineAnns.length > 0
               ? renderLineWithAnnotations(line.html, lineAnns, owner, repo, commitSha)
               : line.html;
+          if (line.command) {
+            const sev = line.command.severity;
+            const wrapper =
+              sev === "error"
+                ? "bg-red-950/40 border-l-2 border-red-500 text-red-200"
+                : sev === "warning"
+                  ? "bg-yellow-950/30 border-l-2 border-yellow-500 text-yellow-100"
+                  : "bg-blue-950/30 border-l-2 border-blue-500 text-blue-100";
+            const label = sev[0].toUpperCase() + sev.slice(1);
+            const locText =
+              line.command.file && line.command.line
+                ? `${line.command.file}:${line.command.line}${line.command.col ? `:${line.command.col}` : ""}`
+                : line.command.file || null;
+            return (
+              <div
+                key={line.originalIndex}
+                data-line-index={line.originalIndex}
+                className={`flex items-start px-3 py-1 my-0.5 ${wrapper}`}
+              >
+                <span className="text-gray-500 select-none w-10 text-right pr-2 tabular-nums">
+                  {line.originalIndex + 1}
+                </span>
+                {line.ts && (
+                  <span className="text-gray-500 select-none pr-2 tabular-nums" title={line.ts}>
+                    {line.ts.slice(11, 23)}
+                  </span>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide opacity-80">
+                    <span>{label}</span>
+                    {locText && <span className="font-mono normal-case">{locText}</span>}
+                    {line.command.title && (
+                      <span className="font-normal normal-case opacity-90">
+                        {line.command.title}
+                      </span>
+                    )}
+                  </div>
+                  <pre className="whitespace-pre-wrap break-all font-mono text-xs mt-0.5">
+                    {line.command.message}
+                  </pre>
+                </div>
+              </div>
+            );
+          }
           return (
             <div
               key={line.originalIndex}

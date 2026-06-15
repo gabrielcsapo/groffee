@@ -1,10 +1,10 @@
-import { GroffeeLogo, RepoNav, BranchSwitcher, Badge, CloneUrl } from "@groffee/ui";
+import { Wordmark, RepoNav, BranchSwitcher, Badge, CloneUrl } from "@groffee/ui";
 import { BrowserChrome } from "./browser-chrome";
 
 function FileIcon({ isDir }: { isDir?: boolean }) {
   if (isDir) {
     return (
-      <svg className="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 text-accent" fill="currentColor" viewBox="0 0 24 24">
         <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
       </svg>
     );
@@ -58,23 +58,26 @@ const mockFiles = [
 
 export function MockRepoPreview() {
   return (
-    <BrowserChrome url="groffee.example.com/gabrielcsapo/groffee">
-      <div className="bg-header-bg px-4 h-10 flex items-center gap-2">
-        <GroffeeLogo size={18} className="text-white" />
-        <span className="text-white text-xs font-semibold">Groffee</span>
+    <BrowserChrome url="groffee.local/gabrielcsapo/groffee">
+      {/* Header — transparent over the canvas with a hairline border, same
+       * as the live product's `root.tsx` chrome. The wordmark replaces the
+       * old icon+text construction. */}
+      <div className="bg-canvas px-4 h-12 flex items-center gap-5 border-b border-border">
+        <Wordmark height={22} cupColor="var(--color-accent)" />
+        <span className="ml-auto font-mono text-xs text-text-secondary">explore</span>
+        <span className="font-mono text-xs text-text-secondary">docs</span>
       </div>
 
       <div className="p-4">
         <div className="mb-3">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm text-text-secondary">gabrielcsapo</span>
+          <div className="flex items-center gap-1.5 mb-2 font-mono text-sm">
+            <FileIcon isDir />
+            <span className="text-text-secondary">gabrielcsapo</span>
             <span className="text-text-secondary">/</span>
-            <span className="text-sm font-semibold text-primary">groffee</span>
+            <span className="font-semibold text-text-primary">groffee</span>
             <Badge variant="public">Public</Badge>
           </div>
-          <p className="text-xs text-text-secondary mb-3">
-            The best way to deal with git is with a little bit of coffee.
-          </p>
+          <p className="text-xs text-text-secondary mb-3">git, locally roasted.</p>
           <RepoNav
             owner="gabrielcsapo"
             repo="groffee"
@@ -101,7 +104,7 @@ export function MockRepoPreview() {
               <div key={file.name} className="flex items-center gap-3 px-4 py-2 text-sm">
                 <FileIcon isDir={file.isDir} />
                 <span
-                  className={`shrink-0 ${file.isDir ? "text-primary font-medium" : "text-text-primary"}`}
+                  className={`shrink-0 font-mono ${file.isDir ? "text-accent font-medium" : "text-text-primary"}`}
                 >
                   {file.name}
                 </span>

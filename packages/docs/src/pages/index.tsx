@@ -1,6 +1,11 @@
 import { Link } from "react-router";
-import { GroffeeLogo } from "@groffee/ui";
-import { MockRepoPreview, MockIssueList } from "../components/mocks";
+import { Wordmark } from "@groffee/ui";
+import {
+  MockRepoPreview,
+  MockIssueList,
+  MockPullRequest,
+  MockPipelineRun,
+} from "../components/mocks";
 
 interface Comparison {
   groffee: string;
@@ -29,37 +34,91 @@ const comparisons: Comparison[] = [
 
 export function Component() {
   return (
-    <div className="py-12 not-prose">
-      <div className="text-center mb-16">
-        <GroffeeLogo size={72} className="mx-auto mb-6 text-text-primary" />
-        <h1 className="text-4xl font-bold text-text-primary mb-4">Groffee</h1>
-        <p className="text-lg text-text-secondary mb-2 max-w-2xl mx-auto leading-relaxed">
-          The best way to deal with git is with a little bit of coffee.
+    <div className="py-10 not-prose">
+      {/* Hero — matches the live product's landing page voice: the
+       * Wordmark is the H1, the tagline is the same monospace
+       * "git, locally roasted." line with a blinking amber cursor. CTAs
+       * are monospace text links, not pill buttons. */}
+      <header className="mb-12 pt-4 pb-2 border-b border-border">
+        <h1 aria-label="groffee" className="-ml-1">
+          <Wordmark
+            height={120}
+            textColor="var(--color-text-primary)"
+            cupColor="var(--color-accent)"
+            className="max-w-full h-auto"
+          />
+        </h1>
+        <p className="font-mono text-sm text-text-secondary mt-4 cursor-blink">
+          git, locally roasted.
         </p>
-        <p className="text-sm text-text-secondary mb-8 max-w-2xl mx-auto">
-          Self-hosted git platform. Built with React 19, Vite, and modern web technologies.
-        </p>
-        <div className="flex items-center justify-center gap-4">
-          <Link to="/docs/getting-started" className="btn-primary hover:no-underline">
-            Get Started
+        <div className="flex items-center gap-5 mt-5 font-mono text-sm">
+          <Link to="/docs/getting-started" className="text-accent hover:underline">
+            → get started
           </Link>
-          <Link to="/docs/api" className="btn-secondary hover:no-underline">
-            API Reference
+          <Link to="/docs/api" className="text-text-secondary hover:text-text-primary">
+            api reference
           </Link>
         </div>
-      </div>
+      </header>
 
-      <div className="mb-16">
-        <h2 className="text-lg font-semibold text-text-primary mb-2 text-center">
-          See it in action
+      {/* Browse tab — interactive PR mock with clickable tabs. The
+       * conversation / files / commits panels swap via local state; the
+       * mock pulls its visual primitives (StatusPill, diff colors, mono
+       * commit rows) from @groffee/ui so the docs and product stay in
+       * lockstep when those primitives change. */}
+      <section className="mb-16">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-secondary mb-1">
+          pull request
         </h2>
-        <p className="text-sm text-text-secondary mb-6 text-center">
-          A familiar repository view built with real Groffee components.
+        <h3 className="font-editorial font-black text-2xl text-text-primary lowercase tracking-tight mb-2">
+          click between the tabs.
+        </h3>
+        <p className="text-sm text-text-secondary mb-6 max-w-2xl">
+          Real components from <code className="font-mono text-xs">@groffee/ui</code>, real diff
+          colors, real status pills. The chrome stays mounted while the content swaps — same as the
+          deployed product.
         </p>
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl">
+          <MockPullRequest />
+        </div>
+      </section>
+
+      {/* Pipelines tab — interactive DAG mock. Click a node to highlight
+       * the matching job below. Reuses the same chrome, theme tokens, and
+       * step-row layout as the live `/pipelines/runs/:n` view, so docs and
+       * product never visually drift. */}
+      <section className="mb-16">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-secondary mb-1">
+          pipelines
+        </h2>
+        <h3 className="font-editorial font-black text-2xl text-text-primary lowercase tracking-tight mb-2">
+          ci, with no second service.
+        </h3>
+        <p className="text-sm text-text-secondary mb-6 max-w-2xl">
+          Drop a <code className="font-mono text-xs">.groffee/pipelines.yml</code> in your repo and
+          push. Runs are wired to the commit graph, the DAG renders the job dependencies, and steps
+          stream logs in place. Click a node below to jump to its job card.
+        </p>
+        <div className="max-w-5xl">
+          <MockPipelineRun />
+        </div>
+      </section>
+
+      <section className="mb-16">
+        <h2 className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-secondary mb-1">
+          repository
+        </h2>
+        <h3 className="font-editorial font-black text-2xl text-text-primary lowercase tracking-tight mb-2">
+          your repos, your machine.
+        </h3>
+        <p className="text-sm text-text-secondary mb-6 max-w-2xl">
+          File tree, branch switcher, clone URL — same layout the live product renders. The path is
+          monospace, folders are amber, the chrome is transparent over the warm canvas.
+        </p>
+        <div className="max-w-4xl">
           <MockRepoPreview />
         </div>
-      </div>
+      </section>
 
       <div className="mb-16">
         <h2 className="text-lg font-semibold text-text-primary mb-2 text-center">Why Groffee?</h2>

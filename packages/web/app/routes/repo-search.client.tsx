@@ -466,7 +466,7 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
                         onClick={() => handleLangFilter(isActive ? null : lang.ext)}
                         className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left ${
                           isActive
-                            ? "bg-primary/10 text-primary font-medium"
+                            ? "bg-selected-bg text-selected-text font-medium"
                             : "text-text-secondary hover:bg-surface-secondary"
                         }`}
                       >
@@ -497,11 +497,11 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
                       i < TABS.length - 1 ? "border-b border-border" : ""
                     } ${
                       isActive
-                        ? "bg-primary/10 text-primary font-medium"
+                        ? "bg-selected-bg text-selected-text font-medium"
                         : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
                     }`}
                   >
-                    <span className={isActive ? "text-primary" : "text-text-secondary"}>
+                    <span className={isActive ? "text-text-primary" : "text-text-secondary"}>
                       {tab.icon}
                     </span>
                     <span className="flex-1">{tab.label}</span>
@@ -509,7 +509,7 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded-full ${
                           isActive
-                            ? "bg-primary/20 text-primary"
+                            ? "bg-selected-bg text-selected-text"
                             : count === 0
                               ? "bg-surface-secondary text-text-secondary"
                               : "bg-surface-secondary text-text-primary"
@@ -555,7 +555,7 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
                       onClick={() => handleLangFilter(isActive ? null : lang.ext)}
                       className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
                         isActive
-                          ? "bg-primary/10 text-primary font-medium"
+                          ? "bg-selected-bg text-selected-text font-medium"
                           : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
                       }`}
                     >
@@ -563,7 +563,7 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded-full ${
                           isActive
-                            ? "bg-primary/20 text-primary"
+                            ? "bg-selected-bg text-selected-text"
                             : "bg-surface-secondary text-text-secondary"
                         }`}
                       >
@@ -593,7 +593,7 @@ export function RepoSearchView({ owner, repo }: { owner: string; repo: string })
                       onClick={() => handleSortChange(opt.key)}
                       className={`px-2.5 py-1 text-xs transition-colors ${
                         sort === opt.key
-                          ? "bg-primary/10 text-primary font-medium"
+                          ? "bg-selected-bg text-selected-text font-medium"
                           : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
                       }`}
                     >

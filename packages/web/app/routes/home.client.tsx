@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Link } from "react-flight-router/client";
-import { GroffeeLogo } from "@groffee/ui";
+import { Wordmark, RepositoryRow } from "@groffee/ui";
 import { timeAgo } from "../lib/time";
 import { getSessionUser } from "../lib/server/auth";
 
@@ -30,42 +30,22 @@ function RecentPublicRepos({ repos }: { repos: Repo[] }) {
         {repos.map((repo, i) => (
           <div
             key={repo.id}
-            className={`px-4 py-3 ${i < repos.length - 1 ? "border-b border-border" : ""} hover:bg-surface-secondary transition-colors`}
+            className={`${i < repos.length - 1 ? "border-b border-border" : ""} hover:bg-surface-secondary transition-colors`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg
-                  className="w-4 h-4 text-text-secondary shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                  />
-                </svg>
-                <Link
-                  to={`/${repo.owner}/${repo.name}`}
-                  className="text-sm font-semibold text-text-link hover:underline"
-                >
-                  {repo.owner}
-                  <span className="text-text-secondary font-normal">/</span>
-                  {repo.name}
+            <RepositoryRow
+              owner={repo.owner}
+              name={repo.name}
+              description={repo.description}
+              isPublic={repo.isPublic}
+              updatedAt={repo.updatedAt}
+              dense
+              linkAs={({ to, className, children }) => (
+                <Link to={to} className={className}>
+                  {children}
                 </Link>
-                <span className="badge badge-public">Public</span>
-              </div>
-              {repo.updatedAt && (
-                <span className="text-xs text-text-secondary">
-                  Updated {timeAgo(repo.updatedAt)}
-                </span>
               )}
-            </div>
-            {repo.description && (
-              <p className="text-xs text-text-secondary mt-0.5 ml-6">{repo.description}</p>
-            )}
+              timeAgo={timeAgo}
+            />
           </div>
         ))}
       </div>
@@ -73,30 +53,40 @@ function RecentPublicRepos({ repos }: { repos: Repo[] }) {
   );
 }
 
+/* Typographic hero. The wordmark "groffee" is set in Fraunces Black at a
+ * size that owns the page — left-aligned, lowercase, no centering, no card.
+ * Underneath sits a single monospace tagline with a blinking terminal
+ * cursor. The brand mark recurs as a subtle ornament next to the wordmark
+ * rather than being centered above it. */
 function LandingHero() {
   return (
-    <div className="text-center mb-12">
-      <GroffeeLogo size={64} className="mx-auto text-text-primary mb-4" />
-      <h1 className="text-4xl font-bold text-text-primary mb-3">Groffee</h1>
-      <p className="text-xl text-text-secondary mb-2">
-        The best way to deal with git is with a little bit of coffee.
+    <header className="mb-10 pt-6 pb-4 border-b border-border">
+      {/* Baked wordmark — text and cup are a single SVG so the brand renders
+       * identically across browsers and never has the layout-thrash from
+       * font-swap. The cup ligature replaces the `o`. */}
+      <h1 aria-label="groffee" className="-ml-1">
+        <Wordmark
+          height={140}
+          textColor="var(--color-text-primary)"
+          cupColor="var(--color-accent)"
+          className="max-w-full h-auto"
+        />
+      </h1>
+      <p className="font-mono text-sm text-text-secondary mt-4 cursor-blink">
+        git, locally roasted.
       </p>
-      <p className="text-text-secondary mb-6">
-        Self-hosted git platform. Create repositories, collaborate with your team, and manage your
-        code.
-      </p>
-    </div>
+    </header>
   );
 }
 
 function LoggedOutActions() {
   return (
-    <div className="flex gap-3 justify-center mb-12">
-      <Link to="/register" className="btn-primary px-6 py-2.5">
-        Sign up for free
+    <div className="flex items-center gap-5 mb-10 font-mono text-sm">
+      <Link to="/register" className="text-accent hover:underline">
+        → new account
       </Link>
-      <Link to="/login" className="btn-secondary px-6 py-2.5">
-        Sign in
+      <Link to="/login" className="text-text-secondary hover:text-text-primary">
+        sign in
       </Link>
     </div>
   );
@@ -104,15 +94,15 @@ function LoggedOutActions() {
 
 function LoggedInActions({ username }: { username: string }) {
   return (
-    <div className="flex gap-3 justify-center mb-12">
-      <Link to="/new" className="btn-primary px-6 py-2.5">
-        New repository
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-10 font-mono text-sm">
+      <Link to="/new" className="text-accent hover:underline">
+        → new repository
       </Link>
-      <Link to={`/${username}`} className="btn-secondary px-6 py-2.5">
-        Your repositories
+      <Link to={`/${username}`} className="text-text-secondary hover:text-text-primary">
+        your repos
       </Link>
-      <Link to="/explore" className="btn-secondary px-6 py-2.5">
-        Explore
+      <Link to="/explore" className="text-text-secondary hover:text-text-primary">
+        explore
       </Link>
     </div>
   );
@@ -132,12 +122,12 @@ export function HomeView({ initialRepos }: { initialRepos: Repo[] }) {
   }, []);
 
   return (
-    <div className="max-w-3xl mx-auto mt-12">
+    <div className="max-w-3xl mt-2">
       <LandingHero />
       {loading ? (
-        <div className="flex gap-3 justify-center mb-12">
-          <div className="skeleton w-36 h-10 rounded-md" />
-          <div className="skeleton w-36 h-10 rounded-md" />
+        <div className="flex gap-3 mb-10">
+          <div className="skeleton w-40 h-5 rounded" />
+          <div className="skeleton w-32 h-5 rounded" />
         </div>
       ) : user ? (
         <LoggedInActions username={user.username} />

@@ -131,10 +131,15 @@ export default function SettingsTokensClient() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <SettingsNav />
-      <h1 className="text-2xl font-bold text-text-primary mb-1">Personal Access Tokens</h1>
+      <h1 className="font-editorial font-bold text-3xl text-text-primary lowercase tracking-tight mb-1">
+        access tokens
+      </h1>
       <p className="text-sm text-text-secondary mb-6">
         Tokens can be used to authenticate with the API and Git over HTTP. Use them as a password
-        with your username, or as a Bearer token in the Authorization header.
+        with your username, or as a Bearer token in the Authorization header.{" "}
+        <a href="/docs#tokens" className="text-text-link hover:underline">
+          api reference →
+        </a>
       </p>
 
       {message && (

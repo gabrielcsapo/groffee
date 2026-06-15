@@ -106,7 +106,7 @@ export default async function RepoEdit({ params }: { params?: Record<string, str
     <RepoEditClient
       owner={owner}
       repoName={repoName}
-      ref={data.ref}
+      refName={data.ref}
       path={data.path}
       initialContent={data.content || ""}
       editPolicy={editCtx.editPolicy}

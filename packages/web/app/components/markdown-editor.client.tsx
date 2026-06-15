@@ -1,5 +1,6 @@
 "use client";
 
+import type * as React from "react";
 import { useCallback, useRef, useState } from "react";
 import { previewMarkdown } from "../lib/server/markdown-preview";
 
@@ -24,6 +25,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 
 interface ToolbarButton {
   label: string;
+  icon: React.ReactNode;
   title: string;
   apply: (sel: { before: string; selected: string; after: string }) => {
     text: string;
@@ -32,9 +34,69 @@ interface ToolbarButton {
   };
 }
 
+const ICON_BOLD = (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M4 2h4.5a3.5 3.5 0 0 1 2.5 5.95A3.5 3.5 0 0 1 8.5 14H4V2Zm2 5h2.5a1.5 1.5 0 0 0 0-3H6v3Zm0 5h2.5a1.5 1.5 0 0 0 0-3H6v3Z" />
+  </svg>
+);
+const ICON_ITALIC = (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M6 2h6v2H9.7l-2 8H10v2H4v-2h2.3l2-8H6V2Z" />
+  </svg>
+);
+const ICON_CODE = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    aria-hidden="true"
+  >
+    <path
+      d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+const ICON_LINK = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    aria-hidden="true"
+  >
+    <path
+      d="M6.5 8H4a2.5 2.5 0 0 1 0-5h2.5M9.5 8H12a2.5 2.5 0 0 1 0 5H9.5M5 8h6"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+const ICON_LIST = (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <circle cx="3" cy="4" r="1" />
+    <circle cx="3" cy="8" r="1" />
+    <circle cx="3" cy="12" r="1" />
+    <rect x="6" y="3.5" width="8" height="1.2" rx="0.5" />
+    <rect x="6" y="7.5" width="8" height="1.2" rx="0.5" />
+    <rect x="6" y="11.5" width="8" height="1.2" rx="0.5" />
+  </svg>
+);
+const ICON_QUOTE = (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M4 4h3v3H5v1a2 2 0 0 0 2 2v1a3 3 0 0 1-3-3V4Zm6 0h3v3h-2v1a2 2 0 0 0 2 2v1a3 3 0 0 1-3-3V4Z" />
+  </svg>
+);
+
 const TOOLBAR: ToolbarButton[] = [
   {
-    label: "B",
+    label: "Bold",
+    icon: ICON_BOLD,
     title: "Bold (wrap with **)",
     apply: ({ before, selected, after }) => {
       const inner = selected || "bold text";
@@ -44,7 +106,8 @@ const TOOLBAR: ToolbarButton[] = [
     },
   },
   {
-    label: "I",
+    label: "Italic",
+    icon: ICON_ITALIC,
     title: "Italic (wrap with _)",
     apply: ({ before, selected, after }) => {
       const inner = selected || "italic text";
@@ -54,7 +117,8 @@ const TOOLBAR: ToolbarButton[] = [
     },
   },
   {
-    label: "<>",
+    label: "Code",
+    icon: ICON_CODE,
     title: "Code (wrap with `)",
     apply: ({ before, selected, after }) => {
       const inner = selected || "code";
@@ -71,6 +135,7 @@ const TOOLBAR: ToolbarButton[] = [
   },
   {
     label: "Link",
+    icon: ICON_LINK,
     title: "Link",
     apply: ({ before, selected, after }) => {
       const label = selected || "link text";
@@ -81,6 +146,7 @@ const TOOLBAR: ToolbarButton[] = [
   },
   {
     label: "List",
+    icon: ICON_LIST,
     title: "Bulleted list",
     apply: ({ before, selected, after }) => {
       const lines = (selected || "list item").split("\n");
@@ -92,7 +158,8 @@ const TOOLBAR: ToolbarButton[] = [
     },
   },
   {
-    label: '"',
+    label: "Quote",
+    icon: ICON_QUOTE,
     title: "Quote",
     apply: ({ before, selected, after }) => {
       const lines = (selected || "quote").split("\n");
@@ -266,16 +333,16 @@ export function MarkdownEditor({
   const rows = Math.max(minRows, 4);
 
   return (
-    <div className="border border-border rounded-md bg-surface focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">
+    <div className="border border-border rounded-md bg-surface focus-within:ring-1 focus-within:ring-text-link/50 focus-within:border-text-link">
       <div className="flex items-center justify-between border-b border-border px-2 py-1 gap-2">
-        <div className="flex">
+        <div className="inline-flex border border-border rounded-md overflow-hidden text-xs font-medium">
           <button
             type="button"
             onClick={() => handleSelectTab("write")}
-            className={`px-3 py-1 text-xs font-medium rounded ${
+            className={`px-3 py-1 transition-colors ${
               tab === "write"
-                ? "bg-surface-secondary text-text-primary"
-                : "text-text-secondary hover:text-text-primary"
+                ? "bg-selected-bg text-selected-text"
+                : "text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
             }`}
           >
             Write
@@ -283,10 +350,10 @@ export function MarkdownEditor({
           <button
             type="button"
             onClick={() => handleSelectTab("preview")}
-            className={`px-3 py-1 text-xs font-medium rounded ${
+            className={`px-3 py-1 border-l border-border transition-colors ${
               tab === "preview"
-                ? "bg-surface-secondary text-text-primary"
-                : "text-text-secondary hover:text-text-primary"
+                ? "bg-selected-bg text-selected-text"
+                : "text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
             }`}
           >
             Preview
@@ -299,10 +366,11 @@ export function MarkdownEditor({
                 key={btn.label}
                 type="button"
                 title={btn.title}
+                aria-label={btn.label}
                 onClick={() => applyToolbarAction(btn)}
-                className="px-2 py-1 text-xs font-mono text-text-secondary hover:text-text-primary hover:bg-surface-secondary rounded"
+                className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-surface-secondary rounded"
               >
-                {btn.label}
+                {btn.icon}
               </button>
             ))}
           </div>

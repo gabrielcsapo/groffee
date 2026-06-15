@@ -158,24 +158,33 @@ export function RepoNav({
   ];
 
   return (
-    <div className="flex gap-1 border-b border-border mb-6">
+    /* Strip styled as a monospace operator-nav: lowercase labels, no leading
+     * icons, amber underline on the active tab. Strips the GitHub-tabs feel
+     * because no GitHub clone would commit to monospace navigation. */
+    <div className="flex gap-0 border-b border-border mb-6 overflow-x-auto">
       {tabs.map((tab) => (
         <LinkComponent
           key={tab.label}
           to={tab.href}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px hover:no-underline ${
+          className={`flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-mono lowercase border-b-2 -mb-px hover:no-underline whitespace-nowrap shrink-0 transition-colors ${
             tab.active
-              ? "border-primary text-text-primary"
-              : "border-transparent text-text-secondary hover:text-text-primary hover:border-border"
+              ? "border-accent text-text-primary"
+              : "border-transparent text-text-secondary hover:text-text-primary"
           }`}
         >
-          {tab.icon}
           {tab.label}
           {"statusDot" in tab && (tab as any).statusDot && (
-            <span className={`w-2 h-2 rounded-full ${(tab as any).statusDot}`} />
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${(tab as any).statusDot}`}
+              aria-hidden="true"
+            />
           )}
           {tab.count != null && tab.count > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-surface-secondary text-text-secondary font-normal">
+            <span
+              className={`text-[11px] tabular-nums ${
+                tab.active ? "text-accent" : "text-text-secondary"
+              }`}
+            >
               {tab.count}
             </span>
           )}

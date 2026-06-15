@@ -28,9 +28,12 @@ const lines: DiffLine[] = [
 function lineClass(kind: DiffLine["kind"]) {
   switch (kind) {
     case "add":
-      return "bg-success/10";
+      // Diff additions use the amber-tinted background that the live
+      // product uses (`--color-diff-add-bg`) — this is the brand's flagship
+      // "the diff view is not GitHub" cue, so the mock has to match.
+      return "bg-diff-add-bg";
     case "remove":
-      return "bg-error/10";
+      return "bg-diff-del-bg";
     case "hunk":
       return "bg-surface-secondary text-text-secondary";
     default:
@@ -63,8 +66,8 @@ export function MockDiffView() {
             />
           </svg>
           <span className="font-mono text-text-primary">packages/web/src/config.ts</span>
-          <span className="ml-auto text-success">+3</span>
-          <span className="text-error">−2</span>
+          <span className="ml-auto text-diff-add-text">+3</span>
+          <span className="text-diff-del-text">−2</span>
         </div>
         <div className="font-mono text-xs">
           {lines.map((l, i) => (

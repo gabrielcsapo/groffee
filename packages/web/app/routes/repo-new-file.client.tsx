@@ -6,13 +6,13 @@ import { Link } from "react-flight-router/client";
 interface Props {
   owner: string;
   repoName: string;
-  ref: string;
+  refName: string;
   pathPrefix: string;
   editPolicy: "direct" | "pull_request";
 }
 
 export default function RepoNewFileClient(props: Props) {
-  const { owner, repoName, ref, pathPrefix, editPolicy } = props;
+  const { owner, repoName, refName, pathPrefix, editPolicy } = props;
 
   const [filename, setFilename] = useState("");
   const [content, setContent] = useState("");
@@ -35,7 +35,7 @@ export default function RepoNewFileClient(props: Props) {
     setError(null);
 
     try {
-      const res = await fetch(`/api/repos/${owner}/${repoName}/contents/${ref}/${fullPath}`, {
+      const res = await fetch(`/api/repos/${owner}/${repoName}/contents/${refName}/${fullPath}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -55,7 +55,7 @@ export default function RepoNewFileClient(props: Props) {
       if (data.prNumber) {
         window.location.href = `/${owner}/${repoName}/pull/${data.prNumber}`;
       } else {
-        window.location.href = `/${owner}/${repoName}/blob/${ref}/${fullPath}`;
+        window.location.href = `/${owner}/${repoName}/blob/${refName}/${fullPath}`;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create file");
@@ -68,7 +68,7 @@ export default function RepoNewFileClient(props: Props) {
       return;
     }
     const target = pathPrefix
-      ? `/${owner}/${repoName}/tree/${ref}/${pathPrefix}`
+      ? `/${owner}/${repoName}/tree/${refName}/${pathPrefix}`
       : `/${owner}/${repoName}`;
     window.location.href = target;
   }
@@ -85,12 +85,12 @@ export default function RepoNewFileClient(props: Props) {
           {repoName}
         </Link>
         <span className="text-text-secondary">/</span>
-        <span className="text-text-secondary text-sm">{ref}</span>
+        <span className="text-text-secondary text-sm">{refName}</span>
         {pathPrefix && (
           <>
             <span className="text-text-secondary">/</span>
             <Link
-              to={`/${owner}/${repoName}/tree/${ref}/${pathPrefix}`}
+              to={`/${owner}/${repoName}/tree/${refName}/${pathPrefix}`}
               className="text-text-link hover:underline"
             >
               {pathPrefix}
@@ -123,7 +123,7 @@ export default function RepoNewFileClient(props: Props) {
               autoFocus
             />
             <span className="text-xs text-text-secondary ml-3">
-              On <span className="font-mono">{ref}</span>
+              On <span className="font-mono">{refName}</span>
             </span>
           </div>
           <textarea
@@ -143,7 +143,7 @@ export default function RepoNewFileClient(props: Props) {
           {isPR && (
             <p className="text-xs text-text-secondary mb-3">
               A new branch will be created and a pull request opened against{" "}
-              <span className="font-mono">{ref}</span>.
+              <span className="font-mono">{refName}</span>.
             </p>
           )}
           <input

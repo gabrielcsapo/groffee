@@ -114,11 +114,16 @@ export default function SettingsKeysClient() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <SettingsNav />
-      <h1 className="text-2xl font-bold text-text-primary mb-1">SSH Keys</h1>
+      <h1 className="font-editorial font-bold text-3xl text-text-primary lowercase tracking-tight mb-1">
+        ssh keys
+      </h1>
       <p className="text-sm text-text-secondary mb-6">
         Your account SSH keys let you clone, fetch, and push to any repository you have access to.
-        For machine-to-machine access scoped to a single repository, use a deploy key in that repo's
-        settings instead.
+        For machine-to-machine access scoped to a single repository, use a deploy key in that
+        repo&apos;s settings instead.{" "}
+        <a href="/docs#ssh-keys" className="text-text-link hover:underline">
+          api reference →
+        </a>
       </p>
 
       {message && (

@@ -12,22 +12,22 @@ export interface NavSection {
 
 export const sections: NavSection[] = [
   {
-    title: "Guide",
+    title: "guide",
     items: [
-      { label: "Getting Started", to: "/docs/getting-started", file: "getting-started.mdx" },
-      { label: "Architecture", to: "/docs/architecture", file: "architecture.mdx" },
-      { label: "Configuration", to: "/docs/configuration", file: "configuration.mdx" },
-      { label: "Deployment", to: "/docs/deployment", file: "deployment.mdx" },
-      { label: "CLI", to: "/docs/cli", file: "cli.mdx" },
+      { label: "getting started", to: "/docs/getting-started", file: "getting-started.mdx" },
+      { label: "architecture", to: "/docs/architecture", file: "architecture.mdx" },
+      { label: "configuration", to: "/docs/configuration", file: "configuration.mdx" },
+      { label: "deployment", to: "/docs/deployment", file: "deployment.mdx" },
+      { label: "cli", to: "/docs/cli", file: "cli.mdx" },
     ],
   },
   {
-    title: "Reference",
+    title: "reference",
     items: [
-      { label: "API Reference", to: "/docs/api" },
-      { label: "SSH", to: "/docs/ssh", file: "ssh.mdx" },
-      { label: "Git LFS", to: "/docs/git-lfs", file: "git-lfs.mdx" },
-      { label: "Database Schema", to: "/docs/database", file: "database.mdx" },
+      { label: "api reference", to: "/docs/api" },
+      { label: "ssh", to: "/docs/ssh", file: "ssh.mdx" },
+      { label: "git lfs", to: "/docs/git-lfs", file: "git-lfs.mdx" },
+      { label: "database schema", to: "/docs/database", file: "database.mdx" },
     ],
   },
 ];

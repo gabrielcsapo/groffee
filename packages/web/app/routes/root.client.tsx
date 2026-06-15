@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigation, useRouter } from "react-flight-router/client";
 import { type Theme, getStoredTheme, applyTheme } from "../lib/theme";
 import { getSessionUser } from "../lib/server/auth";
@@ -38,7 +39,21 @@ export function HeaderSearch() {
         e.key === "/" &&
         !["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement).tagName)
       ) {
+        // Context-aware shortcut: on the docs page the rail has its own
+        // search input wired to the endpoint index. Focus that instead of
+        // opening the global Spotlight — sending the user to a
+        // repos/code/users palette while they're reading API docs is the
+        // wrong scope. The rail input opts in by tagging itself with
+        // `data-docs-search`; if it isn't present (other routes) or isn't
+        // visible (the rail is `hidden lg:block` so it's display:none on
+        // narrow widths) we fall back to the global modal.
         e.preventDefault();
+        const docsInput = document.querySelector<HTMLInputElement>("[data-docs-search]");
+        if (docsInput && docsInput.offsetParent !== null) {
+          docsInput.focus();
+          docsInput.select();
+          return;
+        }
         setOpen(true);
       }
       if (e.key === "Escape" && open) {
@@ -76,13 +91,15 @@ export function HeaderSearch() {
 
   return (
     <>
-      {/* Trigger button */}
+      {/* Trigger button — pill that lives in the warm header. Hover surfaces
+       * the amber border so the brand color shows up in everyday interaction
+       * rather than just on the landing page. */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 flex-1 max-w-sm px-3 py-1.5 text-sm text-white/40 bg-white/10 border border-white/20 rounded-md hover:border-white/30 transition-colors cursor-text"
+        className="flex items-center gap-2 flex-1 max-w-sm px-3 py-1.5 font-mono text-xs text-text-secondary bg-surface-secondary border border-border rounded-md hover:border-accent/40 hover:text-text-primary transition-colors cursor-text"
       >
         <svg
-          className="w-4 h-4 flex-shrink-0"
+          className="w-3.5 h-3.5 flex-shrink-0"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -94,126 +111,136 @@ export function HeaderSearch() {
             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
           />
         </svg>
-        <span className="flex-1 text-left truncate">Type / to search</span>
-        <kbd className="text-[10px] text-white/30 border border-white/20 rounded px-1 py-0.5 leading-none">
+        <span className="flex-1 text-left truncate">type / to search</span>
+        <kbd className="text-[10px] text-text-secondary bg-canvas border border-border rounded px-1 py-0.5 leading-none">
           /
         </kbd>
       </button>
 
-      {/* Spotlight modal */}
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={() => setOpen(false)}
-        >
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-
-          {/* Modal */}
+      {/* Spotlight modal — rendered through a portal at `document.body`
+       * because the sticky header above us uses `backdrop-blur-sm`, and
+       * any element with `backdrop-filter` becomes a *containing block* for
+       * its `position: fixed` descendants. Without the portal, `fixed
+       * inset-0` resolves to "fill the header" (~56px tall) instead of
+       * "fill the viewport", and the modal pins itself to the top of the
+       * page mostly off-screen. `transform` ancestors have the same
+       * pitfall — the portal handles both. */}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
-            className="relative w-full max-w-lg mx-4 animate-fade-in"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+            onClick={() => setOpen(false)}
           >
-            <form onSubmit={handleSubmit}>
-              <div className="bg-surface border border-border rounded-md shadow-2xl overflow-hidden ring-1 ring-black/5">
-                {/* Search input */}
-                <div className="p-5">
-                  <div className="flex items-center gap-3 bg-surface-secondary border border-border rounded-lg px-3 py-2.5">
-                    <svg
-                      className="w-5 h-5 text-text-secondary/50 flex-shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+            {/* Modal */}
+            <div
+              className="relative w-full max-w-lg mx-4 animate-fade-in"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <form onSubmit={handleSubmit}>
+                <div className="bg-surface border border-border rounded-md shadow-2xl overflow-hidden ring-1 ring-black/5">
+                  {/* Search input */}
+                  <div className="p-5">
+                    <div className="flex items-center gap-3 bg-surface-secondary border border-border rounded-lg px-3 py-2.5">
+                      <svg
+                        className="w-5 h-5 text-text-secondary/50 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                        />
+                      </svg>
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        placeholder={
+                          isRepoPage
+                            ? `Search in ${repoOwner}/${repoName}...`
+                            : "Search repositories, code, users..."
+                        }
+                        className="modal-input flex-1 bg-transparent border-none text-text-primary placeholder:text-text-secondary/50 text-base"
                       />
-                    </svg>
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      placeholder={
-                        isRepoPage
-                          ? `Search in ${repoOwner}/${repoName}...`
-                          : "Search repositories, code, users..."
-                      }
-                      className="modal-input flex-1 bg-transparent border-none text-text-primary placeholder:text-text-secondary/50 text-base"
-                    />
-                    <kbd className="text-[10px] text-text-secondary/50 border border-border rounded px-1.5 py-0.5 leading-none">
-                      ESC
-                    </kbd>
+                      <kbd className="text-[10px] text-text-secondary/50 border border-border rounded px-1.5 py-0.5 leading-none">
+                        ESC
+                      </kbd>
+                    </div>
+                  </div>
+
+                  {/* Scope selector */}
+                  <div className="px-5 pb-4 text-sm">
+                    {isRepoPage ? (
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setSearchScope("repo")}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors ${
+                            searchScope === "repo"
+                              ? "bg-primary/10 text-primary"
+                              : "text-text-secondary hover:bg-surface-secondary"
+                          }`}
+                        >
+                          <svg
+                            className="w-4 h-4 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                            />
+                          </svg>
+                          <span>
+                            {repoOwner}/{repoName}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSearchScope("global")}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors ${
+                            searchScope === "global"
+                              ? "bg-primary/10 text-primary"
+                              : "text-text-secondary hover:bg-surface-secondary"
+                          }`}
+                        >
+                          <svg
+                            className="w-4 h-4 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <span>Search everywhere</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-text-secondary text-xs px-1">
+                        Press Enter to search across all repositories
+                      </p>
+                    )}
                   </div>
                 </div>
-
-                {/* Scope selector */}
-                <div className="px-5 pb-4 text-sm">
-                  {isRepoPage ? (
-                    <div className="flex flex-col gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setSearchScope("repo")}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors ${
-                          searchScope === "repo"
-                            ? "bg-primary/10 text-primary"
-                            : "text-text-secondary hover:bg-surface-secondary"
-                        }`}
-                      >
-                        <svg
-                          className="w-4 h-4 flex-shrink-0"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                          />
-                        </svg>
-                        <span>
-                          {repoOwner}/{repoName}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSearchScope("global")}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors ${
-                          searchScope === "global"
-                            ? "bg-primary/10 text-primary"
-                            : "text-text-secondary hover:bg-surface-secondary"
-                        }`}
-                      >
-                        <svg
-                          className="w-4 h-4 flex-shrink-0"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                        <span>Search everywhere</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-text-secondary text-xs px-1">
-                      Press Enter to search across all repositories
-                    </p>
-                  )}
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              </form>
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
@@ -245,7 +272,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={cycle}
-      className="text-white/60 hover:text-white p-1.5 rounded-md hover:bg-white/10 transition-colors"
+      className="text-text-secondary hover:text-text-primary p-1.5 rounded-md hover:bg-surface-secondary transition-colors"
       title={`Theme: ${theme}`}
     >
       {theme === "dark" ? (
@@ -283,6 +310,7 @@ export function ThemeToggle() {
 export function UserNav() {
   const [user, setUser] = useState<{
     username: string;
+    email: string | null;
     isAdmin: boolean;
     avatarUploadId: string | null;
   } | null>(null);
@@ -295,6 +323,7 @@ export function UserNav() {
         if (u)
           setUser({
             username: u.username,
+            email: u.email ?? null,
             isAdmin: !!u.isAdmin,
             avatarUploadId: u.avatarUploadId ?? null,
           });
@@ -313,9 +342,9 @@ export function UserNav() {
         <ThemeToggle />
         <Link
           to="/login"
-          className="text-white/70 text-sm hover:text-white hover:no-underline transition-colors"
+          className="text-text-secondary font-mono text-xs hover:text-text-primary hover:no-underline transition-colors"
         >
-          Sign in
+          sign in
         </Link>
         <Link to="/register" className="btn-primary btn-sm hover:no-underline">
           Sign up
@@ -329,7 +358,7 @@ export function UserNav() {
       <ThemeToggle />
       <Link
         to="/new"
-        className="text-white/60 hover:text-white hover:no-underline p-1.5 rounded-md hover:bg-white/10 transition-colors"
+        className="text-text-secondary hover:text-text-primary hover:no-underline p-1.5 rounded-md hover:bg-surface-secondary transition-colors"
         title="New repository"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -339,17 +368,17 @@ export function UserNav() {
       <div className="relative">
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          className="rounded-full hover:opacity-90 transition-opacity ring-2 ring-transparent hover:ring-white/20"
+          className="rounded-full hover:opacity-90 transition-opacity ring-2 ring-transparent hover:ring-accent/30"
           aria-label="User menu"
         >
           {user.avatarUploadId ? (
             <img
               src={`/api/uploads/${user.avatarUploadId}?w=64`}
               alt={`${user.username} avatar`}
-              className="w-8 h-8 rounded-full object-cover bg-white/10"
+              className="w-7 h-7 rounded-full object-cover bg-surface-secondary"
             />
           ) : (
-            <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-sm font-medium">
+            <span className="w-7 h-7 rounded-full bg-accent/15 text-accent flex items-center justify-center text-xs font-medium font-mono">
               {user.username[0].toUpperCase()}
             </span>
           )}
@@ -360,6 +389,7 @@ export function UserNav() {
             <div className="absolute right-0 mt-2 w-52 bg-surface border border-border rounded-lg shadow-xl z-50 py-1 animate-fade-in">
               <div className="px-4 py-2.5 border-b border-border">
                 <p className="text-sm font-semibold text-text-primary">{user.username}</p>
+                {user.email && <p className="text-xs text-text-secondary truncate">{user.email}</p>}
               </div>
               <div className="py-1">
                 <Link
@@ -427,26 +457,6 @@ export function UserNav() {
                     />
                   </svg>
                   Settings
-                </Link>
-                <Link
-                  to="/settings/tokens"
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-text-primary hover:bg-surface-secondary hover:no-underline"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  <svg
-                    className="w-4 h-4 text-text-secondary"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                    />
-                  </svg>
-                  Access Tokens
                 </Link>
               </div>
               {user.isAdmin && (

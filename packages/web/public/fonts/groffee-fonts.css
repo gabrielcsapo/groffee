@@ -1,0 +1,33 @@
+/* Self-hosted webfonts. Three families, one woff2 file each — they are all
+ * variable fonts, so a single file covers every weight we use.
+ *
+ * Latin subset only (~144 KB total uncompressed → ~40 KB over the wire).
+ *
+ *   fraunces.woff2        Fraunces, opsz 9..144, wght 400..900
+ *   inter-tight.woff2     Inter Tight, wght 400..700
+ *   jetbrains-mono.woff2  JetBrains Mono, wght 400..600
+ */
+
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/fraunces.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "Inter Tight";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-tight.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono.woff2") format("woff2-variations");
+}

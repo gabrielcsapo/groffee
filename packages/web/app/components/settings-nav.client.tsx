@@ -23,7 +23,7 @@ export function SettingsNav() {
             to={link.to}
             className={`px-3 py-1.5 rounded-md text-sm font-medium hover:no-underline transition-colors ${
               active
-                ? "bg-primary/10 text-primary"
+                ? "bg-selected-bg text-selected-text"
                 : "text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
             }`}
           >

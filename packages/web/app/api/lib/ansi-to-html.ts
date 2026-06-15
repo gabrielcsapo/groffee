@@ -239,9 +239,66 @@ export function splitTimestampedLine(line: string): { ts: string | null; content
  * Parse a whole log blob: split on newlines, peel timestamps, ANSI-convert
  * each line. Returns an array of { ts, html } per line.
  */
+export interface LogCommand {
+  severity: "error" | "warning" | "notice";
+  message: string;
+  file?: string;
+  line?: number;
+  col?: number;
+  endLine?: number;
+  endCol?: number;
+  title?: string;
+}
+
 export interface LogLine {
   ts: string | null;
   html: string;
+  command?: LogCommand;
+}
+
+// GitHub-Actions style workflow commands the CI runner may emit.
+// Spec: `::name params::message` where params is comma-separated `key=value`
+// pairs. The message may contain percent-encoded `%0A`/`%0D`/`%25` to embed
+// newlines / carriage returns / literal `%` without breaking the line.
+const WORKFLOW_CMD_RE = /^::(error|warning|notice)(?:\s+([^:]*))?::(.*)$/;
+
+function decodeCommandPayload(s: string): string {
+  // Order matters: decode %25 last so an actual `%0A` token isn't mangled by
+  // an earlier `%25` → `%` substitution that would invent a new `%0A`.
+  return s.replace(/%0A/g, "\n").replace(/%0D/g, "\r").replace(/%25/g, "%");
+}
+
+function parseWorkflowCommand(content: string): LogCommand | null {
+  const m = WORKFLOW_CMD_RE.exec(content);
+  if (!m) return null;
+  const severity = m[1] as LogCommand["severity"];
+  const rawParams = m[2] ?? "";
+  const message = decodeCommandPayload(m[3] ?? "");
+  const cmd: LogCommand = { severity, message };
+  if (rawParams.trim()) {
+    for (const pair of rawParams.split(",")) {
+      const eq = pair.indexOf("=");
+      if (eq < 0) continue;
+      const k = pair.slice(0, eq).trim();
+      const v = decodeCommandPayload(pair.slice(eq + 1).trim());
+      if (!v) continue;
+      if (k === "file") cmd.file = v;
+      else if (k === "line") {
+        const n = parseInt(v, 10);
+        if (!isNaN(n)) cmd.line = n;
+      } else if (k === "col") {
+        const n = parseInt(v, 10);
+        if (!isNaN(n)) cmd.col = n;
+      } else if (k === "endLine") {
+        const n = parseInt(v, 10);
+        if (!isNaN(n)) cmd.endLine = n;
+      } else if (k === "endColumn") {
+        const n = parseInt(v, 10);
+        if (!isNaN(n)) cmd.endCol = n;
+      } else if (k === "title") cmd.title = v;
+    }
+  }
+  return cmd;
 }
 
 export function parseLogBlob(blob: string): LogLine[] {
@@ -252,6 +309,14 @@ export function parseLogBlob(blob: string): LogLine[] {
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
   return lines.map((line) => {
     const { ts, content } = splitTimestampedLine(line);
+    const command = parseWorkflowCommand(content);
+    if (command) {
+      // The visible HTML is just the decoded message (used as a fallback if
+      // the renderer doesn't recognise the `command` field). Newlines in the
+      // message become explicit `\n` characters; the renderer is responsible
+      // for splitting them.
+      return { ts, html: escapeHtml(command.message), command };
+    }
     return { ts, html: safeAnsiToHtml(content) };
   });
 }

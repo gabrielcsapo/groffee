@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Link } from "react-flight-router/client";
+import { StatusPill, type StatusPillState } from "@groffee/ui";
 import { timeAgo } from "../lib/time";
 import { getEditHistory } from "../lib/server/search";
 import { getSessionUser } from "../lib/server/auth";
@@ -313,16 +314,18 @@ export function IssueDetailView({
           </h1>
         )}
         <div className="flex items-center gap-3">
-          <span className={`badge ${issue.status === "open" ? "badge-open" : "badge-closed"}`}>
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-              <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
-              {issue.status === "open" && <circle cx="8" cy="8" r="3" />}
-              {issue.status === "closed" && (
-                <path d="M4 8l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" />
-              )}
-            </svg>
-            {issue.status === "open" ? "Open" : "Closed"}
-          </span>
+          <StatusPill
+            state={issue.status as StatusPillState}
+            icon={
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+                <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
+                {issue.status === "open" && <circle cx="8" cy="8" r="3" />}
+                {issue.status === "closed" && (
+                  <path d="M4 8l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" />
+                )}
+              </svg>
+            }
+          />
           <span className="text-sm text-text-secondary">
             <Link
               to={`/${issue.author}`}

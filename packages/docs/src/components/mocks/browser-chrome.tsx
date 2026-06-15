@@ -30,7 +30,11 @@ export function BrowserChrome({ url, children }: { url: string; children: ReactN
         </div>
         <div className="w-[54px]" />
       </div>
-      <div className="pointer-events-none select-none">{children}</div>
+      {/* `select-none` keeps the mock from feeling like text-to-be-read while
+       * still letting interactive children (tab switches, etc.) receive
+       * clicks. Mocks that want to disable interaction can wrap their
+       * inner content in `pointer-events-none` themselves. */}
+      <div className="select-none">{children}</div>
     </div>
   );
 }

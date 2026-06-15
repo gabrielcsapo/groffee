@@ -156,6 +156,57 @@ export async function getAdminDashboard() {
     .orderBy(desc(auditLogs.createdAt))
     .limit(50);
 
+  // Resolve target IDs → human labels (e.g. "repository:abc123" → "owner/name").
+  const auditRepoIds = new Set<string>();
+  const auditUserIds = new Set<string>();
+  for (const a of audit) {
+    if (a.targetType === "repository" && a.targetId) auditRepoIds.add(a.targetId);
+    if (a.targetType === "user" && a.targetId) auditUserIds.add(a.targetId);
+  }
+  const auditRepoLabels = new Map<string, string>();
+  if (auditRepoIds.size > 0) {
+    const r = await db
+      .select({ id: repositories.id, name: repositories.name, ownerId: repositories.ownerId })
+      .from(repositories)
+      .where(
+        sql`${repositories.id} in (${sql.join(
+          Array.from(auditRepoIds).map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      );
+    const ownerIds = new Set(r.map((x) => x.ownerId));
+    const ownerRows =
+      ownerIds.size > 0
+        ? await db
+            .select({ id: users.id, username: users.username })
+            .from(users)
+            .where(
+              sql`${users.id} in (${sql.join(
+                Array.from(ownerIds).map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+            )
+        : [];
+    const ownerMap = new Map(ownerRows.map((u) => [u.id, u.username]));
+    for (const x of r) {
+      const owner = ownerMap.get(x.ownerId);
+      if (owner) auditRepoLabels.set(x.id, `${owner}/${x.name}`);
+    }
+  }
+  const auditUserLabels = new Map<string, string>();
+  if (auditUserIds.size > 0) {
+    const u = await db
+      .select({ id: users.id, username: users.username })
+      .from(users)
+      .where(
+        sql`${users.id} in (${sql.join(
+          Array.from(auditUserIds).map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      );
+    for (const row of u) auditUserLabels.set(row.id, row.username);
+  }
+
   return {
     users: userCount.count,
     repos: repoCount.count,
@@ -178,6 +229,12 @@ export async function getAdminDashboard() {
     auditEvents: audit.map((a) => ({
       ...a,
       createdAt: a.createdAt instanceof Date ? a.createdAt.toISOString() : String(a.createdAt),
+      targetLabel:
+        a.targetType === "repository"
+          ? (auditRepoLabels.get(a.targetId) ?? null)
+          : a.targetType === "user"
+            ? (auditUserLabels.get(a.targetId) ?? null)
+            : null,
     })),
   };
 }
@@ -278,10 +335,70 @@ export async function getAdminAuditLog(opts: {
       )
     : null;
 
+  // Resolve target IDs to human labels. Audit rows store opaque IDs for
+  // `repository`/`user` targets so the admin UI can't show them directly.
+  const repoIds = new Set<string>();
+  const userIds = new Set<string>();
+  for (const r of pageRows) {
+    if (r.targetType === "repository" && r.targetId) repoIds.add(r.targetId);
+    if (r.targetType === "user" && r.targetId) userIds.add(r.targetId);
+  }
+  const repoLabels = new Map<string, string>();
+  if (repoIds.size > 0) {
+    const repoRows = await db
+      .select({ id: repositories.id, name: repositories.name, ownerId: repositories.ownerId })
+      .from(repositories)
+      .where(
+        sql`${repositories.id} in (${sql.join(
+          Array.from(repoIds).map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      );
+    const ownerIds = new Set(repoRows.map((r) => r.ownerId));
+    const ownerRows =
+      ownerIds.size > 0
+        ? await db
+            .select({ id: users.id, username: users.username })
+            .from(users)
+            .where(
+              sql`${users.id} in (${sql.join(
+                Array.from(ownerIds).map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+            )
+        : [];
+    const ownerLookup = new Map(ownerRows.map((u) => [u.id, u.username]));
+    for (const r of repoRows) {
+      const owner = ownerLookup.get(r.ownerId);
+      if (owner) repoLabels.set(r.id, `${owner}/${r.name}`);
+    }
+  }
+  const userLabels = new Map<string, string>();
+  if (userIds.size > 0) {
+    const userRows = await db
+      .select({ id: users.id, username: users.username })
+      .from(users)
+      .where(
+        sql`${users.id} in (${sql.join(
+          Array.from(userIds).map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      );
+    for (const u of userRows) userLabels.set(u.id, u.username);
+  }
+
+  function resolveLabel(targetType: string | null, targetId: string | null): string | null {
+    if (!targetType || !targetId) return null;
+    if (targetType === "repository") return repoLabels.get(targetId) ?? null;
+    if (targetType === "user") return userLabels.get(targetId) ?? null;
+    return null;
+  }
+
   return {
     events: pageRows.map((r) => ({
       ...r,
       createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+      targetLabel: resolveLabel(r.targetType, r.targetId),
     })),
     nextCursor,
   };

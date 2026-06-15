@@ -7,6 +7,7 @@ import {
   users,
   issues,
   pullRequests,
+  pipelineRuns,
   comments,
   diffComments,
   editHistory,
@@ -24,7 +25,7 @@ import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
 import { getRequest } from "./request-context";
 import { resolveDiskPath } from "../../api/lib/paths";
-import { batchLoadUsers } from "./user-utils";
+import { batchLoadUsers, batchLoadUserProfiles } from "./user-utils";
 import { highlightDiff } from "../highlight";
 import { renderMarkdown } from "../markdown";
 import { isRepoArchivedById } from "./repos";
@@ -74,13 +75,64 @@ export async function getPullRequests(
 
   const authorMap = await batchLoadUsers(prList.map((p) => p.authorId));
 
-  const prsWithAuthors = prList.map((p) => ({
-    ...p,
-    createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
-    updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt,
-    mergedAt: p.mergedAt instanceof Date ? p.mergedAt.toISOString() : p.mergedAt,
-    author: authorMap.get(p.authorId) || "unknown",
-  }));
+  // Aggregate per-PR comment counts in a single grouped query — cheaper than
+  // hitting comments once per row.
+  const prIds = prList.map((p) => p.id);
+  const commentCounts =
+    prIds.length > 0
+      ? await db
+          .select({
+            pullRequestId: comments.pullRequestId,
+            count: count(),
+          })
+          .from(comments)
+          .where(inArray(comments.pullRequestId, prIds))
+          .groupBy(comments.pullRequestId)
+      : [];
+  const commentCountMap = new Map(commentCounts.map((c) => [c.pullRequestId, c.count]));
+
+  // Latest pipeline run per source-branch HEAD commit. We use a single query
+  // over all source branches and pick the newest per ref. (`commit_oid` is
+  // unknown until we resolve the branch HEAD which costs a git call — for
+  // the list view we approximate by latest run on the `ref` matching the
+  // source branch. Good enough for a status pill; the PR detail page does
+  // the exact lookup by commit OID.)
+  const sourceBranches = [...new Set(prList.map((p) => p.sourceBranch))];
+  const runRows =
+    sourceBranches.length > 0
+      ? await db
+          .select({
+            ref: pipelineRuns.ref,
+            status: pipelineRuns.status,
+            number: pipelineRuns.number,
+            createdAt: pipelineRuns.createdAt,
+          })
+          .from(pipelineRuns)
+          .where(
+            and(eq(pipelineRuns.repoId, result.repo.id), inArray(pipelineRuns.ref, sourceBranches)),
+          )
+          .orderBy(sql`${pipelineRuns.createdAt} DESC`)
+      : [];
+  const latestRunByRef = new Map<string, { status: string; number: number }>();
+  for (const r of runRows) {
+    if (!latestRunByRef.has(r.ref)) {
+      latestRunByRef.set(r.ref, { status: r.status, number: r.number });
+    }
+  }
+
+  const prsWithAuthors = prList.map((p) => {
+    const run = latestRunByRef.get(p.sourceBranch) ?? null;
+    return {
+      ...p,
+      createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
+      updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt,
+      mergedAt: p.mergedAt instanceof Date ? p.mergedAt.toISOString() : p.mergedAt,
+      author: authorMap.get(p.authorId) || "unknown",
+      commentCount: commentCountMap.get(p.id) ?? 0,
+      pipelineStatus: run?.status ?? null,
+      pipelineRunNumber: run?.number ?? null,
+    };
+  });
 
   const page = paginatedResult(prsWithAuthors, limit, "createdAt");
   return { pullRequests: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore };
@@ -140,14 +192,15 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
     .where(eq(comments.pullRequestId, pr.id))
     .orderBy(comments.createdAt);
 
-  // Batch-load all users (PR author + mergedBy + comment authors) in one query
+  // Batch-load all users (PR author + mergedBy + comment authors) in one query.
+  // Using the richer profile loader so the client can render avatars without
+  // a follow-up roundtrip per comment.
   const allUserIds = [
     pr.authorId,
     ...(pr.mergedById ? [pr.mergedById] : []),
     ...commentList.map((c) => c.authorId),
   ];
-  const userMap = await batchLoadUsers(allUserIds);
-  const commentAuthorMap = userMap;
+  const userMap = await batchLoadUserProfiles(allUserIds);
 
   const [prEditInfo] = await db
     .select({ editCount: count(), lastEditedAt: max(editHistory.createdAt) })
@@ -178,16 +231,22 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
     ]),
   );
 
-  const commentsWithAuthors = commentList.map((c) => ({
-    ...c,
-    createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
-    updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : c.updatedAt,
-    author: commentAuthorMap.get(c.authorId) || "unknown",
-    editCount: commentEditMap.get(c.id)?.editCount || 0,
-    lastEditedAt: commentEditMap.get(c.id)?.lastEditedAt || null,
-  }));
+  const commentsWithAuthors = commentList.map((c) => {
+    const profile = userMap.get(c.authorId);
+    return {
+      ...c,
+      createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
+      updatedAt: c.updatedAt instanceof Date ? c.updatedAt.toISOString() : c.updatedAt,
+      author: profile?.username || "unknown",
+      authorDisplayName: profile?.displayName ?? null,
+      authorAvatarUploadId: profile?.avatarUploadId ?? null,
+      editCount: commentEditMap.get(c.id)?.editCount || 0,
+      lastEditedAt: commentEditMap.get(c.id)?.lastEditedAt || null,
+    };
+  });
 
-  const mergedBy = pr.mergedById ? userMap.get(pr.mergedById) || null : null;
+  const prAuthor = userMap.get(pr.authorId);
+  const mergedByProfile = pr.mergedById ? (userMap.get(pr.mergedById) ?? null) : null;
 
   return {
     pullRequest: {
@@ -195,8 +254,10 @@ export async function getPullRequest(ownerName: string, repoName: string, prNumb
       createdAt: pr.createdAt instanceof Date ? pr.createdAt.toISOString() : pr.createdAt,
       updatedAt: pr.updatedAt instanceof Date ? pr.updatedAt.toISOString() : pr.updatedAt,
       mergedAt: pr.mergedAt instanceof Date ? pr.mergedAt.toISOString() : pr.mergedAt,
-      author: userMap.get(pr.authorId) || "unknown",
-      mergedBy,
+      author: prAuthor?.username || "unknown",
+      authorDisplayName: prAuthor?.displayName ?? null,
+      authorAvatarUploadId: prAuthor?.avatarUploadId ?? null,
+      mergedBy: mergedByProfile?.username ?? null,
       editCount: prEditInfo?.editCount || 0,
       lastEditedAt:
         prEditInfo?.lastEditedAt instanceof Date
@@ -704,6 +765,8 @@ export interface DiffCommentDTO {
   bodyHtml: string;
   resolved: boolean;
   author: string;
+  authorDisplayName: string | null;
+  authorAvatarUploadId: string | null;
   authorId: string;
   createdAt: string;
   updatedAt: string;
@@ -757,24 +820,29 @@ export async function getDiffComments(ownerName: string, repoName: string, prNum
     .orderBy(asc(diffComments.createdAt));
 
   const authorIds = rows.map((r) => r.authorId);
-  const authorMap = await batchLoadUsers(authorIds);
+  const authorMap = await batchLoadUserProfiles(authorIds);
 
-  const flat: DiffCommentDTO[] = rows.map((r) => ({
-    id: r.id,
-    pullRequestId: r.pullRequestId,
-    parentId: r.parentId ?? null,
-    filePath: r.filePath,
-    commitOid: r.commitOid,
-    side: r.side as "old" | "new",
-    lineNumber: r.lineNumber,
-    body: r.body,
-    bodyHtml: r.body ? renderMarkdown(r.body) : "",
-    resolved: !!r.resolved,
-    author: authorMap.get(r.authorId) || "unknown",
-    authorId: r.authorId,
-    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
-    updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
-  }));
+  const flat: DiffCommentDTO[] = rows.map((r) => {
+    const profile = authorMap.get(r.authorId);
+    return {
+      id: r.id,
+      pullRequestId: r.pullRequestId,
+      parentId: r.parentId ?? null,
+      filePath: r.filePath,
+      commitOid: r.commitOid,
+      side: r.side as "old" | "new",
+      lineNumber: r.lineNumber,
+      body: r.body,
+      bodyHtml: r.body ? renderMarkdown(r.body) : "",
+      resolved: !!r.resolved,
+      author: profile?.username || "unknown",
+      authorDisplayName: profile?.displayName ?? null,
+      authorAvatarUploadId: profile?.avatarUploadId ?? null,
+      authorId: r.authorId,
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+      updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
+    };
+  });
 
   return { comments: flat };
 }
@@ -1008,6 +1076,10 @@ export interface PRCommit {
   author: string;
   authorEmail: string;
   authorTimestamp: number;
+  authorUsername: string | null;
+  authorAvatarUploadId: string | null;
+  pipelineStatus: "queued" | "running" | "success" | "failure" | "cancelled" | "timed_out" | null;
+  pipelineRunNumber: number | null;
 }
 
 /**
@@ -1038,7 +1110,7 @@ export async function getPullRequestCommits(
       { cwd: repoDiskPath, maxBuffer: 5 * 1024 * 1024 },
     );
 
-    const commits: PRCommit[] = stdout
+    const rawCommits = stdout
       .split("\n")
       .filter(Boolean)
       .map((line) => {
@@ -1051,6 +1123,75 @@ export async function getPullRequestCommits(
           authorTimestamp: Number(ts) || 0,
         };
       });
+
+    // Enrich each commit with the author's avatar (matched by email) and the
+    // latest pipeline status (matched by commit OID). Both lookups are batch
+    // queries — one per dimension, regardless of the number of commits.
+    const oids = rawCommits.map((c) => c.oid);
+    const emails = [
+      ...new Set(rawCommits.map((c) => c.authorEmail).filter((e): e is string => !!e)),
+    ];
+
+    const userRows =
+      emails.length > 0
+        ? await db
+            .select({
+              email: users.email,
+              username: users.username,
+              avatarUploadId: users.avatarUploadId,
+            })
+            .from(users)
+            .where(inArray(users.email, emails))
+        : [];
+    const userByEmail = new Map(
+      userRows.map((u) => [
+        u.email,
+        { username: u.username, avatarUploadId: u.avatarUploadId ?? null },
+      ]),
+    );
+
+    // For each commit OID, take the most recent pipeline run. Using SQL
+    // GROUP-MAX would be cleaner but Drizzle's window-function support is
+    // patchy across dialects — sort newest-first and pick the first hit.
+    const runRows =
+      oids.length > 0
+        ? await db
+            .select({
+              commitOid: pipelineRuns.commitOid,
+              status: pipelineRuns.status,
+              number: pipelineRuns.number,
+              createdAt: pipelineRuns.createdAt,
+            })
+            .from(pipelineRuns)
+            .where(
+              and(eq(pipelineRuns.repoId, found.repo.id), inArray(pipelineRuns.commitOid, oids)),
+            )
+            .orderBy(sql`${pipelineRuns.createdAt} DESC`)
+        : [];
+    const latestRunByOid = new Map<
+      string,
+      { status: PRCommit["pipelineStatus"]; number: number }
+    >();
+    for (const r of runRows) {
+      if (!latestRunByOid.has(r.commitOid)) {
+        latestRunByOid.set(r.commitOid, {
+          status: r.status as PRCommit["pipelineStatus"],
+          number: r.number,
+        });
+      }
+    }
+
+    const commits: PRCommit[] = rawCommits.map((c) => {
+      const profile = userByEmail.get(c.authorEmail);
+      const run = latestRunByOid.get(c.oid);
+      return {
+        ...c,
+        authorUsername: profile?.username ?? null,
+        authorAvatarUploadId: profile?.avatarUploadId ?? null,
+        pipelineStatus: run?.status ?? null,
+        pipelineRunNumber: run?.number ?? null,
+      };
+    });
 
     // Use isomorphic-git as a fallback / parity check is unnecessary; if
     // execFile failed we already returned. Reference getCommitLog so the

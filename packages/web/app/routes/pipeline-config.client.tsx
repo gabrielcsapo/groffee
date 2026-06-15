@@ -196,7 +196,7 @@ export function PipelineConfigEditor({
             onClick={handleCommit}
             disabled={committing || validating || !dirty}
             title={!dirty ? "No changes to commit" : undefined}
-            className="px-3 py-1.5 text-sm bg-primary text-white rounded-md hover:bg-primary-hover disabled:opacity-50"
+            className="px-3 py-1.5 text-sm bg-action text-white rounded-md hover:bg-action-hover disabled:opacity-50"
           >
             {committing ? "Committing…" : editPolicy === "pull_request" ? "Open PR" : "Commit"}
           </button>

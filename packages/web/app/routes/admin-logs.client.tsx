@@ -111,7 +111,9 @@ export default function AdminLogsClient() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">System Logs</h1>
+      <h1 className="font-editorial font-bold text-3xl text-text-primary lowercase tracking-tight mb-1">
+        system logs
+      </h1>
       <p className="text-text-secondary text-sm mb-6">
         View structured request and application logs
       </p>
@@ -126,7 +128,7 @@ export default function AdminLogsClient() {
               onClick={() => updateParams({ level: l })}
               className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${
                 level === l
-                  ? "bg-primary text-white"
+                  ? "bg-selected-bg text-selected-text"
                   : "bg-surface-secondary text-text-secondary hover:text-text-primary"
               }`}
             >
@@ -141,7 +143,7 @@ export default function AdminLogsClient() {
               onClick={() => updateParams({ source: s })}
               className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${
                 source === s
-                  ? "bg-primary text-white"
+                  ? "bg-selected-bg text-selected-text"
                   : "bg-surface-secondary text-text-secondary hover:text-text-primary"
               }`}
             >
@@ -167,7 +169,7 @@ export default function AdminLogsClient() {
         />
         <button
           onClick={() => fetchLogs()}
-          className="px-3 py-1 text-xs bg-primary text-white rounded-md hover:brightness-110"
+          className="px-3 py-1 text-xs bg-action text-white rounded-md hover:brightness-110"
         >
           Apply
         </button>

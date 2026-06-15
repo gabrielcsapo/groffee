@@ -8,7 +8,6 @@ import { promisify } from "node:util";
 import { resolveDiskPath } from "../api/lib/paths";
 import { renderMarkdown } from "../lib/markdown";
 import { PullDetailLayout } from "./pull-detail.client";
-import { getRequest } from "../lib/server/request-context";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,14 +27,6 @@ function PullDetailSkeleton() {
   );
 }
 
-function detectTab(req: Request | null | undefined): "conversation" | "files" | "commits" {
-  if (!req) return "conversation";
-  const path = new URL(req.url).pathname;
-  if (path.endsWith("/files-changed")) return "files";
-  if (path.endsWith("/commits")) return "commits";
-  return "conversation";
-}
-
 async function PullDetailContent({ params }: { params: Record<string, string> }) {
   const {
     owner,
@@ -44,8 +35,6 @@ async function PullDetailContent({ params }: { params: Record<string, string> })
   } = params as { owner: string; repo: string; number: string };
 
   const data = await getPullRequest(owner, repo, Number(prNumber));
-  const req = getRequest();
-  const tab = detectTab(req);
   const pr = data.pullRequest || null;
   const prBodyHtml = pr?.body ? renderMarkdown(pr.body) : "";
   const comments = (data.comments || []).map((c) => ({
@@ -59,10 +48,10 @@ async function PullDetailContent({ params }: { params: Record<string, string> })
   const diffCommentsList =
     diffCommentResult && "comments" in diffCommentResult ? diffCommentResult.comments : [];
 
-  // Commits tab data — only needed when actually on commits tab, but keep
-  // it cheap on the others (single git log call).
-  const commitsResult =
-    tab === "commits" && pr ? await getPullRequestCommits(owner, repo, Number(prNumber)) : null;
+  // Commits data is fetched on every tab so the tab-strip can show an
+  // accurate count even from the Conversation view. The underlying call is a
+  // single `git log` which is cheap relative to the page render.
+  const commitsResult = pr ? await getPullRequestCommits(owner, repo, Number(prNumber)) : null;
   const commits = commitsResult && "commits" in commitsResult ? commitsResult.commits : [];
 
   // Pipeline status for the source-branch HEAD (shown in conversation tab).
@@ -107,7 +96,6 @@ async function PullDetailContent({ params }: { params: Record<string, string> })
       initialCommits={commits}
       sourceHeadOid={sourceHeadOid}
       pipelineRun={pipelineRun}
-      tab={tab}
     />
   );
 }

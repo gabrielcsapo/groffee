@@ -83,7 +83,7 @@ export default async function RepoNewFile({ params }: { params?: Record<string, 
     <RepoNewFileClient
       owner={owner}
       repoName={repoName}
-      ref={resolvedRef}
+      refName={resolvedRef}
       pathPrefix={pathPrefix}
       editPolicy={editCtx.editPolicy}
     />

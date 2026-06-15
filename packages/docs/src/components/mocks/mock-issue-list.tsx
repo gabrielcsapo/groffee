@@ -1,4 +1,3 @@
-import { Badge } from "@groffee/ui";
 import { BrowserChrome } from "./browser-chrome";
 
 interface Issue {
@@ -50,22 +49,45 @@ const issues: Issue[] = [
   },
 ];
 
+// Small label color map — the actual product lets users define label colors,
+// but for the mock we hand-tint a few common categories so the visual reads
+// as "real labels," not as identical neutral pills.
+const LABEL_TINT: Record<string, string> = {
+  bug: "bg-danger/10 text-danger border border-danger/25",
+  enhancement: "bg-action/10 text-action border border-action/25",
+  docs: "bg-info-bg text-info border border-info/25",
+  lfs: "bg-accent/10 text-accent border border-accent/25",
+};
+
+function LabelChip({ label }: { label: string }) {
+  const tint = LABEL_TINT[label] ?? "bg-surface-secondary text-text-secondary border border-border";
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${tint}`}>{label}</span>
+  );
+}
+
 export function MockIssueList() {
   const open = issues.filter((i) => i.state === "open").length;
-  const closed = issues.filter((i) => i.state === "closed").length;
 
   return (
-    <BrowserChrome url="groffee.example.com/gabrielcsapo/groffee/issues">
+    <BrowserChrome url="groffee.local/gabrielcsapo/groffee/issues">
       <div className="bg-surface">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-4 text-xs">
-          <span className="text-text-primary font-medium">{open} Open</span>
-          <span className="text-text-secondary">{closed} Closed</span>
+        {/* Filter row — Open/Closed pill toggles + "New issue" CTA on the
+         * right, mirroring the live product's `/repo/issues` header. */}
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2 text-xs">
+          <div className="inline-flex border border-border rounded-md overflow-hidden font-mono">
+            <span className="bg-selected-bg text-selected-text px-3 py-1">{open} open</span>
+            <span className="border-l border-border px-3 py-1 text-text-secondary">closed</span>
+          </div>
+          <span className="ml-auto inline-flex items-center gap-1 bg-action text-white px-3 py-1 rounded-md text-xs font-medium">
+            new issue
+          </span>
         </div>
         <div className="divide-y divide-border">
           {issues.map((issue) => (
             <div key={issue.number} className="px-4 py-3 flex items-start gap-3 text-sm">
               <svg
-                className={`w-4 h-4 mt-0.5 shrink-0 ${issue.state === "open" ? "text-success" : "text-merged"}`}
+                className={`w-4 h-4 mt-0.5 shrink-0 ${issue.state === "open" ? "text-success" : "text-text-secondary"}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -77,13 +99,11 @@ export function MockIssueList() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-text-primary truncate">{issue.title}</span>
                   {issue.labels.map((l) => (
-                    <Badge key={l} variant="public">
-                      {l}
-                    </Badge>
+                    <LabelChip key={l} label={l} />
                   ))}
                 </div>
-                <div className="text-xs text-text-secondary mt-0.5">
-                  #{issue.number} opened {issue.age} by {issue.author}
+                <div className="text-xs text-text-secondary mt-0.5 font-mono">
+                  #{issue.number} · opened {issue.age} by {issue.author}
                 </div>
               </div>
               {issue.comments > 0 && (

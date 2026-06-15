@@ -4,6 +4,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Groffee Docs</title>
+    <!-- Self-hosted webfonts — same three families the live product uses
+         (Inter Tight, JetBrains Mono, Fraunces). Preload + display=swap so
+         the docs and the product share the exact same typographic feel. -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/fraunces.woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/inter-tight.woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/jetbrains-mono.woff2"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="/fonts/groffee-fonts.css" />
     <script>
       (function () {
         var t = localStorage.getItem("theme");

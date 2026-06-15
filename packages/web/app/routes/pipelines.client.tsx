@@ -20,12 +20,18 @@ interface PipelineRun {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  queued: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  running: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  success: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  failure: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-  cancelled: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
-  timed_out: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+  queued:
+    "bg-yellow-100 text-yellow-800 border border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700/40",
+  running:
+    "bg-blue-100 text-blue-800 border border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/40",
+  success:
+    "bg-green-100 text-green-800 border border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/40",
+  failure:
+    "bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700/40",
+  cancelled:
+    "bg-gray-100 text-gray-800 border border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700/40",
+  timed_out:
+    "bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700/40",
 };
 
 const STATUS_ICONS: Record<string, string> = {
@@ -227,7 +233,7 @@ export function PipelinesView({
           )}
           <button
             onClick={() => setShowDispatch(!showDispatch)}
-            className="px-3 py-1.5 text-sm bg-primary text-white rounded-md hover:bg-primary-hover"
+            className="px-3 py-1.5 text-sm bg-action text-white rounded-md hover:bg-action-hover"
           >
             Run Pipeline
           </button>
@@ -252,7 +258,7 @@ export function PipelinesView({
             <button
               onClick={handleDispatch}
               disabled={dispatching}
-              className="px-4 py-1.5 text-sm bg-primary text-white rounded-md hover:bg-primary-hover disabled:opacity-50"
+              className="px-4 py-1.5 text-sm bg-action text-white rounded-md hover:bg-action-hover disabled:opacity-50"
             >
               {dispatching ? "Triggering..." : "Trigger"}
             </button>
@@ -298,7 +304,7 @@ export function PipelinesView({
               }}
               className={`px-3 py-1 text-sm rounded-md ${
                 statusFilter === btn.value
-                  ? "bg-primary text-white"
+                  ? "bg-selected-bg text-selected-text"
                   : "text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
               }`}
             >
@@ -383,29 +389,30 @@ export function PipelinesView({
       </div>
 
       {!hasConfig && runs.length === 0 && (
-        <div className="text-center py-12 text-text-secondary">
-          <div className="text-4xl mb-4">
-            <svg
-              className="w-12 h-12 mx-auto"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-text-primary mb-1">No pipelines configured</h3>
-          <p className="text-sm">
-            Add a{" "}
+        <div className="py-14">
+          <pre
+            className="font-mono text-[11px] leading-tight text-text-secondary/60 mb-6 select-none"
+            aria-hidden="true"
+          >
+            {`         (   )
+          ) (
+         (   )
+      _________
+     |_________|___
+    |             |\\
+    |             | )
+    |_____________|/
+       \\_________/`}
+          </pre>
+          <h3 className="font-editorial font-bold text-2xl text-text-primary lowercase tracking-tight mb-2">
+            nothing brewing.
+          </h3>
+          <p className="font-mono text-sm text-text-secondary">
+            add{" "}
             <code className="px-1.5 py-0.5 bg-surface-secondary rounded text-xs">
               .groffee/pipelines.yml
             </code>{" "}
-            file to your repository to get started.
+            to your repo, then push.
           </p>
         </div>
       )}

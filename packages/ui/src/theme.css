@@ -1,33 +1,70 @@
 @theme {
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
+  /* Groffee's design system. Read this once before changing anything.
+   *
+   * The palette is built around a warm-bone canvas and a single signature
+   * accent — **roasted amber** `#C77D3A` — that does the brand work that
+   * GitHub's blue does for them. The functional semantics are:
+   *
+   *   accent  → amber  (active tab underline, focus rings, links, brand)
+   *   action  → olive  (primary CTAs: Create, Commit, Merge, Run)
+   *   success → olive  (open PR / passing pipeline / additions in non-diff UI)
+   *   danger  → sienna (destructive only — not "close PR")
+   *   warning → ochre  (running / queued)
+   *   neutral → bone   (secondary buttons, inactive filter pills)
+   *
+   * --color-primary is a legacy alias kept pointing at the accent so existing
+   * `bg-primary` / `text-primary` callers inherit the new brand color until
+   * they're individually audited. */
+
+  /* Type system. Inter Tight (display + UI), JetBrains Mono (mono, promoted
+   * to a first-class UI font for SHAs/branches/timestamps), Fraunces (display
+   * — used sparingly for editorial moments like the wordmark and docs H1). */
+  --font-sans:
+    "Inter Tight", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-editorial: "Fraunces", "Inter Tight", serif;
+
+  --color-canvas: #fbf8f4;
+  --color-primary: #c77d3a;
+  --color-primary-hover: #a66526;
+  --color-accent: #c77d3a;
+  --color-accent-hover: #a66526;
+  --color-accent-quiet: #f3e3cd;
+  --color-action: #5b8a3a;
+  --color-action-hover: #4a7530;
+  --color-selected-bg: #ede4d3;
+  --color-selected-text: #1a1410;
   --color-surface: #ffffff;
-  --color-surface-secondary: #f6f8fa;
-  --color-border: #d1d9e0;
-  --color-border-muted: #e5e7eb;
-  --color-text-primary: #1f2328;
-  --color-text-secondary: #656d76;
-  --color-text-link: #0969da;
-  --color-success: #1a7f37;
-  --color-danger: #d1242f;
-  --color-danger-bg: #fef2f2;
-  --color-warning: #9a6700;
-  --color-warning-bg: #fef3c7;
-  --color-info: #2563eb;
-  --color-info-bg: #dbeafe;
+  --color-surface-secondary: #f4efe6;
+  --color-border: #e8e0d2;
+  --color-border-muted: #efe8db;
+  --color-text-primary: #1a1410;
+  --color-text-secondary: #6b5d4f;
+  --color-text-link: #c77d3a;
+  --color-success: #5b8a3a;
+  --color-danger: #b43a2a;
+  --color-danger-bg: #fbede8;
+  --color-warning: #c49a2a;
+  --color-warning-bg: #fbf2dc;
+  --color-info: #4a6b8a;
+  --color-info-bg: #e6ecf2;
   --color-merged: #8b5cf6;
-  --color-merged-bg: #f3e8ff;
-  --color-neutral-bg: #f3f4f6;
-  --color-neutral-text: #4b5563;
-  --color-diff-add-bg: #dafbe1;
-  --color-diff-del-bg: #ffebe9;
-  --color-diff-add-text: #116329;
-  --color-diff-del-text: #82071e;
-  --color-header-bg: #24292f;
-  --heatmap-l1: #9be9a8;
-  --heatmap-l2: #40c463;
-  --heatmap-l3: #30a14e;
-  --heatmap-l4: #216e39;
+  --color-merged-bg: #f1e8ff;
+  --color-neutral-bg: #f4efe6;
+  --color-neutral-text: #6b5d4f;
+  /* Diff additions use the accent (amber) — this is the single biggest
+   * visual cue that the diff view isn't GitHub. */
+  --color-diff-add-bg: #fbf1e3;
+  --color-diff-del-bg: #fbede8;
+  --color-diff-add-text: #8b5a25;
+  --color-diff-del-text: #8a2618;
+  --color-header-bg: #fbf8f4;
+  --heatmap-l1: #f3e3cd;
+  --heatmap-l2: #e0b87a;
+  --heatmap-l3: #c77d3a;
+  --heatmap-l4: #8b5a25;
 
   --animate-progress: progress 1s infinite linear;
   --animate-pulse-subtle: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -67,37 +104,48 @@
   }
 }
 
-/* Dark mode color overrides */
+/* Dark mode — warm near-black with cream text. The canvas is brown-tinted
+ * (`#0f0d0b`) instead of GitHub's cool `#010409` so the product feels lit by
+ * espresso-shop lamps, not by fluorescent bulbs. Cream text (`#f1e9dc`)
+ * carries the warmth into the typography. */
 .dark {
-  --color-primary: #58a6ff;
-  --color-primary-hover: #79c0ff;
-  --color-surface: #161b22;
-  --color-surface-secondary: #0d1117;
-  --color-border: #30363d;
-  --color-border-muted: #21262d;
-  --color-text-primary: #e6edf3;
-  --color-text-secondary: #8b949e;
-  --color-text-link: #58a6ff;
-  --color-success: #3fb950;
-  --color-danger: #f85149;
-  --color-danger-bg: #2d1215;
-  --color-warning: #d29922;
-  --color-warning-bg: #2d2305;
-  --color-info: #58a6ff;
-  --color-info-bg: #0d1b36;
+  --color-canvas: #0f0d0b;
+  --color-primary: #d9924a;
+  --color-primary-hover: #e8a263;
+  --color-accent: #d9924a;
+  --color-accent-hover: #e8a263;
+  --color-accent-quiet: #3a2a1a;
+  --color-action: #7aa84f;
+  --color-action-hover: #93c265;
+  --color-selected-bg: #2a241e;
+  --color-selected-text: #f1e9dc;
+  --color-surface: #15120f;
+  --color-surface-secondary: #1c1815;
+  --color-border: #2a241f;
+  --color-border-muted: #1f1a16;
+  --color-text-primary: #f1e9dc;
+  --color-text-secondary: #9b8b78;
+  --color-text-link: #d9924a;
+  --color-success: #7aa84f;
+  --color-danger: #d65a4a;
+  --color-danger-bg: #2a1714;
+  --color-warning: #d9b347;
+  --color-warning-bg: #2a200f;
+  --color-info: #6e8da9;
+  --color-info-bg: #161e25;
   --color-merged: #a78bfa;
   --color-merged-bg: #1e1033;
-  --color-neutral-bg: #161b22;
-  --color-neutral-text: #8b949e;
-  --color-diff-add-bg: #12261e;
-  --color-diff-del-bg: #2d1215;
-  --color-diff-add-text: #3fb950;
-  --color-diff-del-text: #f85149;
-  --color-header-bg: #010409;
-  --heatmap-l1: #0e4429;
-  --heatmap-l2: #006d32;
-  --heatmap-l3: #26a641;
-  --heatmap-l4: #39d353;
+  --color-neutral-bg: #1c1815;
+  --color-neutral-text: #9b8b78;
+  --color-diff-add-bg: #2a1f12;
+  --color-diff-del-bg: #2a1815;
+  --color-diff-add-text: #d9924a;
+  --color-diff-del-text: #d65a4a;
+  --color-header-bg: #0f0d0b;
+  --heatmap-l1: #3a2a1a;
+  --heatmap-l2: #8b5a25;
+  --heatmap-l3: #c77d3a;
+  --heatmap-l4: #e8a263;
 }
 
 @layer components {
@@ -110,6 +158,15 @@
     @apply bg-surface rounded-lg;
     border: 1px solid var(--color-border);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  /* In dark mode the ambient soft shadow is invisible against the near-black
+   * canvas, so cards float without a sense of elevation. Strengthen the
+   * border and add an inset highlight so cards read as clearly elevated. */
+  .dark .card {
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.02) inset,
+      0 1px 4px rgba(0, 0, 0, 0.5);
   }
 
   .badge {
@@ -127,16 +184,23 @@
     border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
   }
 
+  /* Status pills match the pipeline-status convention: filled tint + same-hue
+   * border + same-hue text. The `currentColor` border from the base `.badge`
+   * uses the text color, so the border auto-matches each variant's hue. */
   .badge-open {
-    @apply bg-success/10 text-success;
+    @apply bg-success/15 text-success;
   }
 
   .badge-closed {
-    @apply bg-danger/10 text-danger;
+    @apply bg-danger/15 text-danger;
   }
 
   .badge-merged {
     @apply bg-merged-bg text-merged;
+  }
+
+  .badge-draft {
+    @apply bg-neutral-bg text-neutral-text;
   }
 
   .btn-primary {
@@ -294,7 +358,23 @@
   }
 
   .markdown-body input[type="checkbox"] {
-    @apply mr-1.5;
+    @apply mr-2 align-middle w-4 h-4 rounded border;
+    appearance: none;
+    border-color: var(--color-border);
+    background-color: var(--color-surface);
+    position: relative;
+    top: -1px;
+  }
+
+  .markdown-body input[type="checkbox"]:checked {
+    background-color: var(--color-action);
+    border-color: var(--color-action);
+    /* Inline SVG checkmark — keeps the renderer free of extra deps and works
+     * regardless of remark/marked plugin choice. */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'><path d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7 7a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06L6.25 10.69l6.47-6.47a.75.75 0 0 1 1.06 0Z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 12px 12px;
   }
 
   .markdown-body del {
@@ -302,12 +382,18 @@
   }
 
   /* Method badges */
+  /* HTTP method badges — paint with restraint. GET uses the brand accent
+   * (amber) because it's the read default; POST gets olive (action color);
+   * PATCH warns in ochre; DELETE uses sienna BUT desaturated so it doesn't
+   * scream on a docs page where every spec annotation looks the same. The
+   * audit note: only an irreversible button should look red — a DELETE
+   * docs row is reference material, not an action. */
   .badge-method-get {
-    @apply bg-info-bg text-info font-bold font-mono text-xs px-2 py-0.5 rounded border border-info/20;
+    @apply bg-accent/15 text-accent font-bold font-mono text-xs px-2 py-0.5 rounded border border-accent/30;
   }
 
   .badge-method-post {
-    @apply bg-success/10 text-success font-bold font-mono text-xs px-2 py-0.5 rounded border border-success/20;
+    @apply bg-action/10 text-action font-bold font-mono text-xs px-2 py-0.5 rounded border border-action/20;
   }
 
   .badge-method-patch {
@@ -315,16 +401,43 @@
   }
 
   .badge-method-delete {
-    @apply bg-danger-bg text-danger font-bold font-mono text-xs px-2 py-0.5 rounded border border-danger/20;
+    @apply bg-danger/10 text-danger font-bold font-mono text-xs px-2 py-0.5 rounded border border-danger/25;
   }
 
-  /* Auth badges */
+  /* JSON syntax tokens. The `JsonBlock` highlighter runs at SSR time and
+   * tags each token with one of these classes. Palette stays inside the
+   * brand: accent (amber) for keys, action (olive) for strings, sienna
+   * for booleans, muted for numbers + null. Deliberately desaturated so
+   * the docs page reads as reference material, not a syntax demo. */
+  .json-block .tk-key {
+    color: var(--color-accent);
+  }
+  .json-block .tk-str {
+    color: var(--color-action);
+  }
+  .json-block .tk-num {
+    color: var(--color-text-primary);
+  }
+  .json-block .tk-bool {
+    color: var(--color-danger);
+  }
+  .json-block .tk-null {
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
+  /* Auth badges — neutral first, never alarm-red. The audit caught the
+   * inverted hierarchy: `Auth Required` was alarm red while `No Auth` was
+   * neutral, which read backwards (the least restrictive endpoint flagged
+   * loudest). Now `Required` and `None` are both neutral-warm, and
+   * `Optional` carries a quiet amber dot to indicate "auth is honored if
+   * you send it, but not mandatory." */
   .badge-auth-required {
-    @apply bg-danger-bg text-danger text-xs px-2 py-0.5 rounded border border-danger/20;
+    @apply bg-surface-secondary text-text-primary text-xs px-2 py-0.5 rounded border border-border;
   }
 
   .badge-auth-optional {
-    @apply bg-warning-bg text-warning text-xs px-2 py-0.5 rounded border border-warning/20;
+    @apply bg-accent/10 text-accent text-xs px-2 py-0.5 rounded border border-accent/25;
   }
 
   .badge-auth-none {

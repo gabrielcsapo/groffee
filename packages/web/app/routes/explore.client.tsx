@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-flight-router/client";
 import { timeAgo } from "../lib/time";
 import { searchRepos } from "../lib/server/search";
+import { RepositoryRow } from "@groffee/ui";
 
 interface Repo {
   id: string;
@@ -58,9 +59,11 @@ export function ExploreList({ initialRepos }: { initialRepos: Repo[] }) {
   return (
     <div className="max-w-4xl mx-auto mt-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-text-primary mb-2">Explore</h1>
-        <p className="text-sm text-text-secondary">
-          Discover public repositories on this Groffee instance.
+        <h1 className="font-editorial font-bold text-4xl text-text-primary lowercase tracking-tight mb-1">
+          explore
+        </h1>
+        <p className="font-mono text-xs text-text-secondary">
+          public repositories on this instance.
         </p>
       </div>
 
@@ -113,42 +116,21 @@ export function ExploreList({ initialRepos }: { initialRepos: Repo[] }) {
           {repos.map((repo, i) => (
             <div
               key={repo.id}
-              className={`px-4 py-4 ${i < repos.length - 1 ? "border-b border-border" : ""} hover:bg-surface-secondary transition-colors`}
+              className={`${i < repos.length - 1 ? "border-b border-border" : ""} hover:bg-surface-secondary transition-colors`}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <svg
-                      className="w-4 h-4 text-text-secondary shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                      />
-                    </svg>
-                    <Link
-                      to={`/${repo.owner}/${repo.name}`}
-                      className="text-base font-semibold text-text-link hover:underline"
-                    >
-                      {repo.owner}
-                      <span className="text-text-secondary font-normal">/</span>
-                      {repo.name}
-                    </Link>
-                    <span className="badge badge-public">Public</span>
-                  </div>
-                  {repo.description && (
-                    <p className="text-sm text-text-secondary mb-2 ml-6">{repo.description}</p>
-                  )}
-                  <div className="flex items-center gap-4 text-xs text-text-secondary ml-6">
-                    <span>Updated {timeAgo(repo.updatedAt)}</span>
-                  </div>
-                </div>
-              </div>
+              <RepositoryRow
+                owner={repo.owner}
+                name={repo.name}
+                description={repo.description}
+                isPublic={repo.isPublic}
+                updatedAt={repo.updatedAt}
+                linkAs={({ to, className, children }) => (
+                  <Link to={to} className={className}>
+                    {children}
+                  </Link>
+                )}
+                timeAgo={timeAgo}
+              />
             </div>
           ))}
         </div>

@@ -29,7 +29,9 @@ export default function NewRepoClient() {
 
   return (
     <div className="max-w-xl mx-auto">
-      <h1 className="text-2xl font-semibold mb-2">Create a new repository</h1>
+      <h1 className="font-editorial font-bold text-3xl text-text-primary lowercase tracking-tight mb-2">
+        new repository
+      </h1>
       <p className="text-text-secondary mb-6">
         A repository contains all project files, including the revision history.
       </p>
@@ -79,7 +81,7 @@ export default function NewRepoClient() {
                   name="visibility"
                   value="public"
                   defaultChecked
-                  className="mt-1"
+                  className="mt-1 accent-action"
                 />
                 <div>
                   <span className="font-medium text-sm">Public</span>
@@ -87,7 +89,12 @@ export default function NewRepoClient() {
                 </div>
               </label>
               <label className="flex items-start gap-3 cursor-pointer">
-                <input type="radio" name="visibility" value="private" className="mt-1" />
+                <input
+                  type="radio"
+                  name="visibility"
+                  value="private"
+                  className="mt-1 accent-action"
+                />
                 <div>
                   <span className="font-medium text-sm">Private</span>
                   <p className="text-xs text-text-secondary">

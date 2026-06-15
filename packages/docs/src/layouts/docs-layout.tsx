@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router";
-import { GroffeeLogo } from "@groffee/ui";
+import { Wordmark } from "@groffee/ui";
 import { SidebarNav } from "../components/sidebar-nav";
 import { ThemeToggle } from "../components/theme-toggle";
 import { Search } from "../components/search";
@@ -14,11 +14,14 @@ export function DocsLayout() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-30 bg-header-bg border-b border-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-4">
+      {/* Header — same as the live product: transparent over the canvas,
+       * hairline bottom border, Wordmark on the left, search in the
+       * middle, theme toggle + GitHub on the right. */}
+      <header className="sticky top-0 z-30 bg-canvas/90 backdrop-blur-sm border-b border-border">
+        <div className="max-w-7xl mx-auto px-5 h-14 flex items-center gap-4">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="lg:hidden p-1.5 rounded-md text-white/70 hover:text-white hover:bg-white/10"
+            className="lg:hidden p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
             aria-label="Toggle navigation"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -30,9 +33,16 @@ export function DocsLayout() {
               />
             </svg>
           </button>
-          <Link to="/" className="flex items-center gap-2 text-white hover:no-underline shrink-0">
-            <GroffeeLogo size={24} className="text-white" />
-            <span className="font-semibold text-sm">Groffee</span>
+          <Link
+            to="/"
+            className="shrink-0 hover:no-underline hover:opacity-80"
+            aria-label="Groffee home"
+          >
+            <Wordmark
+              height={22}
+              textColor="var(--color-text-primary)"
+              cupColor="var(--color-accent)"
+            />
           </Link>
           <div className="flex-1 flex justify-center">
             <Search />

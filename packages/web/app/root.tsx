@@ -1,7 +1,7 @@
 import "./styles.css";
 import { Link, Outlet, ScrollRestoration } from "react-flight-router/client";
 import { GlobalNavigationLoadingBar, HeaderSearch, UserNav } from "./routes/root.client";
-import { GroffeeLogo } from "@groffee/ui";
+import { Wordmark } from "@groffee/ui";
 
 export default function Root() {
   return (
@@ -14,6 +14,33 @@ export default function Root() {
             __html: `(function(){var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark')})()`,
           }}
         />
+        {/* Webfonts — Inter Tight, JetBrains Mono, Fraunces. Self-hosted
+         * out of `public/fonts/` so a deployed Groffee never reaches out to
+         * fonts.googleapis.com. Each family is a single variable woff2;
+         * the manifest in `public/fonts/groffee-fonts.css` declares the
+         * full variable-axis range and `font-display: swap`. */}
+        <link
+          rel="preload"
+          as="font"
+          type="font/woff2"
+          href="/fonts/fraunces.woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          as="font"
+          type="font/woff2"
+          href="/fonts/inter-tight.woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          as="font"
+          type="font/woff2"
+          href="/fonts/jetbrains-mono.woff2"
+          crossOrigin="anonymous"
+        />
+        <link rel="stylesheet" href="/fonts/groffee-fonts.css" />
         <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="shortcut icon" href="/favicon.ico" />
@@ -21,57 +48,68 @@ export default function Root() {
         <link rel="manifest" href="/site.webmanifest" />
         <title>Groffee</title>
       </head>
-      <body className="flex flex-col min-h-screen">
+      <body className="flex flex-col min-h-screen bg-canvas text-text-primary">
         <ScrollRestoration />
-        <header className="bg-header-bg sticky top-0 z-30 pb-px shadow-sm">
-          <nav className="max-w-[1280px] mx-auto px-4 h-16 flex items-center gap-6">
+        {/* Header — transparent over the warm canvas with a hairline border,
+         * not a dark bar floating over a light body (the GitHub pattern).
+         * The wordmark uses Fraunces lowercase so the brand reads as
+         * "editorial / coffee-house" rather than "another Tailwind app." */}
+        <header className="sticky top-0 z-30 bg-canvas/90 backdrop-blur-sm border-b border-border">
+          <nav className="max-w-[1180px] mx-auto px-5 h-14 flex items-center gap-5">
             <Link
               to="/"
-              className="text-white hover:no-underline flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity"
+              className="text-text-primary hover:no-underline shrink-0 hover:opacity-80 transition-opacity"
+              aria-label="Groffee home"
             >
-              <GroffeeLogo size={32} className="text-white" />
-              <span className="hidden sm:inline font-semibold text-sm">Groffee</span>
+              <Wordmark
+                height={22}
+                textColor="var(--color-text-primary)"
+                cupColor="var(--color-accent)"
+                className="block"
+              />
             </Link>
             <HeaderSearch />
             <div className="ml-auto flex items-center gap-1">
               <Link
                 to="/explore"
-                className="text-white/70 text-xs font-medium hover:text-white hover:no-underline px-2 py-1.5 rounded-md hover:bg-white/10 transition-colors"
+                className="text-text-secondary font-mono text-xs hover:text-text-primary hover:no-underline px-2 py-1.5 rounded-md hover:bg-surface-secondary transition-colors"
               >
-                Explore
+                explore
               </Link>
               <Link
                 to="/docs"
-                className="text-white/70 text-xs font-medium hover:text-white hover:no-underline px-2 py-1.5 rounded-md hover:bg-white/10 transition-colors"
+                className="text-text-secondary font-mono text-xs hover:text-text-primary hover:no-underline px-2 py-1.5 rounded-md hover:bg-surface-secondary transition-colors"
               >
-                Docs
+                docs
               </Link>
             </div>
-            <div className="h-6 w-px bg-white/10" aria-hidden="true" />
+            <div className="h-6 w-px bg-border" aria-hidden="true" />
             <UserNav />
           </nav>
         </header>
         <GlobalNavigationLoadingBar />
-        <main className="flex-1 max-w-[1280px] w-full mx-auto px-4 sm:px-6 py-6">
+        <main className="flex-1 max-w-[1180px] w-full mx-auto px-5 sm:px-6 py-6">
           <Outlet />
         </main>
         <footer className="border-t border-border mt-auto">
-          <div className="max-w-[1280px] mx-auto px-6 py-6 flex items-center justify-between text-xs text-text-secondary">
-            <p>Groffee powered by Git and Coffee</p>
+          <div className="max-w-[1180px] mx-auto px-5 py-6 flex items-center justify-between text-xs text-text-secondary font-mono">
+            <p>
+              <span className="font-editorial italic">groffee</span> · locally roasted git
+            </p>
             <div className="flex items-center gap-4">
               <Link
                 to="/explore"
                 className="text-text-secondary hover:text-text-primary hover:no-underline"
               >
-                Explore
+                explore
               </Link>
               <Link
                 to="/docs"
                 className="text-text-secondary hover:text-text-primary hover:no-underline"
               >
-                Docs
+                docs
               </Link>
-              <span>Self-hosted git platform</span>
+              <span>self-hosted</span>
             </div>
           </div>
         </footer>

@@ -14,15 +14,31 @@ RUN apt-get update \
     && git config --global safe.directory '*' \
     && git lfs install --system
 
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Pinned to match the `packageManager` field in package.json. When you bump
+# pnpm locally, update both here and there together.
+RUN corepack enable
 
 WORKDIR /app
-COPY . .
 
+# Dep-install layer: copy everything pnpm needs to resolve and verify the
+# lockfile, but NOT the source. Lets `pnpm install` cache cleanly between
+# rebuilds — this layer only invalidates when a manifest or lockfile changes.
+# Required pieces:
+#   - pnpm-lock.yaml          : the lockfile we install --frozen against
+#   - pnpm-workspace.yaml     : tells pnpm about packages/* + holds policy
+#                               settings (allowBuilds, minimumReleaseAgeExclude)
+#   - .npmrc                  : npm-compatible settings (minimum-release-age,
+#                               ignore-build-scripts, etc.)
+#   - root + each workspace package.json : needed for the dependency graph
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages/db/package.json   ./packages/db/
+COPY packages/docs/package.json ./packages/docs/
+COPY packages/git/package.json  ./packages/git/
+COPY packages/ui/package.json   ./packages/ui/
+COPY packages/web/package.json  ./packages/web/
 RUN pnpm install --frozen-lockfile
 
+COPY . .
 ENV EXTERNAL_URL=""
 
 EXPOSE 3000

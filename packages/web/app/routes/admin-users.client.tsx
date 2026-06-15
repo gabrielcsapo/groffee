@@ -65,7 +65,9 @@ export default function AdminUsersClient() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">User Management</h1>
+      <h1 className="font-editorial font-bold text-3xl text-text-primary lowercase tracking-tight mb-1">
+        users
+      </h1>
       <p className="text-text-secondary text-sm mb-6">Manage user accounts and permissions</p>
       <AdminNav />
 
