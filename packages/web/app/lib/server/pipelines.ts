@@ -15,7 +15,7 @@ import {
 } from "@groffee/db";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { getSessionUser } from "./session.js";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, statSync, openSync, readSync, closeSync } from "node:fs";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -339,6 +339,11 @@ export async function getStepLogs(
   repoName: string,
   runNumber: number,
   stepId: string,
+  // Byte offset to read from. The live-tail poll passes the `nextByte` it got
+  // from the previous response so each tick fetches only the bytes appended
+  // since — instead of re-reading + re-parsing the whole log every 2s. A
+  // 0/undefined offset (initial load) does a full read.
+  fromByte?: number,
 ) {
   const currentUser = await getSessionUser();
   const result = await findRepo(ownerName, repoName, currentUser?.id);
@@ -355,13 +360,66 @@ export async function getStepLogs(
   if (!step || !step.logPath) return { error: "Logs not found" };
 
   const logPath = resolve(PIPELINE_LOGS_DIR, run.id, step.logPath);
-  if (!existsSync(logPath)) return { error: "Log file not found", logs: "", lines: [] };
+  if (!existsSync(logPath)) {
+    return { error: "Log file not found", lines: [], annotations: [], nextByte: 0, append: false };
+  }
 
-  // Return both raw text (for backwards compat / search-anywhere) and pre-
-  // parsed lines (timestamp + ansi-rendered HTML) so the UI can render
-  // colored logs without doing the conversion client-side.
-  const content = readFileSync(logPath, "utf-8");
-  const lines = parseLogBlob(content);
+  const { size } = statSync(logPath);
+
+  // Incremental read when the caller supplies a positive offset within the
+  // file. If the offset is past EOF (file rotated/truncated — shouldn't happen
+  // for append-only logs, but be safe) we fall back to a full re-read.
+  const incremental = typeof fromByte === "number" && fromByte > 0 && fromByte <= size;
+  const start = incremental ? fromByte! : 0;
+
+  // Nothing new since the last poll — early-out before any read/parse.
+  if (start === size) {
+    return {
+      lines: [],
+      annotations: [],
+      nextByte: size,
+      commitSha: run.commitOid,
+      status: step.status,
+      append: incremental,
+    };
+  }
+
+  // Read only [start, size). Emit through the last complete line and report
+  // `nextByte` at that boundary so a half-written trailing line (mid-append)
+  // is re-read on the next poll. Cutting at a `\n` also guarantees we never
+  // split a multi-byte UTF-8 character across reads.
+  const fd = openSync(logPath, "r");
+  let chunk: string;
+  let nextByte: number;
+  try {
+    const length = size - start;
+    const buf = Buffer.allocUnsafe(length);
+    const bytesRead = readSync(fd, buf, 0, length, start);
+    const slice = buf.subarray(0, bytesRead);
+    const lastNl = slice.lastIndexOf(0x0a); // "\n"
+    if (lastNl === -1) {
+      // No complete line in this delta yet — wait for more output.
+      return {
+        lines: [],
+        annotations: [],
+        nextByte: start,
+        commitSha: run.commitOid,
+        status: step.status,
+        append: incremental,
+      };
+    }
+    chunk = slice.subarray(0, lastNl + 1).toString("utf-8");
+    nextByte = start + lastNl + 1;
+  } finally {
+    closeSync(fd);
+  }
+
+  // Pre-parsed lines (timestamp + ansi-rendered HTML) so the UI renders
+  // colored logs without doing the conversion client-side. On an incremental
+  // read these are only the new lines and the client appends them; the
+  // `lineIndex` on annotations is relative to this batch, so the client shifts
+  // it by the number of lines already loaded.
+  const lines = parseLogBlob(chunk);
 
   // Resolve `file.ext:LINE` patterns to repo paths that actually exist at
   // the run's commit. We swallow any error here so log fetching is never
@@ -375,11 +433,12 @@ export async function getStepLogs(
   }
 
   return {
-    logs: content,
     lines,
     annotations,
+    nextByte,
     commitSha: run.commitOid,
     status: step.status,
+    append: incremental,
   };
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Link } from "react-flight-router/client";
 import {
   getPipelineRunDetail,
@@ -733,6 +733,10 @@ export function PipelineRunView({
   const [stepLogs, setStepLogs] = useState<Record<string, LogLine[]>>({});
   const [stepAnnotations, setStepAnnotations] = useState<Record<string, LogAnnotation[]>>({});
   const [stepCommitShas, setStepCommitShas] = useState<Record<string, string>>({});
+  // Per-step live-tail cursor: the byte offset to resume reading from and how
+  // many lines have been loaded so far. Lives in a ref so it survives the
+  // polling interval's stale closure and isn't reset by re-renders.
+  const logCursors = useRef<Record<string, { nextByte: number; lineCount: number }>>({});
   const [cancelling, setCancelling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [rerunningFailed, setRerunningFailed] = useState(false);
@@ -765,20 +769,67 @@ export function PipelineRunView({
     setArtifacts((prev) => prev.filter((a) => a.id !== artifactId));
   };
 
+  // Fetch logs for a step starting from its saved cursor. The first call for a
+  // step (cursor at 0) does a full read and replaces; subsequent calls fetch
+  // only the bytes appended since and append them — so an active run no longer
+  // re-reads + re-parses the whole log on every poll tick.
+  const pullStepLogs = useCallback(
+    async (step: Step) => {
+      if (!step.logPath) return;
+      const cursor = logCursors.current[step.id] ?? { nextByte: 0, lineCount: 0 };
+      const data = await getStepLogs(owner, repo, run.number, step.id, cursor.nextByte);
+      if ("error" in data) return;
+
+      const append = data.append === true;
+      const newLines = data.lines ?? [];
+      const base = append ? cursor.lineCount : 0;
+
+      // Incremental poll with no new complete lines: just advance the offset.
+      if (append && newLines.length === 0) {
+        if (typeof data.nextByte === "number") {
+          logCursors.current[step.id] = { nextByte: data.nextByte, lineCount: cursor.lineCount };
+        }
+        return;
+      }
+
+      if (data.annotations !== undefined) {
+        // Annotation `lineIndex` is relative to this batch; shift it to the
+        // absolute position so it lines up with the appended lines.
+        const shifted =
+          base === 0
+            ? data.annotations
+            : data.annotations.map((a) => ({ ...a, lineIndex: a.lineIndex + base }));
+        setStepAnnotations((prev) => ({
+          ...prev,
+          [step.id]: append ? [...(prev[step.id] ?? []), ...shifted] : shifted,
+        }));
+      }
+      setStepLogs((prev) => ({
+        ...prev,
+        [step.id]: append ? [...(prev[step.id] ?? []), ...newLines] : newLines,
+      }));
+      if (data.commitSha) {
+        setStepCommitShas((prev) => ({ ...prev, [step.id]: data.commitSha! }));
+      }
+
+      logCursors.current[step.id] = {
+        nextByte: typeof data.nextByte === "number" ? data.nextByte : cursor.nextByte,
+        lineCount: base + newLines.length,
+      };
+    },
+    [owner, repo, run.number],
+  );
+
   /** Lazy-load logs for a step (called by selection + initial mount). */
-  const loadStepLogs = async (step: Step) => {
-    if (stepLogs[step.id] || !step.logPath) return;
-    const data = await getStepLogs(owner, repo, run.number, step.id);
-    if (data.lines !== undefined) {
-      setStepLogs((prev) => ({ ...prev, [step.id]: data.lines! }));
-    }
-    if (data.annotations !== undefined) {
-      setStepAnnotations((prev) => ({ ...prev, [step.id]: data.annotations! }));
-    }
-    if (data.commitSha) {
-      setStepCommitShas((prev) => ({ ...prev, [step.id]: data.commitSha! }));
-    }
-  };
+  const loadStepLogs = useCallback(
+    async (step: Step) => {
+      // Skip if already loaded — selecting a previously-opened step shouldn't
+      // refetch. The poll effect handles fresh bytes for a running step.
+      if (logCursors.current[step.id] || !step.logPath) return;
+      await pullStepLogs(step);
+    },
+    [pullStepLogs],
+  );
 
   const selectStep = (step: Step) => {
     setSelectedStepId(step.id);
@@ -800,21 +851,17 @@ export function PipelineRunView({
   useEffect(() => {
     if (!selectedStepId) return;
     const step = jobs.flatMap((j) => j.steps).find((s) => s.id === selectedStepId);
-    if (!step || step.status !== "running") return;
-    const interval = setInterval(async () => {
-      const data = await getStepLogs(owner, repo, run.number, step.id);
-      if (data.lines !== undefined) {
-        setStepLogs((prev) => ({ ...prev, [step.id]: data.lines! }));
-      }
-      if (data.annotations !== undefined) {
-        setStepAnnotations((prev) => ({ ...prev, [step.id]: data.annotations! }));
-      }
-      if (data.commitSha) {
-        setStepCommitShas((prev) => ({ ...prev, [step.id]: data.commitSha! }));
-      }
-    }, 2000);
+    if (!step || !step.logPath) return;
+    if (step.status !== "running") {
+      // Step finished — pull any bytes written between the last tick and
+      // termination once, then stop. Guarded on an existing cursor so we don't
+      // race the initial load of a freshly-selected, already-finished step.
+      if (logCursors.current[step.id]) void pullStepLogs(step);
+      return;
+    }
+    const interval = setInterval(() => void pullStepLogs(step), 2000);
     return () => clearInterval(interval);
-  }, [selectedStepId, jobs, owner, repo, run.number]);
+  }, [selectedStepId, jobs, owner, repo, run.number, pullStepLogs]);
 
   const handleCancel = async () => {
     setCancelling(true);
