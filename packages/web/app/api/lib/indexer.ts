@@ -339,6 +339,27 @@ export async function fullReindex(repoId: string, repoPath: string): Promise<voi
     }
   }
 
+  // indexRef stamps gitRefs.updatedAt with the reindex moment (correct for a
+  // real push, wrong here). Re-derive each ref's last-activity time from the
+  // committer timestamp of the commit it points at, so the landing-page
+  // "Updated X ago" reflects true history rather than the reindex time.
+  // Both columns are stored as Unix seconds, so the value copies directly.
+  db.run(sql`
+    UPDATE git_refs
+    SET updated_at = (
+      SELECT git_commits.committer_timestamp
+      FROM git_commits
+      WHERE git_commits.repo_id = git_refs.repo_id
+        AND git_commits.oid = git_refs.commit_oid
+    )
+    WHERE git_refs.repo_id = ${repoId}
+      AND EXISTS (
+        SELECT 1 FROM git_commits
+        WHERE git_commits.repo_id = git_refs.repo_id
+          AND git_commits.oid = git_refs.commit_oid
+      )
+  `);
+
   // Stamp last_indexed_at so the admin dashboard / repo settings know the
   // FTS index is current. We do this for both full and incremental paths.
   await db

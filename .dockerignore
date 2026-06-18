@@ -1,0 +1,31 @@
+# Dependencies are installed fresh in the image (`pnpm install --frozen-lockfile`)
+# before the source COPY. Baking the host's node_modules over them ships the
+# wrong-arch binaries (host is often macOS, image is linux) and — critically —
+# carries stale build caches (.vite / .vite-temp) that make the in-container
+# build emit pre-edit code. Never copy node_modules from the host.
+node_modules
+**/node_modules
+
+# Build output and bundler/transform caches. These MUST be regenerated in the
+# container from current source. A stale host `dist/` or `.vite-temp/` baked in
+# here is reused by the build and silently serves outdated compiled modules
+# (this is what froze the homepage's getPublicRepos on the old query).
+**/dist
+**/.vite
+**/.vite-temp
+**/.turbo
+*.tsbuildinfo
+
+# Runtime data — provided by a mounted volume at /app/data in production.
+# Baking the host DB/repos/LFS into the image shadows nothing (the volume wins)
+# but bloats the image and confuses debugging.
+data
+
+# VCS / local tooling
+.git
+.gitignore
+*.log
+.DS_Store
+.env*
+coverage
+.nyc_output

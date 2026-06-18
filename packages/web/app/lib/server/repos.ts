@@ -121,9 +121,17 @@ export async function getPublicRepos(opts: { limit?: number; offset?: number; q?
   // Sort by last push activity (max gitRefs.updatedAt) so the list reflects
   // real repo activity, not just row mutations. Fall back to the repo's own
   // updatedAt for repos that have never received a push.
+  //
+  // NOTE: the identifiers here are written out explicitly rather than via
+  // `${gitRefs.repoId}`/`${repositories.id}`. In a SELECT-field position Drizzle
+  // renders those column refs UNQUALIFIED (`"repo_id" = "id"`), and because
+  // git_refs has its own `id` column the correlated subquery silently became
+  // `git_refs.repo_id = git_refs.id` (never true) → NULL → every repo fell back
+  // to repositories.updatedAt. Aliasing git_refs as `gr` and qualifying
+  // `repositories.*` keeps the correlation correct in both SELECT and ORDER BY.
   const lastActivity = sql<number>`COALESCE(
-    (SELECT MAX(${gitRefs.updatedAt}) FROM ${gitRefs} WHERE ${gitRefs.repoId} = ${repositories.id}),
-    ${repositories.updatedAt}
+    (SELECT MAX(gr.updated_at) FROM git_refs gr WHERE gr.repo_id = repositories.id),
+    repositories.updated_at
   )`;
 
   const repos = await db
