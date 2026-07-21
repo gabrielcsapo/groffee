@@ -1,15 +1,29 @@
 # groffee
 
-> A self-hosted Git platform built with Node.js
+> Git, locally roasted.
+
+Groffee is an opinionated, self-hosted Git forge for individuals and small teams. It combines
+repository hosting, review, automation, and day-to-day administration in one warm, compact UI—
+without depending on a hosted control plane.
 
 ## Features
 
-- Repository hosting with Smart HTTP and SSH push/pull
-- Git LFS (Large File Storage) support
-- Pull requests and issues
-- Code search (FTS5)
-- SSH key and personal access token authentication
-- Admin portal with structured logging
+- Smart HTTP and SSH repository hosting, including Git LFS
+- Repository browsing, syntax highlighting, history, diffs, blame, and browser-based file editing
+- Issues and pull requests with Markdown, threaded discussion, inline review, and merge/squash flows
+- SQLite FTS5 search across repositories, code, issues, and pull requests
+- Built-in pipelines with matrices, encrypted secrets, live logs, annotations, artifacts, and reruns
+- Static Pages deployment from pipeline jobs
+- Password, SSH key, deploy key, and personal access token authentication
+- Invitations, collaborators, notifications, audit history, and repository controls
+- Admin dashboard, user management, structured logs, and host-level maintenance commands
+
+## Why Groffee
+
+Groffee is designed for the homelab and the small private forge: straightforward storage,
+understandable operations, and a UI with less ceremony than an enterprise Git host. Data lives in
+SQLite and ordinary directories, repositories remain standard bare Git repositories, and the
+application ships as one Node.js service plus an SSH listener.
 
 ## Requirements
 

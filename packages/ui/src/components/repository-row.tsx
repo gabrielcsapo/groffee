@@ -91,12 +91,12 @@ export function RepositoryRow(props: RepositoryRowProps) {
 
   return (
     <div className={wrapperClass}>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-start sm:items-center gap-2 mb-1 min-w-0">
             <RepoIcon />
             {titleLink}
-            <span className={`badge ${isPublic ? "badge-public" : "badge-private"}`}>
+            <span className={`badge shrink-0 ${isPublic ? "badge-public" : "badge-private"}`}>
               {isPublic ? "Public" : "Private"}
             </span>
             {trailing}
@@ -108,7 +108,7 @@ export function RepositoryRow(props: RepositoryRowProps) {
           )}
         </div>
         {updatedAt && (
-          <span className="text-xs text-text-secondary whitespace-nowrap mt-1">
+          <span className="text-xs text-text-secondary whitespace-nowrap ml-6 sm:ml-0 sm:mt-1">
             Updated {timeAgo(updatedAt)}
           </span>
         )}

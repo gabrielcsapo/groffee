@@ -93,3 +93,14 @@ class Logger {
 }
 
 export const logger = new Logger();
+
+export function errorMetadata(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message, stack: error.stack };
+  }
+  return { error: String(error) };
+}
+
+export function logBackgroundError(message: string, source: string) {
+  return (error: unknown) => logger.error(message, { source, metadata: errorMetadata(error) });
+}

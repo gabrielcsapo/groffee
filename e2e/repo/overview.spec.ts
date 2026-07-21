@@ -12,7 +12,10 @@ test.describe("Repository overview", () => {
   test("shows clone URL", async ({ page, snap }) => {
     await page.goto("/alice/mega-app");
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("text=HTTPS")).toBeVisible();
+    const cloneButton = page.getByRole("button", { name: "Clone" });
+    await expect(cloneButton).toBeVisible();
+    await cloneButton.click();
+    await expect(page.getByRole("tab", { name: "HTTPS" })).toBeVisible();
     await snap("overview-clone-url");
   });
 

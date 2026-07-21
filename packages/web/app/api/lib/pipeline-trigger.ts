@@ -21,6 +21,7 @@ import {
 import { enqueueRun } from "./pipeline-queue.js";
 import { logAudit } from "./audit.js";
 import { createHash } from "node:crypto";
+import { logBackgroundError, logger } from "./logger.js";
 
 export async function triggerPipelines(params: {
   repoId: string;
@@ -50,7 +51,10 @@ export async function triggerPipelines(params: {
   // Parse and validate
   const { config, error } = parsePipelineYaml(yamlContent);
   if (!config || error) {
-    console.error(`Pipeline config error in repo ${repoId}: ${error}`);
+    logger.error("Pipeline configuration is invalid", {
+      source: "pipeline-trigger",
+      metadata: { repoId, error },
+    });
     return [];
   }
 
@@ -198,7 +202,7 @@ export async function triggerPipelines(params: {
       targetType: "pipeline_run",
       targetId: runId,
       metadata: { pipeline: name, trigger, ref: branchName, commitOid },
-    }).catch(console.error);
+    }).catch(logBackgroundError("Pipeline audit log failed", "pipeline-trigger"));
   }
 
   return runIds;

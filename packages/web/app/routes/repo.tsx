@@ -39,7 +39,7 @@ export default async function Repo({ params }: { params?: Record<string, string>
 
   if (repoData.error) {
     return (
-      <div className="max-w-6xl mx-auto mt-8">
+      <div className="max-w-6xl min-w-0 mx-auto mt-4 sm:mt-8">
         <div className="bg-surface border border-border rounded-lg p-6">
           <h1 className="text-xl font-semibold text-text-primary">Repository not found</h1>
         </div>
@@ -162,7 +162,7 @@ export default async function Repo({ params }: { params?: Record<string, string>
 
             {/* File tree */}
             {entries.length > 0 ? (
-              <div className="border border-border rounded-lg overflow-hidden bg-surface">
+              <div className="border border-border rounded-lg overflow-x-auto bg-surface">
                 {/* Last commit header */}
                 {latestCommit && (
                   <div className="flex items-center justify-between px-4 py-2.5 bg-surface-secondary border-b border-border text-sm">
@@ -217,7 +217,7 @@ export default async function Repo({ params }: { params?: Record<string, string>
                   </div>
                 )}
 
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[640px] text-sm">
                   <tbody>
                     {entries.map(
                       (

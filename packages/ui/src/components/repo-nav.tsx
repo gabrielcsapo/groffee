@@ -161,7 +161,10 @@ export function RepoNav({
     /* Strip styled as a monospace operator-nav: lowercase labels, no leading
      * icons, amber underline on the active tab. Strips the GitHub-tabs feel
      * because no GitHub clone would commit to monospace navigation. */
-    <div className="flex gap-0 border-b border-border mb-6 overflow-x-auto">
+    <div
+      className="repo-nav-strip flex gap-0 border-b border-border mb-4 sm:mb-6 overflow-x-auto overscroll-x-contain scrollbar-thin"
+      aria-label="Repository sections"
+    >
       {tabs.map((tab) => (
         <LinkComponent
           key={tab.label}

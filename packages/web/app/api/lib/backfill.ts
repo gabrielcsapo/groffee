@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { fullReindex } from "./indexer.js";
 import { listAllRefsWithOids } from "@groffee/git";
 import { resolveDiskPath } from "./paths.js";
+import { errorMetadata, logger } from "./logger.js";
 
 /**
  * Backfill indexes for existing repos that haven't been indexed yet.
@@ -27,12 +28,21 @@ export async function backfillIndexes(): Promise<void> {
       try {
         const refs = await listAllRefsWithOids(resolveDiskPath(repo.diskPath));
         if (refs.length > 0) {
-          console.log(`Backfilling index for ${repo.name}...`);
+          logger.info("Backfilling repository index", {
+            source: "backfill",
+            metadata: { repoId: repo.id, repository: repo.name },
+          });
           await fullReindex(repo.id, resolveDiskPath(repo.diskPath));
-          console.log(`Finished indexing ${repo.name}`);
+          logger.info("Repository index backfill complete", {
+            source: "backfill",
+            metadata: { repoId: repo.id, repository: repo.name },
+          });
         }
       } catch (err) {
-        console.error(`Failed to index ${repo.name}:`, err);
+        logger.error("Repository index backfill failed", {
+          source: "backfill",
+          metadata: { repoId: repo.id, repository: repo.name, ...errorMetadata(err) },
+        });
       }
     }
   }

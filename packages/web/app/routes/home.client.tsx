@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Link } from "react-flight-router/client";
 import { Wordmark, RepositoryRow } from "@groffee/ui";
 import { timeAgo } from "../lib/time";
-import { getSessionUser } from "../lib/server/auth";
 
 interface Repo {
   id: string;
@@ -108,32 +106,17 @@ function LoggedInActions({ username }: { username: string }) {
   );
 }
 
-export function HomeView({ initialRepos }: { initialRepos: Repo[] }) {
-  const [user, setUser] = useState<{ username: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getSessionUser()
-      .then((u) => {
-        if (u) setUser({ username: u.username });
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
+export function HomeView({
+  initialRepos,
+  initialUsername,
+}: {
+  initialRepos: Repo[];
+  initialUsername: string | null;
+}) {
   return (
     <div className="max-w-3xl mt-2">
       <LandingHero />
-      {loading ? (
-        <div className="flex gap-3 mb-10">
-          <div className="skeleton w-40 h-5 rounded" />
-          <div className="skeleton w-32 h-5 rounded" />
-        </div>
-      ) : user ? (
-        <LoggedInActions username={user.username} />
-      ) : (
-        <LoggedOutActions />
-      )}
+      {initialUsername ? <LoggedInActions username={initialUsername} /> : <LoggedOutActions />}
       <RecentPublicRepos repos={initialRepos} />
     </div>
   );

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigation, useRouter } from "react-flight-router/client";
 import { type Theme, getStoredTheme, applyTheme } from "../lib/theme";
-import { getSessionUser } from "../lib/server/auth";
 
 export function GlobalNavigationLoadingBar() {
   const navigation = useNavigation();
@@ -96,7 +95,7 @@ export function HeaderSearch() {
        * rather than just on the landing page. */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 flex-1 max-w-sm px-3 py-1.5 font-mono text-xs text-text-secondary bg-surface-secondary border border-border rounded-md hover:border-accent/40 hover:text-text-primary transition-colors cursor-text"
+        className="flex items-center gap-2 flex-1 min-w-0 max-w-sm px-2.5 sm:px-3 py-1.5 font-mono text-xs text-text-secondary bg-surface-secondary border border-border rounded-md hover:border-accent/40 hover:text-text-primary transition-colors cursor-text"
       >
         <svg
           className="w-3.5 h-3.5 flex-shrink-0"
@@ -111,8 +110,11 @@ export function HeaderSearch() {
             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
           />
         </svg>
-        <span className="flex-1 text-left truncate">type / to search</span>
-        <kbd className="text-[10px] text-text-secondary bg-canvas border border-border rounded px-1 py-0.5 leading-none">
+        <span className="flex-1 text-left truncate">
+          <span className="sm:hidden">search</span>
+          <span className="hidden sm:inline">type / to search</span>
+        </span>
+        <kbd className="hidden sm:inline text-[10px] text-text-secondary bg-canvas border border-border rounded px-1 py-0.5 leading-none">
           /
         </kbd>
       </button>
@@ -307,47 +309,30 @@ export function ThemeToggle() {
   );
 }
 
-export function UserNav() {
-  const [user, setUser] = useState<{
-    username: string;
-    email: string | null;
-    isAdmin: boolean;
-    avatarUploadId: string | null;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
+type NavigationUser = {
+  username: string;
+  email: string | null;
+  isAdmin: boolean;
+  avatarUploadId: string | null;
+};
+
+export function UserNav({ initialUser }: { initialUser: NavigationUser | null }) {
+  const [user] = useState<NavigationUser | null>(initialUser);
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    getSessionUser()
-      .then((u) => {
-        if (u)
-          setUser({
-            username: u.username,
-            email: u.email ?? null,
-            isAdmin: !!u.isAdmin,
-            avatarUploadId: u.avatarUploadId ?? null,
-          });
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse-subtle" />;
-  }
 
   if (!user) {
     return (
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-3 shrink-0">
         <ThemeToggle />
         <Link
           to="/login"
-          className="text-text-secondary font-mono text-xs hover:text-text-primary hover:no-underline transition-colors"
+          className="hidden sm:inline text-text-secondary font-mono text-xs hover:text-text-primary hover:no-underline transition-colors"
         >
           sign in
         </Link>
-        <Link to="/register" className="btn-primary btn-sm hover:no-underline">
-          Sign up
+        <Link to="/register" className="btn-primary btn-sm hover:no-underline whitespace-nowrap">
+          <span className="sm:hidden">Join</span>
+          <span className="hidden sm:inline">Sign up</span>
         </Link>
       </div>
     );

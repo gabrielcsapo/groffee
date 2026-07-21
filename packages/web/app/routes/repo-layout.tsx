@@ -22,11 +22,11 @@ export default async function RepoLayout({ params }: { params?: Record<string, s
 
   return (
     <>
-      <div className="max-w-6xl mx-auto mt-8 mb-0">
+      <div className="max-w-6xl min-w-0 mx-auto mt-4 sm:mt-8 mb-0">
         {/* Repo header */}
         {repository && (
           <div className="mb-4">
-            <div className="flex items-center gap-1.5 text-lg mb-1">
+            <div className="flex flex-wrap items-center gap-1.5 text-base sm:text-lg mb-1 min-w-0">
               <svg
                 className="w-5 h-5 text-text-secondary"
                 fill="none"
@@ -51,7 +51,7 @@ export default async function RepoLayout({ params }: { params?: Record<string, s
                 {repo}
               </Link>
               <span
-                className={`ml-2 badge ${repository.isPublic ? "badge-public" : "badge-private"}`}
+                className={`sm:ml-2 badge ${repository.isPublic ? "badge-public" : "badge-private"}`}
               >
                 {repository.isPublic ? "Public" : "Private"}
               </span>

@@ -24,9 +24,22 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
+      testIgnore: "**/responsive.spec.ts",
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1280, height: 800 },
+        storageState: "e2e/.auth/alice.json",
+      },
+    },
+    {
+      name: "mobile",
+      testMatch: "**/responsive.spec.ts",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true,
         storageState: "e2e/.auth/alice.json",
       },
     },

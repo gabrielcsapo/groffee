@@ -143,8 +143,8 @@ export default async function RepoTree({ params }: { params?: Record<string, str
           )}
 
           {/* File tree */}
-          <div className="border border-border rounded-lg overflow-hidden bg-surface">
-            <table className="w-full text-sm">
+          <div className="border border-border rounded-lg overflow-x-auto bg-surface">
+            <table className="w-full min-w-[640px] text-sm">
               <tbody>
                 {treePath && (
                   <tr className="border-b border-border hover:bg-surface-secondary">

@@ -109,6 +109,11 @@
 }
 
 @layer base {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
   body {
     @apply bg-canvas text-text-primary text-sm antialiased;
     font-family: var(--font-sans);
@@ -184,6 +189,16 @@
   /* Strip focus ring from inputs inside modals */
   .modal-input:focus-visible {
     @apply ring-0 border-transparent outline-none;
+  }
+}
+
+@media (max-width: 639px) {
+  .repo-nav-strip {
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding-left: 0.25rem;
+    padding-right: 1rem;
+    scroll-padding-left: 1rem;
   }
 }
 

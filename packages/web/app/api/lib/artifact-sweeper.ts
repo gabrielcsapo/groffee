@@ -3,6 +3,7 @@ import { lt, isNotNull, and, eq } from "drizzle-orm";
 import { rmSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { PIPELINE_ARTIFACTS_DIR } from "./paths.js";
+import { errorMetadata, logBackgroundError, logger } from "./logger.js";
 
 // Run every 30 minutes. The sweeper is best-effort; missing one cycle simply
 // extends an artifact's life by ~30 min, which is acceptable for v1.
@@ -29,18 +30,27 @@ async function sweepExpiredArtifacts(): Promise<void> {
     } catch (err) {
       // If we can't delete the dir, leave the row alone so we'll retry next
       // cycle. Logging is sufficient here — alerting is a P1.
-      console.error(`[artifact-sweeper] failed to remove dir ${diskPath}:`, err);
+      logger.error("Failed to remove expired artifact directory", {
+        source: "artifact-sweeper",
+        metadata: { diskPath, artifactId: artifact.id, ...errorMetadata(err) },
+      });
       continue;
     }
     try {
       await db.delete(pipelineArtifacts).where(eq(pipelineArtifacts.id, artifact.id));
     } catch (err) {
-      console.error(`[artifact-sweeper] failed to delete row ${artifact.id}:`, err);
+      logger.error("Failed to delete expired artifact record", {
+        source: "artifact-sweeper",
+        metadata: { artifactId: artifact.id, ...errorMetadata(err) },
+      });
     }
   }
 
   if (expired.length > 0) {
-    console.log(`[artifact-sweeper] swept ${expired.length} expired artifact(s)`);
+    logger.info("Expired pipeline artifacts swept", {
+      source: "artifact-sweeper",
+      metadata: { count: expired.length },
+    });
   }
 }
 
@@ -49,11 +59,11 @@ export function startArtifactRetentionSweeper(): void {
   if (_sweeperStarted) return;
   _sweeperStarted = true;
   setTimeout(() => {
-    sweepExpiredArtifacts().catch((err) =>
-      console.error("[artifact-sweeper] initial run failed:", err),
+    sweepExpiredArtifacts().catch(
+      logBackgroundError("Initial artifact sweep failed", "artifact-sweeper"),
     );
   }, SWEEP_INITIAL_DELAY_MS).unref?.();
   setInterval(() => {
-    sweepExpiredArtifacts().catch((err) => console.error("[artifact-sweeper] sweep failed:", err));
+    sweepExpiredArtifacts().catch(logBackgroundError("Artifact sweep failed", "artifact-sweeper"));
   }, SWEEP_INTERVAL_MS).unref?.();
 }

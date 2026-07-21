@@ -8,6 +8,7 @@ import { app as apiApp } from "./app/api/app";
 import { startSshServer } from "./app/api/ssh-server";
 import { backfillIndexes } from "./app/api/lib/backfill";
 import { isPagesRequest, handlePagesRequest } from "./app/api/lib/pages-server";
+import { logger, logBackgroundError } from "./app/api/lib/logger";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -81,14 +82,14 @@ async function main() {
 
   const port = Number(process.env.PORT) || 3000;
   serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, (info) => {
-    console.log(`Groffee running at http://localhost:${info.port}`);
+    logger.info("Groffee web server started", { source: "server", metadata: { port: info.port } });
   });
 
   // Start SSH server
   startSshServer();
 
   // Backfill indexes for existing repos (runs in background on startup)
-  backfillIndexes().catch((err: unknown) => console.error("Backfill failed:", err));
+  backfillIndexes().catch(logBackgroundError("Repository backfill failed", "server"));
 }
 
-main().catch(console.error);
+main().catch(logBackgroundError("Groffee failed to start", "server"));

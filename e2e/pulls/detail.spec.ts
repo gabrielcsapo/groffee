@@ -22,12 +22,13 @@ test.describe("Pull request detail", () => {
     const prLink = page.locator('a[href*="/alice/mega-app/pull/"]').first();
     await expect(prLink).toBeVisible({ timeout: 10000 });
     const href = await prLink.getAttribute("href");
-    // Navigate directly to the files-changed URL
-    await page.goto(`${href}/files-changed`);
-    await page.waitForLoadState("networkidle");
-    // Wait for diff content to appear (hunk headers with @@ markers)
-    await expect(page.locator('a:has-text("Files changed")')).toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(1000);
+    // Mount the persistent PR chrome first, then switch only its nested outlet.
+    await page.goto(href!, { waitUntil: "domcontentloaded" });
+    const filesTab = page.getByRole("link", { name: /Files changed/ });
+    await expect(filesTab).toBeVisible({ timeout: 10000 });
+    await filesTab.click();
+    await expect(filesTab).toHaveAttribute("aria-current", "page");
+    await expect(page.locator("text=@@").first()).toBeVisible({ timeout: 30000 });
     await snap("files-changed", { fullPage: true });
   });
 });

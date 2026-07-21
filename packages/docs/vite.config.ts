@@ -9,6 +9,14 @@ import { searchIndexPlugin } from "./src/search-index-plugin";
 
 export default defineConfig({
   base: "/groffee/",
+  // The workspace UI package declares React as a peer dependency. pnpm can
+  // resolve that peer through a different patch version than the docs app,
+  // which produces two React dispatchers in the production bundle (hooks
+  // such as useId then fail at runtime). Always bundle the docs site against
+  // the app's single React/ReactDOM instances.
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
   server: {
     port: 3001,
   },

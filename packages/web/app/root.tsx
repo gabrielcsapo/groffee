@@ -2,10 +2,20 @@ import "./styles.css";
 import { Link, Outlet, ScrollRestoration } from "react-flight-router/client";
 import { GlobalNavigationLoadingBar, HeaderSearch, UserNav } from "./routes/root.client";
 import { Wordmark } from "@groffee/ui";
+import { getSessionUser } from "./lib/server/auth";
 
-export default function Root() {
+export default async function Root() {
+  const sessionUserRecord = await getSessionUser();
+  const sessionUser = sessionUserRecord
+    ? {
+        username: sessionUserRecord.username,
+        email: sessionUserRecord.email ?? null,
+        isAdmin: !!sessionUserRecord.isAdmin,
+        avatarUploadId: sessionUserRecord.avatarUploadId ?? null,
+      }
+    : null;
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -55,7 +65,7 @@ export default function Root() {
          * The wordmark uses Fraunces lowercase so the brand reads as
          * "editorial / coffee-house" rather than "another Tailwind app." */}
         <header className="sticky top-0 z-30 bg-canvas/90 backdrop-blur-sm border-b border-border">
-          <nav className="max-w-[1180px] mx-auto px-5 h-14 flex items-center gap-5">
+          <nav className="max-w-[1180px] mx-auto px-4 sm:px-5 h-14 flex items-center gap-2 sm:gap-5 min-w-0">
             <Link
               to="/"
               className="text-text-primary hover:no-underline shrink-0 hover:opacity-80 transition-opacity"
@@ -69,7 +79,7 @@ export default function Root() {
               />
             </Link>
             <HeaderSearch />
-            <div className="ml-auto flex items-center gap-1">
+            <div className="ml-auto hidden md:flex items-center gap-1">
               <Link
                 to="/explore"
                 className="text-text-secondary font-mono text-xs hover:text-text-primary hover:no-underline px-2 py-1.5 rounded-md hover:bg-surface-secondary transition-colors"
@@ -83,16 +93,16 @@ export default function Root() {
                 docs
               </Link>
             </div>
-            <div className="h-6 w-px bg-border" aria-hidden="true" />
-            <UserNav />
+            <div className="hidden md:block h-6 w-px bg-border" aria-hidden="true" />
+            <UserNav initialUser={sessionUser} />
           </nav>
         </header>
         <GlobalNavigationLoadingBar />
-        <main className="flex-1 max-w-[1180px] w-full mx-auto px-5 sm:px-6 py-6">
+        <main className="flex-1 max-w-[1180px] min-w-0 w-full mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <Outlet />
         </main>
         <footer className="border-t border-border mt-auto">
-          <div className="max-w-[1180px] mx-auto px-5 py-6 flex items-center justify-between text-xs text-text-secondary font-mono">
+          <div className="max-w-[1180px] mx-auto px-4 sm:px-5 py-6 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between text-xs text-text-secondary font-mono">
             <p>
               <span className="font-editorial italic">groffee</span> · locally roasted git
             </p>

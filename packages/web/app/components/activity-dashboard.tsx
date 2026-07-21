@@ -87,12 +87,15 @@ export function ActivityDashboard({
     <div className="max-w-6xl mx-auto mt-8 space-y-4">
       {/* Author filter */}
       {contributors.length > 1 && (
-        <div className="flex items-center gap-3">
-          <label className="text-sm text-text-secondary">Filter by contributor:</label>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <label htmlFor="activity-contributor" className="text-sm text-text-secondary">
+            Filter by contributor:
+          </label>
           <select
+            id="activity-contributor"
             value={selectedAuthor}
             onChange={(e) => handleAuthorChange(e.target.value)}
-            className="text-sm border border-border rounded-md px-3 py-1.5 bg-surface text-text-primary"
+            className="w-full sm:w-auto text-sm border border-border rounded-md px-3 py-1.5 bg-surface text-text-primary"
           >
             <option value="">All contributors</option>
             {contributors.map((c) => (
