@@ -18,7 +18,7 @@ pipelines:
         timeout: 120
         steps:
           - name: Install pnpm
-            run: corepack enable && corepack prepare pnpm@latest --activate
+            run: mkdir -p "$HOME/.local/bin" && corepack enable --install-directory "$HOME/.local/bin"
           - name: Install dependencies
             run: pnpm install --frozen-lockfile
           - name: Lint
@@ -30,7 +30,7 @@ pipelines:
         timeout: 180
         steps:
           - name: Install pnpm
-            run: corepack enable && corepack prepare pnpm@latest --activate
+            run: mkdir -p "$HOME/.local/bin" && corepack enable --install-directory "$HOME/.local/bin"
           - name: Install dependencies
             run: pnpm install --frozen-lockfile
           - name: Typecheck
@@ -43,7 +43,7 @@ pipelines:
         timeout: 300
         steps:
           - name: Install pnpm
-            run: corepack enable && corepack prepare pnpm@latest --activate
+            run: mkdir -p "$HOME/.local/bin" && corepack enable --install-directory "$HOME/.local/bin"
           - name: Install dependencies
             run: pnpm install --frozen-lockfile
           - name: Build
@@ -55,16 +55,24 @@ pipelines:
 
       test:
         name: E2E Tests
-        image: mcr.microsoft.com/playwright:v1.52.0-noble
+        image: mcr.microsoft.com/playwright:v1.60.0-noble
         needs: [build]
         timeout: 600
         steps:
           - name: Install pnpm
-            run: corepack enable && corepack prepare pnpm@latest --activate
+            run: mkdir -p "$HOME/.local/bin" && corepack enable --install-directory "$HOME/.local/bin"
           - name: Install dependencies
             run: pnpm install --frozen-lockfile
           - name: Build
             run: pnpm build
+          - name: Unit tests
+            run: pnpm --filter @groffee/web test:unit
+          - name: Seed test data
+            run: pnpm seed && pnpm make-admin alice
+          - name: Start production server
+            run: pnpm --filter @groffee/web start > /tmp/groffee.log 2>&1 &
+          - name: Wait for server
+            run: npx wait-on http://localhost:3000 --timeout 30000
           - name: Run E2E tests
             run: pnpm test
         artifacts:

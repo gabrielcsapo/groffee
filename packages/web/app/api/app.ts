@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { db } from "@groffee/db";
 import { sql } from "drizzle-orm";
-import { existsSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdirSync } from "node:fs";
 import { authRoutes } from "./routes/auth.js";
 import { repoRoutes } from "./routes/repos.js";
 import { issueRoutes } from "./routes/issues.js";
@@ -20,12 +20,32 @@ import { secretRoutes } from "./routes/secrets.js";
 import { inviteRoutes, inviteAcceptRoutes } from "./routes/invites.js";
 import { requestId } from "./middleware/request-id.js";
 import { requestLogger } from "./middleware/request-logger.js";
-import { startStuckRunSweeper } from "./lib/pipeline-queue.js";
+import { getQueueStatus, startStuckRunSweeper } from "./lib/pipeline-queue.js";
 import { startArtifactRetentionSweeper } from "./lib/artifact-sweeper.js";
+import { getPipelineRuntimeStatus } from "./lib/pipeline-runner.js";
+import { verifySecretEncryption } from "./lib/secret-crypto.js";
 
 const startTime = Date.now();
 
-import { REPOS_DIR } from "./lib/paths.js";
+import {
+  DATA_DIR,
+  REPOS_DIR,
+  PIPELINE_ARTIFACTS_DIR,
+  PIPELINE_LOGS_DIR,
+  PIPELINE_WORKSPACES_DIR,
+  PAGES_DIR,
+} from "./lib/paths.js";
+
+for (const directory of [
+  DATA_DIR,
+  REPOS_DIR,
+  PIPELINE_WORKSPACES_DIR,
+  PIPELINE_LOGS_DIR,
+  PIPELINE_ARTIFACTS_DIR,
+  PAGES_DIR,
+]) {
+  mkdirSync(directory, { recursive: true });
+}
 
 // Background workers — started once per process. The stuck-run sweeper
 // recovers runs whose worker process died (server restart, OOM) by marking
@@ -50,17 +70,43 @@ app.get("/api/health", async (c) => {
     dbOk = false;
   }
 
-  const dataExists = existsSync(REPOS_DIR);
+  const runtimeDirs = [
+    DATA_DIR,
+    REPOS_DIR,
+    PIPELINE_WORKSPACES_DIR,
+    PIPELINE_LOGS_DIR,
+    PIPELINE_ARTIFACTS_DIR,
+    PAGES_DIR,
+  ];
+  const directories = runtimeDirs.map((path) => {
+    try {
+      accessSync(path, constants.R_OK | constants.W_OK);
+      return { path, status: "writable" as const };
+    } catch {
+      return { path, status: existsSync(path) ? ("not_writable" as const) : ("missing" as const) };
+    }
+  });
+  const pipeline = getPipelineRuntimeStatus();
+  const secretEncryption = verifySecretEncryption();
   const uptimeMs = Date.now() - startTime;
   const memUsage = process.memoryUsage();
-  const healthy = dbOk && dataExists;
+  const directoriesOk = directories.every((directory) => directory.status === "writable");
+  const pipelineReady = pipeline.docker && pipeline.networkReady;
+  const healthy =
+    dbOk &&
+    directoriesOk &&
+    secretEncryption &&
+    (process.env.NODE_ENV !== "production" || pipelineReady);
 
   return c.json(
     {
       status: healthy ? "ok" : "degraded",
       uptime: uptimeMs,
       database: dbOk ? "connected" : "error",
-      dataDirectory: dataExists ? "exists" : "missing",
+      directories,
+      pipeline,
+      secretEncryption: secretEncryption ? "ok" : "error",
+      queue: getQueueStatus(),
       memory: {
         rss: Math.round(memUsage.rss / 1024 / 1024),
         heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),

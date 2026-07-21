@@ -24,7 +24,7 @@ import {
   readSync,
   closeSync,
 } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import { parseLogBlob } from "../lib/ansi-to-html.js";
@@ -561,7 +561,7 @@ pipelineRoutes.post("/:owner/:repo/pipelines/runs/:runNumber/cancel", requireAut
     return c.json({ error: "Run is not in a cancellable state" }, 400);
   }
 
-  cancelRunInQueue(run.id);
+  await cancelRunInQueue(run.id);
 
   logAudit({
     userId: user.id,
@@ -791,7 +791,19 @@ pipelineRoutes.get(
       .limit(1);
     if (!artifact) return c.json({ error: "Artifact not found" }, 404);
 
+    const [artifactRun] = await db
+      .select({ repoId: pipelineRuns.repoId })
+      .from(pipelineRuns)
+      .where(eq(pipelineRuns.id, artifact.runId))
+      .limit(1);
+    if (!artifactRun || artifactRun.repoId !== result.repo.id) {
+      return c.json({ error: "Artifact not found" }, 404);
+    }
+
     const artifactPath = resolve(PIPELINE_ARTIFACTS_DIR, artifact.diskPath);
+    if (!artifactPath.startsWith(resolve(PIPELINE_ARTIFACTS_DIR) + sep)) {
+      return c.json({ error: "Artifact not found" }, 404);
+    }
     if (!existsSync(artifactPath)) return c.json({ error: "Artifact files not found" }, 404);
 
     // For simplicity, tar.gz the artifact directory
@@ -800,10 +812,11 @@ pipelineRoutes.get(
       maxBuffer: 100 * 1024 * 1024,
     });
 
+    const downloadName = artifact.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     return new Response(tarContent, {
       headers: {
         "Content-Type": "application/gzip",
-        "Content-Disposition": `attachment; filename="${artifact.name}.tar.gz"`,
+        "Content-Disposition": `attachment; filename="${downloadName}.tar.gz"`,
       },
     });
   },
@@ -837,6 +850,9 @@ pipelineRoutes.delete("/:owner/:repo/pipelines/artifacts/:artifactId", requireAu
   }
 
   const artifactPath = resolve(PIPELINE_ARTIFACTS_DIR, artifact.diskPath);
+  if (!artifactPath.startsWith(resolve(PIPELINE_ARTIFACTS_DIR) + sep)) {
+    return c.json({ error: "Artifact not found" }, 404);
+  }
   try {
     const { rmSync, existsSync: ex } = await import("node:fs");
     if (ex(artifactPath)) {

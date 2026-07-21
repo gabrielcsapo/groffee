@@ -4,13 +4,26 @@ Groffee is configured through environment variables. There is no separate config
 
 ## Environment Variables
 
-| Variable       | Default                 | Description                                                                      |
-| -------------- | ----------------------- | -------------------------------------------------------------------------------- |
-| `PORT`         | `3000`                  | HTTP server port.                                                                |
-| `SSH_PORT`     | `2223`                  | SSH server port for Git-over-SSH.                                                |
-| `EXTERNAL_URL` | `http://localhost:3000` | Public-facing URL for clone URLs and links shown in the UI.                      |
-| `DATA_DIR`     | `./data`                | Directory for the SQLite database, repositories, and LFS objects.                |
-| `NODE_ENV`     | `development`           | Set to `production` in deployed environments to enable build-time optimizations. |
+| Variable                        | Default                    | Description                                                                                         |
+| ------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `PORT`                          | `3000`                     | HTTP server port.                                                                                   |
+| `SSH_PORT`                      | `2223`                     | SSH server port for Git-over-SSH.                                                                   |
+| `EXTERNAL_URL`                  | `http://localhost:3000`    | Public-facing origin; its protocol is also used for Pages links.                                    |
+| `DATA_DIR`                      | `./data`                   | Directory for all durable application state.                                                        |
+| `DATABASE_URL`                  | `$DATA_DIR/groffee.sqlite` | Optional SQLite path override.                                                                      |
+| `PAGES_HOSTNAME`                | `pages.localhost`          | Hostname on which public Pages sites are served.                                                    |
+| `PAGES_MAX_DEPLOYMENTS`         | `5`                        | Deployment versions retained per repository.                                                        |
+| `PIPELINE_MAX_CONCURRENT`       | `2`                        | Maximum pipeline runs executed concurrently.                                                        |
+| `PIPELINE_DOCKER_NETWORK`       | `groffee-ci`               | Docker network labeled `com.groffee.egress=restricted`; its host firewall must block private CIDRs. |
+| `PIPELINE_MEMORY_LIMIT`         | `2g`                       | Memory limit for each pipeline job container.                                                       |
+| `PIPELINE_CPU_LIMIT`            | `2`                        | CPU limit for each pipeline job container.                                                          |
+| `PIPELINE_PIDS_LIMIT`           | `256`                      | Process limit for each pipeline job container.                                                      |
+| `PIPELINE_SHM_SIZE`             | `1g`                       | Shared-memory allocation for browser-based test jobs.                                               |
+| `PIPELINE_CONTAINER_USER`       | `1000:1000`                | Numeric non-root uid:gid used inside pipeline containers.                                           |
+| `PIPELINE_MAX_ARTIFACT_BYTES`   | `104857600`                | Maximum uncompressed size of one uploaded artifact.                                                 |
+| `DOCKER_HOST_DATA_DIR`          | `$DATA_DIR`                | Host-side data path used when Groffee itself runs in Docker.                                        |
+| `PIPELINE_ALLOW_HOST_EXECUTION` | `true` in development      | Set to `false` to disable the development fallback; production always requires Docker.              |
+| `NODE_ENV`                      | `development`              | Set to `production` to enforce production pipeline isolation.                                       |
 
 ## Data Directory Layout
 
@@ -18,16 +31,33 @@ Groffee is configured through environment variables. There is no separate config
 
 ```
 data/
-├── groffee.db         # SQLite database (with WAL companion files)
+├── groffee.sqlite     # SQLite database (with WAL companion files)
+├── .groffee-key       # Secret-encryption master key; back this up
+├── ssh_host_ed25519_key # Persistent SSH host identity
 ├── repositories/      # Bare Git repositories, organized by owner/repo.git
-└── lfs-objects/       # Git LFS object storage, content-addressed
+├── lfs-objects/       # Git LFS object storage, content-addressed
+├── pipeline-workspaces/
+├── pipeline-logs/
+├── pipeline-artifacts/
+└── pages/
 ```
 
-This directory is the only thing you need to back up. The database is in WAL mode, so a hot file copy is safe but not atomic — prefer `sqlite3 groffee.db ".backup data/backup.db"` for a consistent snapshot, then archive the `repositories/` and `lfs-objects/` trees.
+This directory is the only thing you need to back up. Preserve `.groffee-key`; losing it makes every stored pipeline secret undecryptable. The database is in WAL mode, so prefer `sqlite3 groffee.sqlite ".backup data/backup.sqlite"` for a consistent snapshot, then archive the full data directory.
 
 ## SSH Server
 
-The SSH server runs on `SSH_PORT` and authenticates using SSH keys registered through the web UI. The host key is generated on first boot and stored at `<DATA_DIR>/ssh-host-key`. To rotate it, stop the server, delete the file, and restart — clients will see a host-key change warning the next time they connect.
+The SSH server runs on `SSH_PORT` and authenticates using SSH keys registered through the web UI. The host key is generated on first boot and stored at `<DATA_DIR>/ssh_host_ed25519_key`. To rotate it, stop the server, delete the file, and restart — clients will see a host-key change warning the next time they connect.
+
+## Pipeline network isolation
+
+Production pipelines require Docker and never fall back to commands on the Groffee host. Create a dedicated bridge network and label it so the readiness endpoint can verify that the intended policy is selected:
+
+```bash
+docker network create --subnet 172.30.0.0/24 \
+  --label com.groffee.egress=restricted groffee-ci
+```
+
+On the Docker host, add `DOCKER-USER` firewall rules for that subnet which allow established traffic and public internet destinations but reject loopback, link-local, RFC1918, and your organization’s private ranges. The label records operator intent; the host firewall is the enforcement point. Do not expose the Docker socket to pipeline containers.
 
 ## Reverse Proxy Considerations
 

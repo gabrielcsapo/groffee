@@ -3,21 +3,29 @@ import { parse as parseYaml } from "yaml";
 
 // --- Zod Schema for .groffee/pipelines.yml ---
 
-const stepSchema = z.object({
-  name: z.string(),
-  run: z.string().optional(),
-  uses: z.string().optional(),
-  with: z.record(z.string(), z.string()).optional(),
-  working_directory: z.string().optional(),
-});
+const stepSchema = z
+  .object({
+    name: z.string(),
+    run: z.string().optional(),
+    uses: z.literal("deploy-pages").optional(),
+    with: z.record(z.string(), z.string()).optional(),
+    working_directory: z.string().optional(),
+  })
+  .refine((step) => Boolean(step.run) !== Boolean(step.uses), {
+    message: 'step must define exactly one of "run" or "uses"',
+  });
 
 const artifactUploadSchema = z.object({
-  name: z.string(),
+  name: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-zA-Z0-9._-]+$/),
   path: z.string(),
   // Optional. When set, the artifact-retention sweeper deletes the artifact
   // (disk dir + DB row) after `createdAt + retention_days * 86400`. Omit to
   // retain forever (or until the run/repo is deleted).
-  retention_days: z.number().int().positive().optional(),
+  retention_days: z.number().int().positive().max(365).optional(),
 });
 
 // Matrix values are restricted to scalar primitives so they can be safely
@@ -51,7 +59,7 @@ const jobSchema = z.object({
   steps: z.array(stepSchema).min(1),
   artifacts: z
     .object({
-      upload: z.array(artifactUploadSchema).optional(),
+      upload: z.array(artifactUploadSchema).max(20).optional(),
     })
     .optional(),
 });

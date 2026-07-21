@@ -28,7 +28,7 @@ application ships as one Node.js service plus an SSH listener.
 ## Requirements
 
 - Node.js 22+
-- pnpm 10+
+- pnpm 11.1.3 (declared by `packageManager` and activated through Corepack)
 - git
 - git-lfs
 
@@ -108,12 +108,7 @@ EXTERNAL_URL=https://groffee.example.com pnpm start
 
 ## Environment Variables
 
-| Variable       | Default                  | Description                                           |
-| -------------- | ------------------------ | ----------------------------------------------------- |
-| `PORT`         | `3000`                   | HTTP server port                                      |
-| `SSH_PORT`     | `2223`                   | SSH server port                                       |
-| `DATA_DIR`     | `./data`                 | Directory for database, repositories, and LFS objects |
-| `EXTERNAL_URL` | `http://localhost:$PORT` | Public-facing URL (required for Git LFS over SSH)     |
+See the [configuration guide](packages/docs/src/pages/configuration.mdx) for the complete environment reference, including Docker runner limits and Pages settings.
 
 ## Docker
 
@@ -121,8 +116,17 @@ EXTERNAL_URL=https://groffee.example.com pnpm start
 docker build -t groffee .
 docker run -p 3000:3000 -p 2223:2223 \
   -e EXTERNAL_URL=https://groffee.example.com \
-  -v groffee-data:/app/data groffee
+  -e NODE_ENV=production \
+  -e DOCKER_HOST_DATA_DIR=/var/lib/docker/volumes/groffee-data/_data \
+  -v groffee-data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock groffee
 ```
+
+Production CI requires a dedicated `groffee-ci` Docker network with restricted egress. See the configuration guide before enabling repository pipelines.
+
+Pages publishing is disabled per repository by default, including for public repositories. An
+owner must explicitly enable it in repository settings. Published Pages sites are public even when
+their source repository is private.
 
 ## Project Structure
 

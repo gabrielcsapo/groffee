@@ -308,10 +308,13 @@ export async function deleteArtifact(ownerName: string, repoName: string, artifa
     .limit(1);
   if (!run || run.repoId !== result.repo.id) return { error: "Artifact not found" };
 
-  const { resolve: resolvePath } = await import("node:path");
+  const { resolve: resolvePath, sep } = await import("node:path");
   const { rmSync, existsSync } = await import("node:fs");
   const { PIPELINE_ARTIFACTS_DIR } = await import("../../api/lib/paths.js");
   const diskPath = resolvePath(PIPELINE_ARTIFACTS_DIR, artifact.diskPath);
+  if (!diskPath.startsWith(resolvePath(PIPELINE_ARTIFACTS_DIR) + sep)) {
+    return { error: "Artifact not found" };
+  }
   try {
     if (existsSync(diskPath)) rmSync(diskPath, { recursive: true, force: true });
   } catch {
@@ -758,7 +761,7 @@ export async function cancelPipelineRun(ownerName: string, repoName: string, run
     .limit(1);
   if (!run) return { error: "Run not found" };
 
-  cancelRunInQueue(run.id);
+  await cancelRunInQueue(run.id);
   return { cancelled: true };
 }
 

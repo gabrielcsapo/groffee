@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "seed": "tsx app/api/seed.ts",
     "test:lfs": "bash scripts/test-lfs.sh",
+    "test:unit": "node --import tsx --test --test-concurrency=1 --test-force-exit \"app/api/lib/*.test.ts\"",
     "make-admin": "tsx app/api/make-admin.ts",
     "admin": "tsx app/api/admin-cli.ts"
   },

@@ -1,7 +1,8 @@
 import { db, pipelineRuns, pipelineJobs, pipelineSteps } from "@groffee/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { executeRun } from "./pipeline-runner.js";
 import { logBackgroundError, logger, errorMetadata } from "./logger.js";
+import { interpolateTemplate } from "./pipeline-config.js";
 
 const logQueueError = logBackgroundError("Pipeline queue operation failed", "pipeline-queue");
 
@@ -24,6 +25,7 @@ interface QueueEntry {
 
 interface ActiveRun {
   runId: string;
+  concurrencyGroup?: string;
   abort: AbortController;
   timeoutHandle: NodeJS.Timeout;
 }
@@ -36,8 +38,8 @@ export function enqueueRun(entry: QueueEntry): void {
   // Handle concurrency groups
   if (entry.concurrencyGroup && entry.cancelInProgress) {
     // Cancel any active run in the same group
-    for (const [group, active] of activeRuns) {
-      if (group === entry.concurrencyGroup) {
+    for (const active of activeRuns.values()) {
+      if (active.concurrencyGroup === entry.concurrencyGroup) {
         active.abort.abort();
         clearTimeout(active.timeoutHandle);
         cancelRunInDb(active.runId).catch(logQueueError);
@@ -85,8 +87,6 @@ async function processQueue(): Promise<void> {
       if (!run || run.status === "cancelled") continue;
 
       const abort = new AbortController();
-      const groupKey = entry.concurrencyGroup || entry.runId;
-
       // Per-run hard timeout. Aborts with reason "timeout" so the runner can
       // distinguish from user cancellation when writing the terminal status.
       const timeoutMs = getRunTimeoutMs(run.configSnapshot);
@@ -96,7 +96,12 @@ async function processQueue(): Promise<void> {
       // Allow process exit even if the timer is still pending.
       timeoutHandle.unref?.();
 
-      activeRuns.set(groupKey, { runId: entry.runId, abort, timeoutHandle });
+      activeRuns.set(entry.runId, {
+        runId: entry.runId,
+        concurrencyGroup: entry.concurrencyGroup,
+        abort,
+        timeoutHandle,
+      });
 
       // Run in background — don't await
       executeRun(entry.runId, abort.signal)
@@ -108,7 +113,7 @@ async function processQueue(): Promise<void> {
         )
         .finally(() => {
           clearTimeout(timeoutHandle);
-          activeRuns.delete(groupKey);
+          activeRuns.delete(entry.runId);
           // Process next in queue
           processQueue().catch(logQueueError);
         });
@@ -128,24 +133,46 @@ async function cancelRunInDb(runId: string): Promise<void> {
     .update(pipelineJobs)
     .set({ status: "cancelled", finishedAt: now })
     .where(and(eq(pipelineJobs.runId, runId), eq(pipelineJobs.status, "queued")));
-  await db
-    .update(pipelineSteps)
-    .set({ status: "cancelled", finishedAt: now })
-    .where(eq(pipelineSteps.status, "queued"));
+  const jobs = await db
+    .select({ id: pipelineJobs.id })
+    .from(pipelineJobs)
+    .where(eq(pipelineJobs.runId, runId));
+  if (jobs.length > 0) {
+    await db
+      .update(pipelineSteps)
+      .set({ status: "cancelled", finishedAt: now })
+      .where(
+        and(
+          inArray(
+            pipelineSteps.jobId,
+            jobs.map((job) => job.id),
+          ),
+          eq(pipelineSteps.status, "queued"),
+        ),
+      );
+  }
 }
 
-export function cancelRun(runId: string): void {
+export async function cancelRun(runId: string): Promise<void> {
   // Cancel if active
-  for (const [group, active] of activeRuns) {
+  for (const active of activeRuns.values()) {
     if (active.runId === runId) {
       active.abort.abort();
       clearTimeout(active.timeoutHandle);
-      activeRuns.delete(group);
       break;
     }
   }
   // Cancel in DB
-  cancelRunInDb(runId).catch(logQueueError);
+  await cancelRunInDb(runId);
+  // Lifecycle operations (rename/delete) need the workspace/container to be
+  // released before moving or removing repository storage.
+  const deadline = Date.now() + 15_000;
+  while (activeRuns.has(runId) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  if (activeRuns.has(runId)) {
+    throw new Error(`Pipeline run ${runId} did not stop within 15 seconds`);
+  }
 }
 
 export function getQueueStatus(): { queued: number; active: number } {
@@ -200,11 +227,65 @@ async function sweepStuckRuns(): Promise<void> {
       .update(pipelineJobs)
       .set({ status: "timed_out", finishedAt })
       .where(and(eq(pipelineJobs.runId, run.id), eq(pipelineJobs.status, "running")));
-    await db
-      .update(pipelineSteps)
-      .set({ status: "cancelled", finishedAt })
-      .where(eq(pipelineSteps.status, "running"));
+    const jobs = await db
+      .select({ id: pipelineJobs.id })
+      .from(pipelineJobs)
+      .where(eq(pipelineJobs.runId, run.id));
+    if (jobs.length > 0) {
+      await db
+        .update(pipelineSteps)
+        .set({ status: "cancelled", finishedAt })
+        .where(
+          and(
+            inArray(
+              pipelineSteps.jobId,
+              jobs.map((job) => job.id),
+            ),
+            eq(pipelineSteps.status, "running"),
+          ),
+        );
+    }
     logger.warn("Swept stuck pipeline run", {
+      source: "pipeline-queue",
+      metadata: { runId: run.id, status: "timed_out" },
+    });
+  }
+}
+
+async function recoverInterruptedRuns(): Promise<void> {
+  const interrupted = await db
+    .select({ id: pipelineRuns.id })
+    .from(pipelineRuns)
+    .where(eq(pipelineRuns.status, "running"));
+  const finishedAt = new Date();
+  for (const run of interrupted) {
+    await db
+      .update(pipelineRuns)
+      .set({ status: "timed_out", finishedAt })
+      .where(eq(pipelineRuns.id, run.id));
+    await db
+      .update(pipelineJobs)
+      .set({ status: "timed_out", finishedAt })
+      .where(and(eq(pipelineJobs.runId, run.id), eq(pipelineJobs.status, "running")));
+    const jobs = await db
+      .select({ id: pipelineJobs.id })
+      .from(pipelineJobs)
+      .where(eq(pipelineJobs.runId, run.id));
+    if (jobs.length > 0) {
+      await db
+        .update(pipelineSteps)
+        .set({ status: "cancelled", finishedAt })
+        .where(
+          and(
+            inArray(
+              pipelineSteps.jobId,
+              jobs.map((job) => job.id),
+            ),
+            eq(pipelineSteps.status, "running"),
+          ),
+        );
+    }
+    logger.warn("Recovered interrupted pipeline run", {
       source: "pipeline-queue",
       metadata: { runId: run.id, status: "timed_out" },
     });
@@ -215,6 +296,43 @@ let _sweeperStarted = false;
 export function startStuckRunSweeper(): void {
   if (_sweeperStarted) return;
   _sweeperStarted = true;
+  recoverInterruptedRuns().catch(
+    logBackgroundError("Interrupted pipeline recovery failed", "pipeline-queue"),
+  );
+  // Rehydrate work that was accepted before a clean or unclean restart.
+  // DB status is the durable queue; the in-memory array is only a dispatcher.
+  db.select({
+    id: pipelineRuns.id,
+    repoId: pipelineRuns.repoId,
+    ref: pipelineRuns.ref,
+    pipelineName: pipelineRuns.pipelineName,
+    configSnapshot: pipelineRuns.configSnapshot,
+  })
+    .from(pipelineRuns)
+    .where(eq(pipelineRuns.status, "queued"))
+    .orderBy(pipelineRuns.createdAt)
+    .then((runs) => {
+      for (const run of runs) {
+        let concurrencyGroup: string | undefined;
+        let cancelInProgress = false;
+        try {
+          const config = JSON.parse(run.configSnapshot) as {
+            concurrency?: { group: string; cancel_in_progress?: boolean };
+          };
+          if (config.concurrency) {
+            concurrencyGroup = interpolateTemplate(config.concurrency.group, {
+              ref: run.ref,
+              pipeline: run.pipelineName,
+            });
+            cancelInProgress = Boolean(config.concurrency.cancel_in_progress);
+          }
+        } catch {
+          // The runner will surface an invalid snapshot as a failed run.
+        }
+        enqueueRun({ runId: run.id, repoId: run.repoId, concurrencyGroup, cancelInProgress });
+      }
+    })
+    .catch(logBackgroundError("Queued pipeline recovery failed", "pipeline-queue"));
   // Run once shortly after boot to catch runs that died with the previous
   // process, then on a steady cadence.
   setTimeout(() => {

@@ -1,7 +1,7 @@
 "use server";
 
 import { db, pagesDeployments, repositories, users } from "@groffee/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { getSessionUser } from "./session.js";
 import { PAGES_HOSTNAME, EXTERNAL_URL } from "../../api/lib/paths.js";
 
@@ -30,7 +30,7 @@ export async function getPagesStatus(ownerName: string, repoName: string) {
     .limit(1);
 
   if (!activeDeployment) {
-    return { deployed: false, url: null, deployment: null };
+    return { enabled: result.repo.pagesEnabled, deployed: false, url: null, deployment: null };
   }
 
   const [deployer] = await db
@@ -39,12 +39,14 @@ export async function getPagesStatus(ownerName: string, repoName: string) {
     .where(eq(users.id, activeDeployment.deployedById))
     .limit(1);
 
-  const port = new URL(EXTERNAL_URL).port;
+  const external = new URL(EXTERNAL_URL);
+  const port = external.port;
   const portSuffix = port && port !== "80" && port !== "443" ? `:${port}` : "";
-  const pagesUrl = `http://${PAGES_HOSTNAME}${portSuffix}/${result.owner.username}/${result.repo.name}/`;
+  const pagesUrl = `${external.protocol}//${PAGES_HOSTNAME}${portSuffix}/${result.owner.username}/${result.repo.name}/`;
 
   return {
-    deployed: true,
+    enabled: result.repo.pagesEnabled,
+    deployed: result.repo.pagesEnabled,
     url: pagesUrl,
     deployment: {
       ...activeDeployment,
@@ -71,7 +73,9 @@ export async function getPagesDeployments(ownerName: string, repoName: string) {
 
   const deployerIds = [...new Set(deployments.map((d) => d.deployedById))];
   const deployerUsers =
-    deployerIds.length > 0 ? await db.select().from(users).where(eq(users.id, deployerIds[0])) : [];
+    deployerIds.length > 0
+      ? await db.select().from(users).where(inArray(users.id, deployerIds))
+      : [];
   const userMap = new Map(deployerUsers.map((u) => [u.id, u.username]));
 
   return {

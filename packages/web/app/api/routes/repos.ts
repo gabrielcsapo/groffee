@@ -12,6 +12,7 @@ import {
   auditLogs,
   pullRequests,
   issues,
+  repositoryRedirects,
 } from "@groffee/db";
 import { eq, and, like, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
@@ -39,6 +40,7 @@ import {
   renameFile,
   validatePath,
 } from "../../lib/server/repo-edit.js";
+import { deleteRepositoryCompletely } from "../lib/repository-lifecycle.js";
 
 export const repoRoutes = new Hono<AppEnv>();
 
@@ -138,23 +140,36 @@ repoRoutes.post("/", requireAuth, async (c) => {
   if (existing) {
     return c.json({ error: "Repository already exists" }, 409);
   }
+  const [reserved] = await db
+    .select({ id: repositoryRedirects.id })
+    .from(repositoryRedirects)
+    .where(and(eq(repositoryRedirects.ownerId, user.id), eq(repositoryRedirects.oldName, name)))
+    .limit(1);
+  if (reserved) return c.json({ error: "Repository name is reserved by a rename redirect" }, 409);
 
   const diskPath = `${user.username}/${name}.git`;
-  await initBareRepo(resolveDiskPath(diskPath));
+  const absoluteDiskPath = resolveDiskPath(diskPath);
+  await initBareRepo(absoluteDiskPath);
 
   const now = new Date();
   const id = crypto.randomUUID();
 
-  await db.insert(repositories).values({
-    id,
-    ownerId: user.id,
-    name,
-    description: description || null,
-    isPublic,
-    diskPath,
-    createdAt: now,
-    updatedAt: now,
-  });
+  try {
+    await db.insert(repositories).values({
+      id,
+      ownerId: user.id,
+      name,
+      description: description || null,
+      isPublic,
+      diskPath,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } catch (error) {
+    const { rm } = await import("node:fs/promises");
+    await rm(absoluteDiskPath, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
 
   logAudit({
     userId: user.id,
@@ -251,6 +266,7 @@ repoRoutes.patch("/:owner/:name", requireAuth, async (c) => {
     }
     updates.editPolicy = body.editPolicy;
   }
+  if (typeof body.pagesEnabled === "boolean") updates.pagesEnabled = body.pagesEnabled;
 
   await db.update(repositories).set(updates).where(eq(repositories.id, repo.id));
 
@@ -289,15 +305,18 @@ repoRoutes.delete("/:owner/:name", requireAuth, async (c) => {
 
   if (!repo) return c.json({ error: "Repository not found" }, 404);
 
-  // Delete from DB (cascades to issues, PRs, comments, and all git index tables)
-  await db.delete(repositories).where(eq(repositories.id, repo.id));
-
-  // Delete bare git repo from disk
-  const { rm } = await import("node:fs/promises");
   try {
-    await rm(resolveDiskPath(repo.diskPath), { recursive: true, force: true });
-  } catch {
-    // Best effort — DB record is already gone
+    await deleteRepositoryCompletely({
+      id: repo.id,
+      diskPath: repo.diskPath,
+      name: repo.name,
+      ownerName,
+    });
+  } catch (error) {
+    return c.json(
+      { error: error instanceof Error ? error.message : "Repository deletion failed" },
+      500,
+    );
   }
 
   logAudit({

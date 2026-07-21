@@ -35,11 +35,13 @@ export default function RepoSettingsClient() {
     defaultBranch: string;
     editPolicy?: "direct" | "pull_request";
     isArchived?: boolean;
+    pagesEnabled?: boolean;
   } | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [editPolicy, setEditPolicy] = useState<"direct" | "pull_request">("direct");
+  const [pagesEnabled, setPagesEnabled] = useState(false);
   const [branches, setBranches] = useState<string[]>([]);
   const [defaultBranch, setDefaultBranch] = useState<string>("");
   const [savingDefaultBranch, setSavingDefaultBranch] = useState(false);
@@ -151,6 +153,7 @@ export default function RepoSettingsClient() {
           setDescription(repoData.repository.description || "");
           setIsPublic(repoData.repository.isPublic);
           setEditPolicy((repoData.repository.editPolicy as "direct" | "pull_request") || "direct");
+          setPagesEnabled(Boolean(repoData.repository.pagesEnabled));
           setDefaultBranch(repoData.repository.defaultBranch);
         }
         if (collabData.collaborators) setCollaborators(collabData.collaborators);
@@ -202,6 +205,7 @@ export default function RepoSettingsClient() {
       description,
       isPublic,
       editPolicy,
+      pagesEnabled,
     });
 
     if (result.error) {
@@ -350,6 +354,26 @@ export default function RepoSettingsClient() {
                   </div>
                 </label>
               </div>
+            </fieldset>
+
+            <fieldset>
+              <legend className="text-sm font-medium text-text-primary mb-2">
+                Pages publishing
+              </legend>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={pagesEnabled}
+                  onChange={(e) => setPagesEnabled(e.target.checked)}
+                  className="mt-1"
+                />
+                <div>
+                  <span className="font-medium text-sm">Publish pipeline deployments</span>
+                  <p className="text-xs text-text-secondary">
+                    Pages sites are publicly reachable, even when this repository is private.
+                  </p>
+                </div>
+              </label>
             </fieldset>
 
             <fieldset>

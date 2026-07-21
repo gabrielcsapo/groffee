@@ -4,7 +4,7 @@ Groffee includes a built-in SSH server for Git operations. It runs in the same N
 
 ## Configuration
 
-The SSH server listens on `SSH_PORT` (default `2223`). The host key is generated on first boot and persisted at `<DATA_DIR>/ssh-host-key`. See [Configuration](/docs/configuration) for environment variables.
+The SSH server listens on `SSH_PORT` (default `2223`). The host key is generated on first boot and persisted at `<DATA_DIR>/ssh_host_ed25519_key`. See [Configuration](/docs/configuration) for environment variables.
 
 ## Adding a Key
 
@@ -45,7 +45,7 @@ To rotate the host key:
 
 ```bash
 # Stop the server, then:
-rm <DATA_DIR>/ssh-host-key
+rm <DATA_DIR>/ssh_host_ed25519_key
 # Restart — a fresh key is generated.
 ```
 

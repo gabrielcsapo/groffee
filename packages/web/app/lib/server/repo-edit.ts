@@ -10,6 +10,8 @@ import { logAudit, getClientIp } from "./audit";
 import { getRequest } from "./request-context";
 import { resolveDiskPath } from "../../api/lib/paths";
 import { triggerIncrementalIndex } from "../../api/lib/indexer";
+import { triggerPipelinesFromPush } from "../../api/lib/pipeline-trigger";
+import { errorMetadata, logger } from "../../api/lib/logger";
 
 const execFileAsync = promisify(execFile);
 
@@ -663,7 +665,16 @@ async function performEdit(opts: PerformEditOpts): Promise<EditResult | EditErro
 
   // Trigger incremental index (fire-and-forget).
   triggerIncrementalIndex(repo.id, repoPath, refsBefore).catch((err) => {
-    console.error(`[repo-edit] indexer failed for ${repo.id}:`, err);
+    logger.error("Browser commit indexing failed", {
+      source: "repo-edit",
+      metadata: { repoId: repo.id, ...errorMetadata(err) },
+    });
+  });
+  triggerPipelinesFromPush(repo.id, repoPath, user.id, refsBefore).catch((err) => {
+    logger.error("Browser commit pipeline trigger failed", {
+      source: "repo-edit",
+      metadata: { repoId: repo.id, ...errorMetadata(err) },
+    });
   });
 
   // Bump repo updatedAt (best-effort).

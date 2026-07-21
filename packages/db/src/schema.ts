@@ -82,6 +82,10 @@ export const repositories = sqliteTable(
     editPolicy: text("edit_policy", { enum: ["direct", "pull_request"] })
       .notNull()
       .default("direct"),
+    // Publishing is always explicit, including for public repositories.
+    // Private repositories may opt in after the owner acknowledges that the
+    // resulting Pages site is publicly reachable.
+    pagesEnabled: integer("pages_enabled", { mode: "boolean" }).notNull().default(false),
     diskPath: text("disk_path").notNull(),
     // Cached on-disk size in bytes (sum of git data dir). Recomputed on
     // demand by the admin CLI (`recompute-storage`). Null = never measured.
@@ -96,6 +100,27 @@ export const repositories = sqliteTable(
   (table) => [
     uniqueIndex("repo_owner_name_idx").on(table.ownerId, table.name),
     index("repos_public_updated_idx").on(table.isPublic, table.updatedAt),
+  ],
+);
+
+// Durable old-slug aliases. Web and Pages requests redirect to the canonical
+// slug; Git HTTP redirects and SSH transparently resolves the same alias.
+export const repositoryRedirects = sqliteTable(
+  "repository_redirects",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    oldName: text("old_name").notNull(),
+    repoId: text("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("repo_redirect_owner_name_idx").on(table.ownerId, table.oldName),
+    index("repo_redirect_repo_idx").on(table.repoId),
   ],
 );
 

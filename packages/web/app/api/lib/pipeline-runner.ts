@@ -10,8 +10,9 @@ import {
   symlinkSync,
   renameSync,
   cpSync,
+  readlinkSync,
 } from "node:fs";
-import { resolve, join, relative } from "node:path";
+import { resolve, join, relative, sep } from "node:path";
 import {
   db,
   pipelineRuns,
@@ -23,7 +24,7 @@ import {
   users,
   repoSecrets,
 } from "@groffee/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { decryptSecret } from "./secret-crypto.js";
 import {
   PIPELINE_WORKSPACES_DIR,
@@ -38,11 +39,15 @@ import { resolveJobOrder, interpolateTemplate } from "./pipeline-config.js";
 import { resolveDiskPath } from "./paths.js";
 import { readFileSync } from "node:fs";
 import crypto from "node:crypto";
+import { resolvePipelineWorkspaceInput } from "./pipeline-security.js";
+import { errorMetadata, logger } from "./logger.js";
 
 // Detect Docker availability once at startup
 let _dockerAvailable: boolean | null = null;
 function isDockerAvailable(): boolean {
-  if (_dockerAvailable === null) {
+  // Cache success, but retry failures so a restarted Docker daemon can make
+  // the runner healthy without restarting Groffee.
+  if (_dockerAvailable !== true) {
     try {
       execSync("docker info", { stdio: "ignore", timeout: 5_000 });
       _dockerAvailable = true;
@@ -51,6 +56,41 @@ function isDockerAvailable(): boolean {
     }
   }
   return _dockerAvailable;
+}
+
+export function getPipelineRuntimeStatus(): {
+  docker: boolean;
+  network: string;
+  networkReady: boolean;
+  hostFallback: boolean;
+} {
+  const docker = isDockerAvailable();
+  const network = process.env.PIPELINE_DOCKER_NETWORK || "groffee-ci";
+  let networkReady = false;
+  if (docker) {
+    try {
+      const policy = execFileSync(
+        "docker",
+        ["network", "inspect", "--format", '{{ index .Labels "com.groffee.egress" }}', network],
+        {
+          stdio: ["ignore", "pipe", "ignore"],
+          timeout: 5_000,
+        },
+      )
+        .toString()
+        .trim();
+      networkReady = policy === "restricted";
+    } catch {
+      networkReady = false;
+    }
+  }
+  return { docker, network, networkReady, hostFallback: hostExecutionAllowed() };
+}
+
+function hostExecutionAllowed(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" && process.env.PIPELINE_ALLOW_HOST_EXECUTION !== "false"
+  );
 }
 
 /**
@@ -72,12 +112,15 @@ function getHostDataDir(): string {
   if (envOverride) {
     if (envOverride.startsWith("/")) {
       _hostDataDir = envOverride;
-      console.log(`[groffee] Using DOCKER_HOST_DATA_DIR=${envOverride} for pipeline volume mounts`);
+      logger.info("Using configured Docker host data directory", {
+        source: "pipeline-runner",
+        metadata: { path: envOverride },
+      });
       return _hostDataDir;
     } else {
-      console.warn(
-        `[groffee] DOCKER_HOST_DATA_DIR="${process.env.DOCKER_HOST_DATA_DIR}" is not an absolute path; ignoring.`,
-      );
+      logger.warn("Ignoring non-absolute Docker host data directory", {
+        source: "pipeline-runner",
+      });
     }
   }
 
@@ -99,7 +142,10 @@ function getHostDataDir(): string {
         // Translate: host source path + (DATA_DIR relative to mount destination)
         const suffix = DATA_DIR.slice(match.Destination.length); // "" or "/sub"
         _hostDataDir = match.Source + suffix;
-        console.log(`[groffee] Auto-detected host data dir: ${_hostDataDir}`);
+        logger.info("Auto-detected Docker host data directory", {
+          source: "pipeline-runner",
+          metadata: { path: _hostDataDir },
+        });
         return _hostDataDir;
       }
     }
@@ -267,6 +313,7 @@ export async function executeRun(runId: string, signal: AbortSignal): Promise<vo
           run.commitOid,
           repo.id,
           matrixValues,
+          run.triggeredById,
         );
 
         // Reload job status
@@ -342,11 +389,10 @@ async function loadRepoSecrets(
       env[row.name] = decryptSecret(row.ciphertext as Buffer);
       ids.push(row.id);
     } catch (err) {
-      console.warn(
-        `[pipelines] failed to decrypt secret ${row.name} for repo ${repoId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
+      logger.warn("Failed to decrypt a repository secret", {
+        source: "pipeline-runner",
+        metadata: { repoId, ...errorMetadata(err) },
+      });
     }
   }
   return { env, ids };
@@ -360,7 +406,10 @@ async function bumpSecretLastUsed(ids: string[]): Promise<void> {
       .set({ lastUsedAt: new Date() })
       .where(inArray(repoSecrets.id, ids));
   } catch (err) {
-    console.warn("[pipelines] failed to bump secret lastUsedAt:", err);
+    logger.warn("Failed to update secret usage timestamp", {
+      source: "pipeline-runner",
+      metadata: errorMetadata(err),
+    });
   }
 }
 
@@ -378,6 +427,7 @@ async function executeJob(
   commitOid: string,
   repoId: string,
   matrixValues: MatrixValues | null,
+  triggeredById: string,
 ): Promise<boolean> {
   // Resolve matrix template substitutions for the job's image (steps are
   // resolved per-step below since each step has its own `command`).
@@ -412,19 +462,37 @@ async function executeJob(
   // for the whole job so state (installed binaries, env modifications) persists
   // across steps. Each step then runs via `docker exec` in this container.
   let jobContainerName: string | undefined;
-  const jobUsesDocker = resolvedImage && isDockerAvailable();
+  const dockerAvailable = isDockerAvailable();
+  const jobUsesDocker = Boolean(resolvedImage && dockerAvailable);
+  const trustedActionsOnly = steps.every((step) => step.uses === "deploy-pages" && !step.command);
+  if (!jobUsesDocker && !hostExecutionAllowed() && !trustedActionsOnly) {
+    const reason = resolvedImage
+      ? "Docker is unavailable; production pipelines never fall back to host execution"
+      : "Pipeline job must declare an image; host execution is disabled";
+    for (const step of steps) {
+      const logPath = resolve(jobLogsDir, `${step.id}.log`);
+      appendLog(logPath, `${reason}\n`);
+      await db
+        .update(pipelineSteps)
+        .set({ status: "failure", exitCode: 1, finishedAt: new Date(), logPath })
+        .where(eq(pipelineSteps.id, step.id));
+    }
+    await db
+      .update(pipelineJobs)
+      .set({ status: "failure", finishedAt: new Date() })
+      .where(eq(pipelineJobs.id, jobId));
+    return false;
+  }
   if (jobUsesDocker) {
     jobContainerName = `groffee-job-${jobId.replace(/-/g, "").slice(0, 24)}`;
     const startResult = await startJobContainer(
       jobContainerName,
       resolvedImage!,
       workspaceDir,
-      // Order matters: secrets first so a colliding pipeline.env / job.env
-      // wins and we never accidentally leak a secret value into a non-secret
-      // env var name. (Also: pipeline.env is committed in YAML, so a name
-      // collision is the user's signal that the YAML overrides the secret.)
+      // Secrets are intentionally omitted from the long-lived container's
+      // config so `docker inspect` cannot reveal them after a step finishes.
+      // They are attached only to each short-lived `docker exec` invocation.
       {
-        ...secretEnv,
         ...pipelineEnv,
         ...((jobConfig.env || {}) as Record<string, string>),
       },
@@ -461,7 +529,7 @@ async function executeJob(
   }
 
   try {
-    for (const step of steps) {
+    for (const [stepIndex, step] of steps.entries()) {
       if (signal.aborted) {
         await db
           .update(pipelineSteps)
@@ -500,6 +568,7 @@ async function executeJob(
           repoName,
           commitOid,
           runId,
+          triggeredById,
           logFullPath,
         );
       } else if (step.command) {
@@ -525,6 +594,8 @@ async function executeJob(
           ownerUsername,
           repoName,
           jobContainerName,
+          jobConfig.steps[stepIndex]?.working_directory,
+          Object.values(secretEnv),
         );
       } else {
         appendLog(logFullPath, `Error: Step "${step.name}" has no command or action\n`);
@@ -594,31 +665,29 @@ async function startJobContainer(
   const hostDataDir = getHostDataDir();
   const toHostPath = (containerPath: string) => containerPath.replace(DATA_DIR, hostDataDir);
   const hostWorkspace = toHostPath(workspaceDir);
-  const hostPages = toHostPath(PAGES_DIR);
 
-  if (!hostWorkspace.startsWith("/") || !hostPages.startsWith("/")) {
+  if (!hostWorkspace.startsWith("/")) {
     return {
       success: false,
-      error: `Cannot resolve host paths for volume mounts (got "${hostWorkspace}", "${hostPages}"). Set DOCKER_HOST_DATA_DIR to an absolute host path.`,
+      error: `Cannot resolve host path for the workspace mount (got "${hostWorkspace}"). Set DOCKER_HOST_DATA_DIR to an absolute host path.`,
     };
   }
 
   const containerEnv: Record<string, string> = {
     HOME: "/workspace",
+    PATH: "/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     CI: "true",
     GROFFEE: "true",
     GROFFEE_RUN_ID: runId,
     GROFFEE_COMMIT: commitOid,
     GROFFEE_REPO: `${ownerUsername}/${repoName}`,
-    // Place package manager caches on the container's overlay filesystem
-    // (NOT the bind-mounted /workspace). The bind mount can struggle with
-    // pnpm's CAS extraction (symlinks in package fixtures, etc.).
-    npm_config_store_dir: "/var/cache/pnpm-store",
-    npm_config_cache: "/var/cache/npm",
-    YARN_CACHE_FOLDER: "/var/cache/yarn",
-    // Force copy mode: store is on overlay FS, node_modules is on the bind
-    // mount, so cross-filesystem hardlinks would fail. Copy is slower but
-    // works reliably across mount boundaries.
+    // Keep package-manager caches inside the isolated workspace so they are
+    // removed with the run and never leak across repositories.
+    npm_config_store_dir: "/workspace/.cache/pnpm-store",
+    npm_config_cache: "/workspace/.cache/npm",
+    YARN_CACHE_FOLDER: "/workspace/.cache/yarn",
+    // Force copy mode so installs do not depend on hardlink support in the
+    // Docker workspace bind mount.
     npm_config_package_import_method: "copy",
     ...env,
   };
@@ -629,12 +698,26 @@ async function startJobContainer(
     "--rm",
     "--name",
     containerName,
+    "--user",
+    process.env.PIPELINE_CONTAINER_USER || "1000:1000",
+    "--cap-drop",
+    "ALL",
+    "--security-opt",
+    "no-new-privileges",
+    "--pids-limit",
+    process.env.PIPELINE_PIDS_LIMIT || "256",
+    "--shm-size",
+    process.env.PIPELINE_SHM_SIZE || "1g",
+    "--memory",
+    process.env.PIPELINE_MEMORY_LIMIT || "2g",
+    "--cpus",
+    process.env.PIPELINE_CPU_LIMIT || "2",
+    "--network",
+    process.env.PIPELINE_DOCKER_NETWORK || "groffee-ci",
     "-w",
     "/workspace",
     "-v",
     `${hostWorkspace}:/workspace`,
-    "-v",
-    `${hostPages}:/pages`,
   ];
   for (const [k, v] of Object.entries(containerEnv)) {
     args.push("-e", `${k}=${v}`);
@@ -645,6 +728,27 @@ async function startJobContainer(
 
   appendLog(setupLogPath, `$ docker run ${image} (long-lived job container)\n`);
   try {
+    const containerUser = process.env.PIPELINE_CONTAINER_USER || "1000:1000";
+    if (!/^\d+:\d+$/.test(containerUser)) {
+      throw new Error("PIPELINE_CONTAINER_USER must be a numeric uid:gid pair");
+    }
+    execFileSync(
+      "docker",
+      [
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--entrypoint",
+        "sh",
+        "-v",
+        `${hostWorkspace}:/workspace`,
+        image,
+        "-c",
+        `chown -R ${containerUser} /workspace`,
+      ],
+      { stdio: ["ignore", "pipe", "pipe"], timeout: 300_000 },
+    );
     execFileSync("docker", args, {
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 300_000, // image pull may take a while
@@ -655,7 +759,7 @@ async function startJobContainer(
     // -e KEY=VAL entries — i.e. plaintext secrets). Scrub it before writing
     // to the user-visible log AND before returning to the caller.
     const raw = err instanceof Error ? err.message : String(err);
-    const scrubbed = scrubDockerArgsFromMessage(raw);
+    const scrubbed = maskSecrets(scrubDockerArgsFromMessage(raw), Object.values(env));
     appendLog(setupLogPath, `Failed: ${scrubbed}\n`);
     return { success: false, error: scrubbed };
   }
@@ -677,6 +781,15 @@ function scrubDockerArgsFromMessage(message: string): string {
     .replace(/(--env\s+)([A-Za-z_][A-Za-z0-9_]*)=([^\s'"\\]*)/g, "$1$2=***");
 }
 
+function maskSecrets(message: string, values: string[]): string {
+  let masked = message;
+  for (const value of values) {
+    if (!value) continue;
+    masked = masked.split(value).join("***");
+  }
+  return masked;
+}
+
 function executeStep(
   command: string,
   cwd: string,
@@ -689,6 +802,8 @@ function executeStep(
   ownerUsername: string,
   repoName: string,
   jobContainerName?: string,
+  workingDirectory?: string,
+  secretValues: string[] = [],
 ): Promise<boolean> {
   return new Promise((resolvePromise) => {
     // Ensure log file exists
@@ -699,10 +814,19 @@ function executeStep(
     // pnpm picks a store on the same filesystem as the project, which can be
     // shared across runs and lead to ENOENT errors when concurrent runs evict
     // each other's blobs. A per-run store dir avoids this.
+    let stepCwd = cwd;
+    let containerCwd = "/workspace";
+    if (workingDirectory) {
+      stepCwd = resolvePipelineWorkspaceInput(cwd, workingDirectory);
+      const relativeCwd = relative(cwd, stepCwd);
+      containerCwd = relativeCwd ? `/workspace/${relativeCwd}` : "/workspace";
+    }
     const inContainer = !!jobContainerName;
     const homePath = inContainer ? "/workspace" : cwd;
     const restrictedEnv: Record<string, string> = {
-      PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin",
+      PATH: inContainer
+        ? "/workspace/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        : process.env.PATH || "/usr/local/bin:/usr/bin:/bin",
       HOME: homePath,
       CI: "true",
       GROFFEE: "true",
@@ -726,7 +850,7 @@ function executeStep(
       // Run inside the job's persistent container via `docker exec`.
       // State from previous steps (installed binaries, modified PATH, files
       // dropped in /usr/local/bin by corepack, etc.) is preserved.
-      const args = ["exec", "-w", "/workspace"];
+      const args = ["exec", "-w", containerCwd];
       for (const [k, v] of Object.entries(restrictedEnv)) {
         args.push("-e", `${k}=${v}`);
       }
@@ -740,7 +864,7 @@ function executeStep(
     } else {
       // Run as local subprocess
       child = spawn("sh", ["-c", command], {
-        cwd,
+        cwd: stepCwd,
         env: restrictedEnv,
         stdio: ["ignore", "pipe", "pipe"],
         timeout: timeoutMs,
@@ -753,7 +877,7 @@ function executeStep(
     };
     signal.addEventListener("abort", onAbort, { once: true });
 
-    const writeLine = createLinePrefixer(logPath);
+    const writeLine = createLinePrefixer(logPath, secretValues);
     child.stdout?.on("data", writeLine);
     child.stderr?.on("data", writeLine);
 
@@ -777,10 +901,29 @@ async function executeDeployPages(
   repoName: string,
   commitOid: string,
   runId: string,
+  deployedById: string,
   logPath: string,
 ): Promise<boolean> {
+  let deployDir: string | null = null;
+  let liveLink: string | null = null;
+  let previousLiveTarget: string | null = null;
+  let liveUpdated = false;
   try {
-    const sourceDir = resolve(workspaceDir, directory);
+    const [repo] = await db
+      .select()
+      .from(repositories)
+      .innerJoin(users, eq(users.id, repositories.ownerId))
+      .where(and(eq(users.username, ownerUsername), eq(repositories.name, repoName)))
+      .limit(1);
+    if (!repo || !repo.repositories.pagesEnabled) {
+      appendLog(
+        logPath,
+        "Pages publishing is disabled. Enable it explicitly in repository Settings.\n",
+      );
+      return false;
+    }
+
+    const sourceDir = resolvePipelineWorkspaceInput(workspaceDir, directory);
     if (!existsSync(sourceDir)) {
       appendLog(logPath, `Error: Directory "${directory}" not found in workspace\n`);
       return false;
@@ -789,8 +932,15 @@ async function executeDeployPages(
     const pagesRepoDir = resolve(PAGES_DIR, ownerUsername, repoName);
     const deploymentsDir = resolve(pagesRepoDir, "deployments");
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const deployDir = resolve(deploymentsDir, `${timestamp}-${commitOid.slice(0, 7)}`);
-    const liveLink = resolve(pagesRepoDir, "live");
+    deployDir = resolve(deploymentsDir, `${timestamp}-${commitOid.slice(0, 7)}`);
+    liveLink = resolve(pagesRepoDir, "live");
+    if (existsSync(liveLink)) {
+      try {
+        previousLiveTarget = readlinkSync(liveLink);
+      } catch {
+        previousLiveTarget = null;
+      }
+    }
 
     mkdirSync(deploymentsDir, { recursive: true });
 
@@ -803,64 +953,73 @@ async function executeDeployPages(
     const tempLink = resolve(pagesRepoDir, `.live-${crypto.randomUUID()}`);
     symlinkSync(deployDir, tempLink);
     renameSync(tempLink, liveLink);
+    liveUpdated = true;
     appendLog(logPath, `Updated live symlink\n`);
 
-    // Get repo for DB update
-    const [repo] = await db
-      .select()
-      .from(repositories)
-      .innerJoin(users, eq(users.id, repositories.ownerId))
-      .where(and(eq(users.username, ownerUsername), eq(repositories.name, repoName)))
-      .limit(1);
-
     if (repo) {
-      // Mark previous deployments as superseded
-      await db
-        .update(pagesDeployments)
-        .set({ status: "superseded" })
-        .where(
-          and(
-            eq(pagesDeployments.repoId, repo.repositories.id),
-            eq(pagesDeployments.status, "active"),
-          ),
-        );
-
-      // Insert new deployment record
-      await db.insert(pagesDeployments).values({
-        id: crypto.randomUUID(),
-        repoId: repo.repositories.id,
-        runId,
-        commitOid,
-        diskPath: relative(PAGES_DIR, deployDir),
-        status: "active",
-        deployedById: repo.users.id,
-        createdAt: new Date(),
+      db.transaction((tx) => {
+        tx.update(pagesDeployments)
+          .set({ status: "superseded" })
+          .where(
+            and(
+              eq(pagesDeployments.repoId, repo.repositories.id),
+              eq(pagesDeployments.status, "active"),
+            ),
+          )
+          .run();
+        tx.insert(pagesDeployments)
+          .values({
+            id: crypto.randomUUID(),
+            repoId: repo.repositories.id,
+            runId,
+            commitOid,
+            diskPath: relative(PAGES_DIR, deployDir!),
+            status: "active",
+            deployedById,
+            createdAt: new Date(),
+          })
+          .run();
       });
     }
 
-    // Cleanup old deployments
-    await cleanupOldDeployments(deploymentsDir);
+    // Cleanup old deployments and their database history together.
+    await cleanupOldDeployments(repo.repositories.id, deploymentsDir);
 
     appendLog(logPath, `Pages deployed successfully!\n`);
     return true;
   } catch (err) {
+    if (liveUpdated && liveLink) {
+      try {
+        rmSync(liveLink, { force: true });
+        if (previousLiveTarget) symlinkSync(previousLiveTarget, liveLink);
+      } catch {
+        // Best effort; the failed step and server log retain the original error.
+      }
+    }
+    if (deployDir) {
+      try {
+        rmSync(deployDir, { recursive: true, force: true });
+      } catch {
+        // Best effort cleanup of the failed deployment.
+      }
+    }
     appendLog(logPath, `Deploy pages error: ${err instanceof Error ? err.message : String(err)}\n`);
     return false;
   }
 }
 
-async function cleanupOldDeployments(deploymentsDir: string): Promise<void> {
+async function cleanupOldDeployments(repoId: string, deploymentsDir: string): Promise<void> {
   try {
-    const entries = readdirSync(deploymentsDir)
-      .map((name) => ({
-        name,
-        path: resolve(deploymentsDir, name),
-        mtime: statSync(resolve(deploymentsDir, name)).mtimeMs,
-      }))
-      .sort((a, b) => b.mtime - a.mtime);
-
-    for (let i = PAGES_MAX_DEPLOYMENTS; i < entries.length; i++) {
-      rmSync(entries[i].path, { recursive: true, force: true });
+    const deployments = await db
+      .select()
+      .from(pagesDeployments)
+      .where(eq(pagesDeployments.repoId, repoId))
+      .orderBy(desc(pagesDeployments.createdAt));
+    const expired = deployments.slice(PAGES_MAX_DEPLOYMENTS);
+    for (const deployment of expired) {
+      const path = resolve(PAGES_DIR, deployment.diskPath);
+      if (path.startsWith(deploymentsDir + sep)) rmSync(path, { recursive: true, force: true });
+      await db.delete(pagesDeployments).where(eq(pagesDeployments.id, deployment.id));
     }
   } catch {
     // Best effort
@@ -876,8 +1035,19 @@ async function collectArtifacts(
 ): Promise<void> {
   for (const upload of uploads) {
     try {
-      const sourcePath = resolve(workspaceDir, upload.path);
+      const sourcePath = resolvePipelineWorkspaceInput(workspaceDir, upload.path);
       if (!existsSync(sourcePath)) continue;
+
+      const maxArtifactBytes = parseInt(
+        process.env.PIPELINE_MAX_ARTIFACT_BYTES || String(100 * 1024 * 1024),
+        10,
+      );
+      const sourceSize = getDirSize(sourcePath);
+      if (sourceSize > maxArtifactBytes) {
+        throw new Error(
+          `Artifact "${upload.name}" is ${sourceSize} bytes; limit is ${maxArtifactBytes}`,
+        );
+      }
 
       const artifactDir = resolve(PIPELINE_ARTIFACTS_DIR, runId, upload.name);
       mkdirSync(artifactDir, { recursive: true });
@@ -910,7 +1080,10 @@ async function collectArtifacts(
         createdAt,
       });
     } catch (err) {
-      console.error(`Failed to collect artifact "${upload.name}":`, err);
+      logger.error("Failed to collect pipeline artifact", {
+        source: "pipeline-runner",
+        metadata: { runId, jobId, artifact: upload.name, ...errorMetadata(err) },
+      });
     }
   }
 }
@@ -918,6 +1091,8 @@ async function collectArtifacts(
 function getDirSize(dirPath: string): number {
   let totalSize = 0;
   try {
+    const rootStat = statSync(dirPath);
+    if (!rootStat.isDirectory()) return rootStat.size;
     const entries = readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = resolve(dirPath, entry.name);
@@ -955,14 +1130,14 @@ function appendLog(logPath: string, message: string): void {
  * `\n` arrives. Multiple chunks delivered in the same tick still get one
  * timestamp per line (at flush time), which is good enough for ms accuracy.
  */
-function createLinePrefixer(logPath: string): (chunk: Buffer) => void {
+function createLinePrefixer(logPath: string, secretValues: string[] = []): (chunk: Buffer) => void {
   let pending = "";
   return (chunk: Buffer) => {
     pending += chunk.toString("utf-8");
     let nl: number;
     let out = "";
     while ((nl = pending.indexOf("\n")) !== -1) {
-      const line = pending.slice(0, nl);
+      const line = maskSecrets(pending.slice(0, nl), secretValues);
       pending = pending.slice(nl + 1);
       out += `${new Date().toISOString()}\t${line}\n`;
     }

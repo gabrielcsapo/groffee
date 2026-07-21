@@ -5,6 +5,7 @@ import { triggerIncrementalIndex } from "../lib/indexer.js";
 import { triggerPipelinesFromPush } from "../lib/pipeline-trigger.js";
 import { authenticateGitUser, authChallenge, resolveRepo } from "../lib/git-auth.js";
 import { resolveDiskPath } from "../lib/paths.js";
+import { errorMetadata, logger } from "../lib/logger.js";
 
 type ServiceType = "git-upload-pack" | "git-receive-pack";
 
@@ -77,14 +78,22 @@ gitProtocolRoutes.post("/:owner/:repo/git-receive-pack", async (c) => {
     (exitCode) => {
       if (exitCode === 0) {
         triggerIncrementalIndex(repo.id, resolveDiskPath(repo.diskPath), refsBefore).catch((err) =>
-          console.error("Post-push indexing failed:", err),
+          logger.error("Post-push indexing failed", {
+            source: "git-http",
+            metadata: { repoId: repo.id, ...errorMetadata(err) },
+          }),
         );
         triggerPipelinesFromPush(
           repo.id,
           resolveDiskPath(repo.diskPath),
           user.id,
           refsBefore,
-        ).catch((err) => console.error("Post-push pipeline trigger failed:", err));
+        ).catch((err) =>
+          logger.error("Post-push pipeline trigger failed", {
+            source: "git-http",
+            metadata: { repoId: repo.id, ...errorMetadata(err) },
+          }),
+        );
       }
     },
   );

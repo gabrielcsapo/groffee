@@ -9,6 +9,7 @@ import { startSshServer } from "./app/api/ssh-server";
 import { backfillIndexes } from "./app/api/lib/backfill";
 import { isPagesRequest, handlePagesRequest } from "./app/api/lib/pages-server";
 import { logger, logBackgroundError } from "./app/api/lib/logger";
+import { resolveRepositoryRedirect } from "./app/api/lib/repository-redirects";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -39,10 +40,35 @@ async function main() {
 
   const app = new Hono();
 
+  // Preserve old web, Pages, and Smart HTTP Git URLs after a repository
+  // rename. A permanent 308 keeps the HTTP method/body for Git POSTs.
+  app.use("*", async (c, next) => {
+    const url = new URL(c.req.url);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const apiRepoPath = parts[0] === "api" && parts[1] === "repos" && parts.length >= 4;
+    const ownerIndex = apiRepoPath ? 2 : 0;
+    const repoIndex = apiRepoPath ? 3 : 1;
+    if (parts.length > repoIndex && parts[0] !== "assets") {
+      const oldName = parts[repoIndex].replace(/\.git$/, "");
+      const newName = await resolveRepositoryRedirect(parts[ownerIndex], oldName);
+      if (newName) {
+        parts[repoIndex] = parts[repoIndex].endsWith(".git") ? `${newName}.git` : newName;
+        url.pathname = `/${parts.join("/")}${c.req.path.endsWith("/") ? "/" : ""}`;
+        // Keep redirects origin-relative. Behind a reverse proxy, c.req.url
+        // contains the internal container origin, while the client must stay
+        // on the public scheme and host. Relative Locations also preserve
+        // authenticated Git clients and Pages hosts without trusting forwarded
+        // headers.
+        return c.redirect(`${url.pathname}${url.search}${url.hash}`, 308);
+      }
+    }
+    return next();
+  });
+
   // Pages subdomain middleware (must be first)
   app.use("*", async (c, next) => {
     if (isPagesRequest(c.req.header("host"))) {
-      return handlePagesRequest(c.req.url);
+      return await handlePagesRequest(c.req.url);
     }
     return next();
   });

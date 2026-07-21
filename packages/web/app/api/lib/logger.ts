@@ -20,8 +20,8 @@ const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 class Logger {
   constructor() {
     // Run cleanup on startup (deferred) and then periodically
-    setTimeout(() => this.cleanupOldLogs(), 10_000);
-    setInterval(() => this.cleanupOldLogs(), CLEANUP_INTERVAL_MS);
+    setTimeout(() => this.cleanupOldLogs(), 10_000).unref?.();
+    setInterval(() => this.cleanupOldLogs(), CLEANUP_INTERVAL_MS).unref?.();
   }
 
   private write(level: LogLevel, message: string, opts?: LogOptions) {

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import { PAGES_DIR, PAGES_HOSTNAME } from "./paths.js";
+import { db, repositories, users } from "@groffee/db";
+import { and, eq } from "drizzle-orm";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -28,7 +30,7 @@ export function isPagesRequest(host: string | undefined): boolean {
   return hostname === PAGES_HOSTNAME;
 }
 
-export function handlePagesRequest(url: string): Response {
+export async function handlePagesRequest(url: string): Promise<Response> {
   const pathname = new URL(url, "http://localhost").pathname;
   const segments = pathname.split("/").filter(Boolean);
 
@@ -40,6 +42,24 @@ export function handlePagesRequest(url: string): Response {
   }
 
   const [owner, repo, ...rest] = segments;
+  const [repository] = await db
+    .select({ id: repositories.id })
+    .from(repositories)
+    .innerJoin(users, eq(users.id, repositories.ownerId))
+    .where(
+      and(
+        eq(users.username, owner),
+        eq(repositories.name, repo),
+        eq(repositories.pagesEnabled, true),
+      ),
+    )
+    .limit(1);
+  if (!repository) {
+    return new Response("Pages publishing is not enabled for this repository", {
+      status: 404,
+      headers: { "Content-Type": "text/plain" },
+    });
+  }
   const filePath = rest.join("/") || "index.html";
   const baseDir = resolve(PAGES_DIR, owner, repo, "live");
 
@@ -60,7 +80,7 @@ export function handlePagesRequest(url: string): Response {
   for (const candidate of candidates) {
     const fullPath = resolve(baseDir, candidate);
     // Security: prevent path traversal
-    if (!fullPath.startsWith(baseDir)) continue;
+    if (fullPath !== baseDir && !fullPath.startsWith(baseDir + sep)) continue;
     if (existsSync(fullPath)) {
       try {
         const content = readFileSync(fullPath);

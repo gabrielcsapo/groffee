@@ -21,6 +21,7 @@ function formatTime(iso: string): string {
 
 export function PagesView({
   deployed,
+  enabled,
   url,
   activeDeployment,
   deployments,
@@ -28,6 +29,7 @@ export function PagesView({
   owner: string;
   repo: string;
   deployed: boolean;
+  enabled: boolean;
   url: string | null;
   activeDeployment: Deployment | null;
   deployments: Deployment[];
@@ -53,15 +55,26 @@ export function PagesView({
               />
             </svg>
           </div>
-          <h3 className="text-lg font-medium text-text-primary mb-1">Pages not deployed</h3>
+          <h3 className="text-lg font-medium text-text-primary mb-1">
+            {enabled ? "Pages not deployed" : "Pages publishing is disabled"}
+          </h3>
           <p className="text-sm max-w-md mx-auto">
-            Add a{" "}
-            <code className="px-1.5 py-0.5 bg-surface-secondary rounded text-xs">deploy-pages</code>{" "}
-            step to your pipeline configuration to deploy a static site.
+            {enabled ? (
+              <>
+                Add a{" "}
+                <code className="px-1.5 py-0.5 bg-surface-secondary rounded text-xs">
+                  deploy-pages
+                </code>{" "}
+                step to your pipeline configuration to deploy a static site.
+              </>
+            ) : (
+              "The repository owner must explicitly enable public Pages publishing in Settings."
+            )}
           </p>
-          <div className="mt-4 text-left max-w-lg mx-auto">
-            <pre className="p-4 text-sm bg-surface-secondary rounded-lg overflow-x-auto text-text-primary">
-              {`# .groffee/pipelines.yml
+          {enabled && (
+            <div className="mt-4 text-left max-w-lg mx-auto">
+              <pre className="p-4 text-sm bg-surface-secondary rounded-lg overflow-x-auto text-text-primary">
+                {`# .groffee/pipelines.yml
 pipelines:
   deploy:
     on:
@@ -70,6 +83,7 @@ pipelines:
     jobs:
       build:
         name: Build & Deploy
+        image: node:22-slim
         steps:
           - name: Build
             run: npm run build
@@ -77,8 +91,9 @@ pipelines:
             uses: deploy-pages
             with:
               directory: dist`}
-            </pre>
-          </div>
+              </pre>
+            </div>
+          )}
         </div>
       ) : (
         <div>

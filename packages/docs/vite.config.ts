@@ -6,6 +6,7 @@ import rehypeSlug from "rehype-slug";
 import rehypeShiki from "@shikijs/rehype";
 import { defineConfig } from "vite";
 import { searchIndexPlugin } from "./src/search-index-plugin";
+import { copyFileSync } from "node:fs";
 
 export default defineConfig({
   base: "/groffee/",
@@ -41,5 +42,13 @@ export default defineConfig({
     },
     react({ include: /\.(jsx|tsx|mdx)$/ }),
     searchIndexPlugin(),
+    {
+      name: "github-pages-spa-fallback",
+      closeBundle() {
+        // GitHub Pages serves 404.html for deep links. Shipping the SPA shell
+        // there lets the client router render /groffee/docs/* on refresh.
+        copyFileSync("dist/index.html", "dist/404.html");
+      },
+    },
   ],
 });

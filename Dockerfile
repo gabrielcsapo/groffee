@@ -40,6 +40,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 ENV EXTERNAL_URL=""
+ENV NODE_ENV="production"
 
 EXPOSE 3000
 EXPOSE 2223

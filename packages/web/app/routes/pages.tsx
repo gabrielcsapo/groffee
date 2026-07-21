@@ -13,6 +13,7 @@ export default async function Pages({ params }: { params?: Record<string, string
     <PagesView
       owner={owner}
       repo={repo}
+      enabled={status.enabled ?? false}
       deployed={status.deployed ?? false}
       url={status.url || null}
       activeDeployment={status.deployment || null}

@@ -21,6 +21,7 @@ import { createEphemeralLfsToken } from "./lib/git-auth.js";
 import { snapshotRefs } from "@groffee/git";
 import { triggerIncrementalIndex } from "./lib/indexer.js";
 import { triggerPipelinesFromPush } from "./lib/pipeline-trigger.js";
+import { resolveRepositoryRedirect } from "./lib/repository-redirects.js";
 import { logger } from "./lib/logger.js";
 import { logAudit } from "./lib/audit.js";
 import path from "node:path";
@@ -408,13 +409,26 @@ export function startSshServer() {
               return;
             }
 
-            const [repo] = await db
+            let [repo] = await db
               .select()
               .from(repositories)
               .where(
                 and(eq(repositories.ownerId, owner.id), eq(repositories.name, parsed.repoName)),
               )
               .limit(1);
+
+            if (!repo) {
+              const canonicalName = await resolveRepositoryRedirect(parsed.owner, parsed.repoName);
+              if (canonicalName) {
+                [repo] = await db
+                  .select()
+                  .from(repositories)
+                  .where(
+                    and(eq(repositories.ownerId, owner.id), eq(repositories.name, canonicalName)),
+                  )
+                  .limit(1);
+              }
+            }
 
             if (!repo) {
               logger.warn(`SSH repo not found: ${repoPath}`, {

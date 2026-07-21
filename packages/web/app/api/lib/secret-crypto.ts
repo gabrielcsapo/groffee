@@ -79,15 +79,21 @@ export function decryptSecret(buf: Buffer): string {
   return pt.toString("utf-8");
 }
 
+export function verifySecretEncryption(): boolean {
+  try {
+    const sample = "groffee-secret-crypto-self-test";
+    return decryptSecret(encryptSecret(sample)) === sample;
+  } catch {
+    return false;
+  }
+}
+
 // Smoke test on import in development: verify the round-trip works with the
 // real key file. We skip this in production to avoid noisy warnings on
 // containers where DATA_DIR may not yet be writable at module-load time.
 if (process.env.NODE_ENV === "development") {
   try {
-    const sample = "groffee-secret-crypto-self-test";
-    const sealed = encryptSecret(sample);
-    const back = decryptSecret(sealed);
-    if (back !== sample) {
+    if (!verifySecretEncryption()) {
       console.warn("[secret-crypto] self-test mismatch — secrets are likely broken");
     }
   } catch (err) {

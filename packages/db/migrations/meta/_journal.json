@@ -162,6 +162,13 @@
       "when": 1778013885905,
       "tag": "0022_windy_kid_colt",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1784649828535,
+      "tag": "0023_repository-pages-and-redirects",
+      "breakpoints": true
     }
   ]
 }

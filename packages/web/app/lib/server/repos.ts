@@ -14,11 +14,14 @@ import {
   pullRequests,
   issues,
   lfsObjects,
+  repositoryRedirects,
+  pipelineRuns,
+  pagesDeployments,
   clampLimit,
   decodeCursor,
   encodeCursor,
 } from "@groffee/db";
-import { eq, and, like, desc, asc, sql, lt, or } from "drizzle-orm";
+import { eq, and, like, desc, asc, sql, lt, or, inArray } from "drizzle-orm";
 import {
   initBareRepo,
   getTree,
@@ -35,9 +38,12 @@ import { getSessionUser } from "./session";
 import { logAudit, getClientIp } from "./audit";
 import { parseLfsPointer } from "../lfs";
 import { getRequest } from "./request-context";
-import { resolveDiskPath } from "../../api/lib/paths";
+import { PAGES_DIR, resolveDiskPath } from "../../api/lib/paths";
+import { resolve } from "node:path";
 import { batchLoadUsers } from "./user-utils";
 import { getCachedActivity, setCachedActivity } from "../../api/lib/activity-cache";
+import { deleteRepositoryCompletely } from "../../api/lib/repository-lifecycle";
+import { cancelRun } from "../../api/lib/pipeline-queue";
 
 // --- Helpers ---
 
@@ -1369,23 +1375,36 @@ export async function createRepo(name: string, description: string, isPublic: bo
     .limit(1);
 
   if (existing) return { error: "Repository already exists" };
+  const [reserved] = await db
+    .select({ id: repositoryRedirects.id })
+    .from(repositoryRedirects)
+    .where(and(eq(repositoryRedirects.ownerId, user.id), eq(repositoryRedirects.oldName, name)))
+    .limit(1);
+  if (reserved) return { error: "Repository name is reserved by a rename redirect" };
 
   const diskPath = `${user.username}/${name}.git`;
-  await initBareRepo(resolveDiskPath(diskPath));
+  const absoluteDiskPath = resolveDiskPath(diskPath);
+  await initBareRepo(absoluteDiskPath);
 
   const now = new Date();
   const id = crypto.randomUUID();
 
-  await db.insert(repositories).values({
-    id,
-    ownerId: user.id,
-    name,
-    description: description || null,
-    isPublic,
-    diskPath,
-    createdAt: now,
-    updatedAt: now,
-  });
+  try {
+    await db.insert(repositories).values({
+      id,
+      ownerId: user.id,
+      name,
+      description: description || null,
+      isPublic,
+      diskPath,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } catch (error) {
+    const { rm } = await import("node:fs/promises");
+    await rm(absoluteDiskPath, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
 
   const req = getRequest();
   logAudit({
@@ -1410,6 +1429,7 @@ export async function updateRepo(
     isPublic?: boolean;
     defaultBranch?: string;
     editPolicy?: "direct" | "pull_request";
+    pagesEnabled?: boolean;
   },
 ) {
   const user = await getSessionUser();
@@ -1432,6 +1452,7 @@ export async function updateRepo(
   if (updates.editPolicy === "direct" || updates.editPolicy === "pull_request") {
     dbUpdates.editPolicy = updates.editPolicy;
   }
+  if (typeof updates.pagesEnabled === "boolean") dbUpdates.pagesEnabled = updates.pagesEnabled;
 
   await db.update(repositories).set(dbUpdates).where(eq(repositories.id, repo.id));
 
@@ -1675,21 +1696,99 @@ export async function renameRepository(ownerName: string, oldName: string, newNa
   const newDiskPath = `${user.username}/${newName}.git`;
   const oldAbs = resolveDiskPath(repo.diskPath);
   const newAbs = resolveDiskPath(newDiskPath);
+  const oldPagesAbs = resolve(PAGES_DIR, ownerName, oldName);
+  const newPagesAbs = resolve(PAGES_DIR, ownerName, newName);
 
-  const { rename, mkdir } = await import("node:fs/promises");
+  const { rename, mkdir, rm, symlink } = await import("node:fs/promises");
+  const { existsSync } = await import("node:fs");
   const path = await import("node:path");
+  let repoMoved = false;
+  let pagesMoved = false;
+  const deployments = await db
+    .select()
+    .from(pagesDeployments)
+    .where(eq(pagesDeployments.repoId, repo.id));
   try {
+    const activeRuns = await db
+      .select({ id: pipelineRuns.id })
+      .from(pipelineRuns)
+      .where(
+        and(eq(pipelineRuns.repoId, repo.id), inArray(pipelineRuns.status, ["queued", "running"])),
+      );
+    for (const run of activeRuns) await cancelRun(run.id);
+
     await mkdir(path.dirname(newAbs), { recursive: true });
     await rename(oldAbs, newAbs);
+    repoMoved = true;
+    if (existsSync(oldPagesAbs)) {
+      await mkdir(path.dirname(newPagesAbs), { recursive: true });
+      await rename(oldPagesAbs, newPagesAbs);
+      pagesMoved = true;
+      const active = deployments.find((deployment) => deployment.status === "active");
+      if (active) {
+        const deploymentName = active.diskPath.split("/").at(-1);
+        if (deploymentName) {
+          const livePath = resolve(newPagesAbs, "live");
+          await rm(livePath, { force: true });
+          await symlink(resolve(newPagesAbs, "deployments", deploymentName), livePath);
+        }
+      }
+    }
+
+    db.transaction((tx) => {
+      // A former alias may become canonical again; canonical names must never
+      // also be redirect sources or requests would loop.
+      tx.delete(repositoryRedirects)
+        .where(
+          and(eq(repositoryRedirects.ownerId, user.id), eq(repositoryRedirects.oldName, newName)),
+        )
+        .run();
+      tx.update(repositories)
+        .set({ name: newName, diskPath: newDiskPath, updatedAt: new Date() })
+        .where(eq(repositories.id, repo.id))
+        .run();
+      for (const deployment of deployments) {
+        const suffix = deployment.diskPath.split("/").slice(2).join("/");
+        tx.update(pagesDeployments)
+          .set({ diskPath: `${ownerName}/${newName}/${suffix}` })
+          .where(eq(pagesDeployments.id, deployment.id))
+          .run();
+      }
+      tx.insert(repositoryRedirects)
+        .values({
+          id: crypto.randomUUID(),
+          ownerId: user.id,
+          oldName,
+          repoId: repo.id,
+          createdAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [repositoryRedirects.ownerId, repositoryRedirects.oldName],
+          set: { repoId: repo.id, createdAt: new Date() },
+        })
+        .run();
+    });
   } catch (e: unknown) {
+    // Keep disk and database identity aligned if any later operation fails.
+    try {
+      if (pagesMoved) {
+        await rename(newPagesAbs, oldPagesAbs);
+        const active = deployments.find((deployment) => deployment.status === "active");
+        const deploymentName = active?.diskPath.split("/").at(-1);
+        if (deploymentName) {
+          const livePath = resolve(oldPagesAbs, "live");
+          await rm(livePath, { force: true });
+          await symlink(resolve(oldPagesAbs, "deployments", deploymentName), livePath);
+        }
+      }
+      if (repoMoved) await rename(newAbs, oldAbs);
+    } catch {
+      // The original error remains the useful one; startup readiness will
+      // surface an inconsistent disk layout if rollback itself fails.
+    }
     const msg = e instanceof Error ? e.message : "Failed to rename on disk";
     return { error: msg as string };
   }
-
-  await db
-    .update(repositories)
-    .set({ name: newName, diskPath: newDiskPath, updatedAt: new Date() })
-    .where(eq(repositories.id, repo.id));
 
   const req = getRequest();
   logAudit({
@@ -1717,13 +1816,15 @@ export async function deleteRepo(ownerName: string, repoName: string) {
 
   if (!repo) return { error: "Repository not found" };
 
-  await db.delete(repositories).where(eq(repositories.id, repo.id));
-
-  const { rm } = await import("node:fs/promises");
   try {
-    await rm(resolveDiskPath(repo.diskPath), { recursive: true, force: true });
-  } catch {
-    // Best effort
+    await deleteRepositoryCompletely({
+      id: repo.id,
+      diskPath: repo.diskPath,
+      name: repo.name,
+      ownerName,
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Repository deletion failed" };
   }
 
   const req = getRequest();
