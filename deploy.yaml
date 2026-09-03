@@ -1,0 +1,60 @@
+apiVersion: deploy.local/v1
+kind: Application
+
+metadata:
+  name: groffee
+  labels:
+    category: development
+
+configuration:
+  externalUrl:
+    type: string
+    required: true
+    description: Public origin used to generate HTTP and Git clone URLs
+
+components:
+  web:
+    displayName: Groffee
+    build:
+      context: .
+    role: web
+    interfaces:
+      http:
+        port: 3000
+        protocol: http
+      ssh:
+        port: 2223
+        protocol: tcp
+    environment:
+      EXTERNAL_URL:
+        from: configuration.externalUrl
+    mounts:
+      /app/data:
+        resource: data
+    runtime:
+      privilegedDocker: true
+      networks:
+        - name: groffee-ci
+          subnet: 172.30.0.0/24
+          labels:
+            com.groffee.egress: restricted
+
+resources:
+  data:
+    type: volume
+    durability: durable
+    dataRole: files
+    access: singleWriter
+    consistencyGroup: application
+    ownership: application
+    backup:
+      policy: required
+      retentionCopies: 2
+    suitcase:
+      allowedDataModes: [follows-one-site, site-local]
+
+routes:
+  public:
+    to: web.http
+    path: /
+    discoverable: true
